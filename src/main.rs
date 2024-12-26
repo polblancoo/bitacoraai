@@ -58,12 +58,11 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mu
         terminal.draw(|f| ui::draw(f, app))?;
 
         if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Char('q') => return Ok(()),
-                KeyCode::Tab => app.next_focus(),
-                KeyCode::BackTab => app.previous_focus(),
-                _ => app.handle_input(key),
+            if key.code == KeyCode::Char('q') {
+                return Ok(());
             }
+            // Dejar que App maneje todo el input, incluyendo Tab
+            app.handle_input(key);
         }
     }
 }

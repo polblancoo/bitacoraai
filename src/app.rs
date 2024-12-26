@@ -52,6 +52,7 @@ pub enum PopupFocus {
     Description,
 }
 
+#[derive(Clone)]
 pub struct App {
     pub sections: Vec<Section>,
     pub selected_section: Option<usize>,
@@ -67,6 +68,7 @@ pub struct App {
     pub popup_focus: PopupFocus,
 }
 
+#[derive(Clone)]
 pub struct LayoutSizes {
     pub left_panel_width: u16,
     pub right_panel_width: u16,
@@ -110,7 +112,6 @@ impl App {
     }
 
     pub fn handle_input(&mut self, key: KeyEvent) {
-        // Primero manejamos el Tab en los modos especiales
         if key.code == KeyCode::Tab {
             match self.mode {
                 Mode::Normal => self.next_focus(),
@@ -121,21 +122,18 @@ impl App {
                             PopupFocus::Description => PopupFocus::Title,
                         };
                     }
-                    return; // Importante: evitar que el Tab se propague
                 }
                 Mode::Searching => {
                     self.cycle_search_target();
                     if !self.search_query.is_empty() {
                         self.perform_local_search(self.search_query.clone());
                     }
-                    return; // Importante: evitar que el Tab se propague
                 }
                 _ => {}
             }
-            return; // Evitar que el Tab se procese más
+            return;
         }
 
-        // Luego manejamos el resto de los inputs según el modo
         match self.mode {
             Mode::Normal => {
                 match key.code {
@@ -200,6 +198,9 @@ impl App {
             }
             KeyCode::Enter => {
                 self.handle_add_submit();
+                self.mode = Mode::Normal;
+                self.input_buffer.clear();
+                self.description_buffer.clear();
                 self.popup_focus = PopupFocus::Title;
             }
             KeyCode::Char(c) => {
@@ -331,19 +332,31 @@ impl App {
             KeyCode::Tab => {
                 self.cycle_search_target();
                 if !self.search_query.is_empty() {
-                    match self.search_target {
-                        SearchTarget::Local => self.perform_local_search(self.search_query.clone()),
-                        _ => {}
-                    }
+                    tokio::spawn({
+                        let mut app = self.clone();
+                        async move {
+                            app.perform_search().await;
+                        }
+                    });
                 }
             }
             KeyCode::Char(c) => {
                 self.search_query.push(c);
-                self.perform_local_search(self.search_query.clone());
+                tokio::spawn({
+                    let mut app = self.clone();
+                    async move {
+                        app.perform_search().await;
+                    }
+                });
             }
             KeyCode::Backspace => {
                 self.search_query.pop();
-                self.perform_local_search(self.search_query.clone());
+                tokio::spawn({
+                    let mut app = self.clone();
+                    async move {
+                        app.perform_search().await;
+                    }
+                });
             }
             _ => {}
         }
@@ -518,7 +531,7 @@ impl App {
 
     async fn perform_search(&mut self) {
         self.search_results.clear();
-        let query = self.search_query.to_lowercase();
+        let query = self.search_query.clone();
         
         if query.is_empty() {
             return;
@@ -541,7 +554,6 @@ impl App {
             SearchTarget::All => {
                 self.perform_local_search(query.clone());
                 
-                // Ejecutar las búsquedas una después de otra para evitar problemas de borrowing
                 if let Ok(results) = self.perform_crates_io_search(&query).await {
                     self.search_results.extend(results);
                 }
