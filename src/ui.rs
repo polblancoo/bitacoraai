@@ -377,7 +377,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-fn draw_search_popup(frame: &mut Frame, app: &App) {
+fn draw_search_popup(frame: &mut Frame, app: &mut App) {
     let area = centered_rect(60, 70, frame.size());
     
     let mut content = vec![
