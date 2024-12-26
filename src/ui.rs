@@ -378,7 +378,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 }
 
 fn draw_search_popup(frame: &mut Frame, app: &mut App) {
-    let area = centered_rect(60, 70, frame.size());
+    let area = centered_rect(80, 90, frame.size());
     
     // Limpiar el área antes de dibujar
     let clear = Clear;
@@ -592,20 +592,23 @@ fn draw_search_popup(frame: &mut Frame, app: &mut App) {
         .split(content_area[0]);
 
     // Calcular el scroll para mantener el ítem seleccionado visible
-    let viewport_height = main_area[0].height.saturating_sub(4); // Ajustado para bordes y márgenes
+    let viewport_height = main_area[0].height.saturating_sub(4);
     let total_items = content.len() as u16;
 
-    // Calcular el scroll necesario para mantener el ítem seleccionado visible
-    let scroll_offset = if app.search_scroll >= viewport_height as usize {
-        // Si el ítem seleccionado está más abajo que la altura visible
-        app.search_scroll.saturating_sub((viewport_height / 2) as usize)
+    // Cada resultado ocupa aproximadamente 5 líneas (título, descripción, URL, fuente, separador)
+    let lines_per_result = 5;
+    let real_selected_position = (app.search_scroll * lines_per_result) as u16;
+
+    // Ajustar el scroll para mantener el ítem seleccionado visible
+    let scroll_offset = if real_selected_position > viewport_height {
+        real_selected_position - (viewport_height / 2)
     } else {
         0
     };
 
     // Asegurarse de que no excedamos el máximo scroll posible
-    let max_scroll = total_items.saturating_sub(viewport_height);
-    let scroll_offset = (scroll_offset as u16).min(max_scroll);
+    let max_scroll = (content.len() as u16).saturating_sub(viewport_height);
+    let scroll_offset = scroll_offset.min(max_scroll);
 
     let paragraph = Paragraph::new(content.clone())
         .block(Block::default()
@@ -616,8 +619,8 @@ fn draw_search_popup(frame: &mut Frame, app: &mut App) {
         .wrap(Wrap { trim: true });
 
     // Actualizar el estado del scrollbar
-    let mut scroll_state = ScrollbarState::new(total_items as usize)
-        .position(scroll_offset as usize);
+    let mut scroll_state = ScrollbarState::new((content.len() / lines_per_result as usize) + 1)
+        .position(app.search_scroll);
 
     frame.render_widget(paragraph, main_area[0]);
     frame.render_widget(help_paragraph, content_area[1]);
