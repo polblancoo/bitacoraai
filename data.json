@@ -1,0 +1,69 @@
+{
+  "sections": [
+    {
+      "id": 1,
+      "title": "📁 Git",
+      "details": [
+        {
+          "id": 1,
+          "title": "git status",
+          "description": "Muestra el estado actual del repositorio",
+          "created_at": "2024-03-19T10:00:00Z"
+        },
+        {
+          "id": 2,
+          "title": "git add",
+          "description": "Agrega archivos al staging area",
+          "created_at": "2024-03-19T10:01:00Z"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "🦀 Rust",
+      "details": [
+        {
+          "id": 1,
+          "title": "cargo new",
+          "description": "Crea un nuevo proyecto Rust",
+          "created_at": "2024-03-19T10:02:00Z"
+        },
+        {
+          "id": 2,
+          "title": "cargo run",
+          "description": "Compila y ejecuta el proyecto",
+          "created_at": "2024-12-26 16:30:16"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "📁 Terminal",
+      "details": [
+        {
+          "id": 1,
+          "title": "reset",
+          "description": "",
+          "created_at": "2024-12-26 16:47:12"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "📁 Terminal 2",
+      "details": []
+    },
+    {
+      "id": 5,
+      "title": "📁 sd",
+      "details": [
+        {
+          "id": 1,
+          "title": "as",
+          "description": "",
+          "created_at": "2024-12-26 16:49:27"
+        }
+      ]
+    }
+  ]
+}

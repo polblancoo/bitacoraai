@@ -1,0 +1,40 @@
+{
+  "sections": [
+    {
+      "id": 1,
+      "title": "📁 Git",
+      "details": [
+        {
+          "id": 1,
+          "title": "git status",
+          "description": "Muestra el estado actual del repositorio",
+          "created_at": "2024-03-19 10:00:00"
+        },
+        {
+          "id": 2,
+          "title": "git add",
+          "description": "Agrega archivos al staging area",
+          "created_at": "2024-03-19 10:01:00"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "🦀 Rust",
+      "details": [
+        {
+          "id": 1,
+          "title": "cargo new",
+          "description": "Crea un nuevo proyecto Rust",
+          "created_at": "2024-03-19 10:02:00"
+        },
+        {
+          "id": 2,
+          "title": "cargo run",
+          "description": "Compila y ejecuta el proyecto",
+          "created_at": "2024-03-19 10:03:00"
+        }
+      ]
+    }
+  ]
+} 
