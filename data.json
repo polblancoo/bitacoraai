@@ -1,80 +1,85 @@
 {
+  "layout_sizes": {
+    "left_panel_width": 30,
+    "right_panel_width": 70
+  },
+  "search_target": "All",
   "sections": [
     {
-      "id": 1,
-      "title": "📁 Git",
       "details": [
         {
-          "id": 1,
-          "title": "git status",
+          "created_at": "2024-03-19T10:00:00Z",
           "description": "Muestra el estado actual del repositorio",
-          "created_at": "2024-03-19T10:00:00Z"
+          "id": 1,
+          "title": "git status"
         },
         {
-          "id": 2,
-          "title": "git add",
+          "created_at": "2024-03-19T10:01:00Z",
           "description": "Agrega archivos al staging area",
-          "created_at": "2024-03-19T10:01:00Z"
-        }
-      ]
-    },
-    {
-      "id": 2,
-      "title": "🦀 Rust",
-      "details": [
-        {
-          "id": 1,
-          "title": "cargo new",
-          "description": "Crea un nuevo proyecto Rust",
-          "created_at": "2024-03-19T10:02:00Z"
-        },
-        {
           "id": 2,
-          "title": "cargo run",
-          "description": "Compila y ejecuta el proyecto",
-          "created_at": "2024-12-26 16:30:16"
+          "title": "git add"
+        }
+      ],
+      "id": 1,
+      "title": "📁 Git"
+    },
+    {
+      "details": [
+        {
+          "created_at": "2024-03-19T10:02:00Z",
+          "description": "Crea un nuevo proyecto Rust",
+          "id": 1,
+          "title": "cargo new"
         },
         {
-          "id": 3,
-          "title": "bat",
+          "created_at": "2024-12-26 16:30:16",
+          "description": "Compila y ejecuta el proyecto",
+          "id": 2,
+          "title": "cargo run"
+        },
+        {
+          "created_at": "2024-12-26 18:06:29",
           "description": "Visualizar archivos con formato",
-          "created_at": "2024-12-26 18:06:29"
+          "id": 3,
+          "title": "bat"
         }
-      ]
+      ],
+      "id": 2,
+      "title": "🦀 Rust"
     },
     {
+      "details": [],
       "id": 3,
-      "title": "📁 Terminal",
-      "details": []
+      "title": "📁 Terminal"
     },
     {
-      "id": 5,
-      "title": "📁 Terminal 2",
       "details": [
         {
-          "id": 1,
-          "title": "reset",
+          "created_at": "2024-12-26 17:24:51",
           "description": "limpia consola y resetea terminal",
-          "created_at": "2024-12-26 17:24:51"
+          "id": 1,
+          "title": "reset"
         }
-      ]
+      ],
+      "id": 5,
+      "title": "📁 Terminal 2"
     },
     {
-      "id": 5,
-      "title": "📁 sd",
       "details": [
         {
-          "id": 1,
-          "title": "as",
+          "created_at": "2024-12-26 16:49:27",
           "description": "",
-          "created_at": "2024-12-26 16:49:27"
+          "id": 1,
+          "title": "as"
         }
-      ]
+      ],
+      "id": 5,
+      "title": "📁 sd"
     },
     {
+      "details": [],
       "id": 6,
-      "title": "📁 ssssss",
-      "details": []
+      "title": "📁 ssssss"
     }
   ]
 }

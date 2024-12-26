@@ -30,12 +30,20 @@ async fn main() -> Result<()> {
 
     // Create app and load data
     let mut app = App::new();
-    app.sections = storage.load()?;
     
+    // Cargar el estado guardado
+    if let Ok(json) = storage.load() {
+        if let Err(e) = app.load_state(&json) {
+            eprintln!("Error loading state: {}", e);
+        }
+    }
+
     let res = run_app(&mut terminal, &mut app).await;
 
-    // Save data before exit
-    storage.save(&app.sections)?;
+    // Guardar el estado antes de salir
+    if let Err(e) = storage.save(&app) {
+        eprintln!("Error saving state: {}", e);
+    }
 
     // Restore terminal
     disable_raw_mode()?;

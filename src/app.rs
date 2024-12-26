@@ -7,6 +7,8 @@ use crate::search::cheats::CheatsRsSearch;
 use crate::search::crates_io::CratesIoSearch;
 use crate::search::SearchProvider;
 use tokio::sync::mpsc;
+use arboard::Clipboard;
+use open;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Section {
@@ -23,14 +25,7 @@ pub struct Detail {
     pub created_at: String,
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Focus {
-    Sections,
-    Details,
-    Search,
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum SearchTarget {
     Local,
     CratesIo,
@@ -38,7 +33,25 @@ pub enum SearchTarget {
     All,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+impl std::fmt::Display for SearchTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SearchTarget::Local => write!(f, "📝 Local"),
+            SearchTarget::CratesIo => write!(f, "📦 Crates.io"),
+            SearchTarget::CheatsRs => write!(f, "📚 Cheats.sh"),
+            SearchTarget::All => write!(f, "🔍 Todas las fuentes"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub enum Focus {
+    Sections,
+    Details,
+    Search,
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Mode {
     Normal,
     Adding,
@@ -47,7 +60,7 @@ pub enum Mode {
     Help,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum PopupFocus {
     Title,
     Description,
@@ -70,6 +83,11 @@ pub struct App {
     search_tx: Option<mpsc::Sender<String>>,
     results_rx: Option<mpsc::Receiver<Vec<SearchResult>>>,
     pub search_scroll: usize,
+    pub selected_link: Option<usize>,
+    pub links: Vec<String>,
+    pub clipboard: Option<Clipboard>,
+    pub copying: bool,
+    pub copy_result: Option<SearchResult>,
 }
 
 impl Clone for App {
@@ -91,11 +109,16 @@ impl Clone for App {
             search_tx: self.search_tx.clone(),
             results_rx: None,
             search_scroll: self.search_scroll,
+            selected_link: self.selected_link,
+            links: self.links.clone(),
+            clipboard: None,
+            copying: self.copying,
+            copy_result: self.copy_result.clone(),
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct LayoutSizes {
     pub left_panel_width: u16,
     pub right_panel_width: u16,
@@ -123,6 +146,11 @@ impl App {
             search_tx: None,
             results_rx: None,
             search_scroll: 0,
+            selected_link: None,
+            links: Vec::new(),
+            clipboard: Clipboard::new().ok(),
+            copying: false,
+            copy_result: None,
         }
     }
 
@@ -354,34 +382,31 @@ impl App {
     }
 
     pub fn handle_search_mode(&mut self, key: KeyEvent) {
+        if self.copying {
+            self.handle_copy_mode(key);
+            return;
+        }
+
         match key.code {
             KeyCode::Esc => {
                 self.mode = Mode::Normal;
                 self.search_query.clear();
                 self.search_results.clear();
-                self.searching = false;
                 self.search_scroll = 0;
+                self.selected_link = None;
+                self.links.clear();
+                self.searching = false;
             }
-            KeyCode::Tab => {
-                self.search_results.clear();
-                self.cycle_search_target();
-                
-                // Solo realizar búsqueda si hay texto
+            KeyCode::Backspace => {
+                self.search_query.pop();
                 if !self.search_query.is_empty() {
                     self.searching = true;
                     self.perform_search_based_on_target();
                 }
             }
-            KeyCode::Char(c) => {
-                // Formatear la entrada: solo permitir caracteres válidos
-                if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
-                    self.search_query.push(c);
-                    self.searching = true;
-                    self.perform_search_based_on_target();
-                }
-            }
-            KeyCode::Backspace => {
-                if self.search_query.pop().is_some() && !self.search_query.is_empty() {
+            KeyCode::Tab => {
+                self.cycle_search_target();
+                if !self.search_query.is_empty() {
                     self.searching = true;
                     self.perform_search_based_on_target();
                 }
@@ -389,10 +414,51 @@ impl App {
             KeyCode::Up => {
                 if self.search_scroll > 0 {
                     self.search_scroll -= 1;
+                    if !self.links.is_empty() {
+                        self.selected_link = Some(self.search_scroll);
+                    }
                 }
             }
             KeyCode::Down => {
-                self.search_scroll += 1;
+                if self.search_scroll + 1 < self.search_results.len() {
+                    self.search_scroll += 1;
+                    if !self.links.is_empty() {
+                        self.selected_link = Some(self.search_scroll);
+                    }
+                }
+            }
+            KeyCode::PageUp => {
+                self.search_scroll = self.search_scroll.saturating_sub(5);
+                if !self.links.is_empty() {
+                    self.selected_link = Some(self.search_scroll);
+                }
+            }
+            KeyCode::PageDown => {
+                let max_scroll = self.search_results.len().saturating_sub(1);
+                self.search_scroll = (self.search_scroll + 5).min(max_scroll);
+                if !self.links.is_empty() {
+                    self.selected_link = Some(self.search_scroll);
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(selected) = self.selected_link {
+                    if let Some(url) = self.links.get(selected) {
+                        let _ = open::that(url);
+                    }
+                }
+            }
+            KeyCode::Char('c') => {
+                if !self.search_results.is_empty() {
+                    self.copying = true;
+                    self.copy_result = Some(self.search_results[self.search_scroll].clone());
+                }
+            }
+            KeyCode::Char(c) => {
+                if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
+                    self.search_query.push(c);
+                    self.searching = true;
+                    self.perform_search_based_on_target();
+                }
             }
             _ => {}
         }
@@ -452,8 +518,10 @@ impl App {
         }
     }
 
-    fn perform_search_based_on_target(&mut self) {
+    pub fn perform_search_based_on_target(&mut self) {
         self.search_results.clear();
+        self.links.clear();
+        self.selected_link = None;
         
         if self.search_query.is_empty() {
             return;
@@ -666,6 +734,72 @@ impl App {
                 PopupFocus::Description => PopupFocus::Title,
             };
         }
+    }
+
+    fn handle_copy_mode(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.copying = false;
+                self.copy_result = None;
+            }
+            KeyCode::Enter => {
+                if let Some(result) = self.copy_result.take() {
+                    if let Some(section_idx) = self.selected_section {
+                        if let Some(section) = self.sections.get_mut(section_idx) {
+                            let new_id = section.details.len() + 1;
+                            section.details.push(Detail {
+                                id: new_id,
+                                title: result.title,
+                                description: result.description,
+                                created_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                            });
+                        }
+                    }
+                }
+                self.copying = false;
+            }
+            KeyCode::Up | KeyCode::Down => {
+                // Navegar entre resultados de búsqueda
+                if let Some(current_idx) = self.search_results.iter()
+                    .position(|r| Some(r) == self.copy_result.as_ref()) {
+                    let new_idx = if key.code == KeyCode::Up {
+                        if current_idx > 0 { current_idx - 1 } else { self.search_results.len() - 1 }
+                    } else {
+                        if current_idx < self.search_results.len() - 1 { current_idx + 1 } else { 0 }
+                    };
+                    self.copy_result = Some(self.search_results[new_idx].clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn save_state(&self) -> Result<String, serde_json::Error> {
+        // Solo guardar los campos necesarios
+        let state = serde_json::json!({
+            "sections": self.sections,
+            "layout_sizes": self.layout_sizes,
+            "search_target": self.search_target,
+        });
+        serde_json::to_string_pretty(&state)
+    }
+
+    pub fn load_state(&mut self, json: &str) -> Result<(), serde_json::Error> {
+        let state: serde_json::Value = serde_json::from_str(json)?;
+        
+        if let Some(sections) = state.get("sections") {
+            self.sections = serde_json::from_value(sections.clone())?;
+        }
+        
+        if let Some(layout) = state.get("layout_sizes") {
+            self.layout_sizes = serde_json::from_value(layout.clone())?;
+        }
+        
+        if let Some(target) = state.get("search_target") {
+            self.search_target = serde_json::from_value(target.clone())?;
+        }
+        
+        Ok(())
     }
 }
 
