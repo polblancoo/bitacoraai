@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::search::cheats::CheatsRsSearch;
 use crate::search::crates_io::CratesIoSearch;
 use crate::search::SearchProvider;
+use tokio::sync::mpsc;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Section {
@@ -52,7 +53,6 @@ pub enum PopupFocus {
     Description,
 }
 
-#[derive(Clone)]
 pub struct App {
     pub sections: Vec<Section>,
     pub selected_section: Option<usize>,
@@ -66,6 +66,33 @@ pub struct App {
     pub description_buffer: String,
     pub search_target: SearchTarget,
     pub popup_focus: PopupFocus,
+    pub searching: bool,
+    search_tx: Option<mpsc::Sender<String>>,
+    results_rx: Option<mpsc::Receiver<Vec<SearchResult>>>,
+    pub search_scroll: usize,
+}
+
+impl Clone for App {
+    fn clone(&self) -> Self {
+        Self {
+            sections: self.sections.clone(),
+            selected_section: self.selected_section,
+            selected_detail: self.selected_detail,
+            focus: self.focus.clone(),
+            mode: self.mode.clone(),
+            search_query: self.search_query.clone(),
+            search_results: self.search_results.clone(),
+            layout_sizes: self.layout_sizes.clone(),
+            input_buffer: self.input_buffer.clone(),
+            description_buffer: self.description_buffer.clone(),
+            search_target: self.search_target.clone(),
+            popup_focus: self.popup_focus.clone(),
+            searching: self.searching,
+            search_tx: self.search_tx.clone(),
+            results_rx: None,
+            search_scroll: self.search_scroll,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -92,6 +119,10 @@ impl App {
             description_buffer: String::new(),
             search_target: SearchTarget::Local,
             popup_focus: PopupFocus::Title,
+            searching: false,
+            search_tx: None,
+            results_rx: None,
+            search_scroll: 0,
         }
     }
 
@@ -328,37 +359,120 @@ impl App {
                 self.mode = Mode::Normal;
                 self.search_query.clear();
                 self.search_results.clear();
+                self.searching = false;
+                self.search_scroll = 0;
             }
             KeyCode::Tab => {
+                self.search_results.clear();
                 self.cycle_search_target();
+                
+                // Solo realizar búsqueda si hay texto
                 if !self.search_query.is_empty() {
-                    tokio::spawn({
-                        let mut app = self.clone();
-                        async move {
-                            app.perform_search().await;
-                        }
-                    });
+                    self.searching = true;
+                    self.perform_search_based_on_target();
                 }
             }
             KeyCode::Char(c) => {
-                self.search_query.push(c);
-                tokio::spawn({
-                    let mut app = self.clone();
-                    async move {
-                        app.perform_search().await;
-                    }
-                });
+                // Formatear la entrada: solo permitir caracteres válidos
+                if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
+                    self.search_query.push(c);
+                    self.searching = true;
+                    self.perform_search_based_on_target();
+                }
             }
             KeyCode::Backspace => {
-                self.search_query.pop();
-                tokio::spawn({
-                    let mut app = self.clone();
-                    async move {
-                        app.perform_search().await;
-                    }
-                });
+                if self.search_query.pop().is_some() && !self.search_query.is_empty() {
+                    self.searching = true;
+                    self.perform_search_based_on_target();
+                }
+            }
+            KeyCode::Up => {
+                if self.search_scroll > 0 {
+                    self.search_scroll -= 1;
+                }
+            }
+            KeyCode::Down => {
+                self.search_scroll += 1;
             }
             _ => {}
+        }
+    }
+
+    fn setup_search_channel(&mut self) {
+        let (tx, mut rx) = mpsc::channel(32);
+        let (results_tx, results_rx) = mpsc::channel(32);
+        self.search_tx = Some(tx);
+        self.results_rx = Some(results_rx);
+
+        let search_target = self.search_target.clone();
+
+        // Spawn background task
+        tokio::spawn(async move {
+            let mut crates_search = CratesIoSearch::new();
+            let mut cheats_search = CheatsRsSearch::new();
+
+            while let Some(query) = rx.recv().await {
+                let mut results = Vec::new();
+                
+                match search_target {
+                    SearchTarget::CratesIo => {
+                        if let Ok(search_results) = crates_search.search(&query).await {
+                            results = search_results;
+                        }
+                    }
+                    SearchTarget::CheatsRs => {
+                        if let Ok(search_results) = cheats_search.search(&query).await {
+                            results = search_results;
+                        }
+                    }
+                    SearchTarget::All => {
+                        if let Ok(crates_results) = crates_search.search(&query).await {
+                            results.extend(crates_results);
+                            if let Ok(cheats_results) = cheats_search.search(&query).await {
+                                results.extend(cheats_results);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                let _ = results_tx.send(results).await;
+            }
+        });
+    }
+
+    pub fn check_search_results(&mut self) {
+        if let Some(rx) = &mut self.results_rx {
+            match rx.try_recv() {
+                Ok(results) => {
+                    self.search_results = results;
+                    self.searching = false;
+                }
+                Err(_) => {} // Ignorar errores de try_recv
+            }
+        }
+    }
+
+    fn perform_search_based_on_target(&mut self) {
+        self.search_results.clear();
+        
+        if self.search_query.is_empty() {
+            return;
+        }
+
+        match self.search_target {
+            SearchTarget::Local => {
+                self.perform_local_search(self.search_query.clone());
+            }
+            _ => {
+                if self.search_tx.is_none() {
+                    self.setup_search_channel();
+                }
+                
+                if let Some(tx) = &self.search_tx {
+                    self.searching = true;
+                    let _ = tx.try_send(self.search_query.clone());
+                }
+            }
         }
     }
 
@@ -383,9 +497,8 @@ impl App {
                 if let Some(index) = self.selected_section {
                     if let Some(section) = self.sections.get(index) {
                         self.mode = Mode::Editing;
-                        // Cargar el título sin el ícono para edición
                         self.input_buffer = if section.title.starts_with("📁") {
-                            section.title[4..].to_string() // Saltar "📁 "
+                            section.title[4..].to_string()
                         } else {
                             section.title.clone()
                         };
@@ -433,7 +546,7 @@ impl App {
                     }
                 }
             }
-            Focus::Search => {} // No deletion in search mode
+            Focus::Search => {}
         }
     }
 
@@ -514,54 +627,6 @@ impl App {
             SearchTarget::CheatsRs => SearchTarget::All,
             SearchTarget::All => SearchTarget::Local,
         };
-        if !self.search_query.is_empty() {
-            self.perform_local_search(self.search_query.clone());
-        }
-    }
-
-    async fn perform_crates_io_search(&self, query: &str) -> crate::error::Result<Vec<SearchResult>> {
-        let mut searcher = CratesIoSearch::new();
-        searcher.search(query).await
-    }
-
-    async fn perform_cheats_rs_search(&self, query: &str) -> crate::error::Result<Vec<SearchResult>> {
-        let mut searcher = CheatsRsSearch::new();
-        searcher.search(query).await
-    }
-
-    async fn perform_search(&mut self) {
-        self.search_results.clear();
-        let query = self.search_query.clone();
-        
-        if query.is_empty() {
-            return;
-        }
-
-        match self.search_target {
-            SearchTarget::Local => {
-                self.perform_local_search(query);
-            }
-            SearchTarget::CratesIo => {
-                if let Ok(results) = self.perform_crates_io_search(&query).await {
-                    self.search_results.extend(results);
-                }
-            }
-            SearchTarget::CheatsRs => {
-                if let Ok(results) = self.perform_cheats_rs_search(&query).await {
-                    self.search_results.extend(results);
-                }
-            }
-            SearchTarget::All => {
-                self.perform_local_search(query.clone());
-                
-                if let Ok(results) = self.perform_crates_io_search(&query).await {
-                    self.search_results.extend(results);
-                }
-                if let Ok(results) = self.perform_cheats_rs_search(&query).await {
-                    self.search_results.extend(results);
-                }
-            }
-        }
     }
 
     fn perform_local_search(&mut self, query: String) {

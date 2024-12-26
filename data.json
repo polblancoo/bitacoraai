@@ -33,20 +33,19 @@
           "title": "cargo run",
           "description": "Compila y ejecuta el proyecto",
           "created_at": "2024-12-26 16:30:16"
+        },
+        {
+          "id": 3,
+          "title": "bat",
+          "description": "Visualizar archivos con formato",
+          "created_at": "2024-12-26 18:06:29"
         }
       ]
     },
     {
       "id": 3,
       "title": "📁 Terminal",
-      "details": [
-        {
-          "id": 1,
-          "title": "reset",
-          "description": "",
-          "created_at": "2024-12-26 16:47:12"
-        }
-      ]
+      "details": []
     },
     {
       "id": 5,

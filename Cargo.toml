@@ -14,3 +14,4 @@ serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 reqwest = { version = "0.11", features = ["json"] }
 async-trait = "0.1.73"
+pollster = "0.3"

@@ -61,8 +61,10 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mu
             if key.code == KeyCode::Char('q') {
                 return Ok(());
             }
-            // Dejar que App maneje todo el input, incluyendo Tab
             app.handle_input(key);
         }
+
+        // Verificar resultados de búsqueda
+        app.check_search_results();
     }
 }

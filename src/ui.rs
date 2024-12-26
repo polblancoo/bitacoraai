@@ -2,11 +2,12 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Line},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap, Clear},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap, Clear, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
 use crate::app::{App, Focus, Mode, SearchTarget, PopupFocus};
 use crate::helper::KeyBindings;
+use crate::search::SearchSource;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -89,6 +90,16 @@ fn draw_details(frame: &mut Frame, app: &App, area: Rect) {
     let mut state = ListState::default();
     state.select(app.selected_detail);
 
+    let mut scrollbar_state = ScrollbarState::default()
+        .content_length(if let Some(section_idx) = app.selected_section {
+            app.sections.get(section_idx)
+                .map(|s| s.details.len())
+                .unwrap_or(0)
+        } else {
+            0
+        })
+        .position(app.selected_detail.unwrap_or(0));
+
     let block = Block::default()
         .title("Detalles")
         .borders(Borders::ALL)
@@ -103,7 +114,6 @@ fn draw_details(frame: &mut Frame, app: &App, area: Rect) {
             section.details.iter()
                 .map(|detail| {
                     ListItem::new(vec![
-                        // Primera línea: Título
                         Line::from(vec![
                             Span::styled(
                                 &detail.title,
@@ -112,17 +122,15 @@ fn draw_details(frame: &mut Frame, app: &App, area: Rect) {
                                     .add_modifier(Modifier::BOLD)
                             ),
                         ]),
-                        // Segunda línea: Descripción
                         Line::from(vec![
-                            Span::raw("  "),  // Indentación
+                            Span::raw("  "),
                             Span::styled(
                                 &detail.description,
                                 Style::default().fg(Color::White)
                             ),
                         ]),
-                        // Tercera línea: Fecha de creación
                         Line::from(vec![
-                            Span::raw("  "),  // Indentación
+                            Span::raw("  "),
                             Span::styled(
                                 &detail.created_at,
                                 Style::default()
@@ -130,7 +138,6 @@ fn draw_details(frame: &mut Frame, app: &App, area: Rect) {
                                     .add_modifier(Modifier::ITALIC)
                             ),
                         ]),
-                        // Línea en blanco para separar entradas
                         Line::from(""),
                     ])
                 })
@@ -150,7 +157,20 @@ fn draw_details(frame: &mut Frame, app: &App, area: Rect) {
                 .add_modifier(Modifier::BOLD)
         );
 
-    frame.render_stateful_widget(list, area, &mut state);
+    let list_area = Rect {
+        width: area.width - 1,
+        ..area
+    };
+    frame.render_stateful_widget(list, list_area, &mut state);
+
+    frame.render_stateful_widget(
+        Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None),
+        area,
+        &mut scrollbar_state,
+    );
 }
 
 fn draw_shortcuts(frame: &mut Frame, app: &App, area: Rect) {
@@ -360,29 +380,30 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 fn draw_search_popup(frame: &mut Frame, app: &App) {
     let area = centered_rect(60, 70, frame.size());
     
-    let search_text = format!("{}_", app.search_query);
     let mut content = vec![
-        // Mostrar el selector de fuente
         Line::from(vec![
-            Span::raw("Fuente: "),
+            Span::raw("Fuente actual: "),
             Span::styled(
                 match app.search_target {
-                    SearchTarget::Local => "Local",
-                    SearchTarget::CratesIo => "Crates.io",
-                    SearchTarget::CheatsRs => "Cheats.rs",
-                    SearchTarget::All => "Todas",
+                    SearchTarget::Local => "📝 Local",
+                    SearchTarget::CratesIo => "📦 Crates.io",
+                    SearchTarget::CheatsRs => "📚 Cheats.sh",
+                    SearchTarget::All => "🔍 Todas las fuentes",
                 },
                 Style::default().fg(Color::Green),
             ),
-            Span::raw("  "),
+        ]),
+        Line::from(vec![
             Span::styled("[Tab]", Style::default().fg(Color::Yellow)),
-            Span::raw(" para cambiar"),
+            Span::raw(" para cambiar fuente, "),
+            Span::styled("[Esc]", Style::default().fg(Color::Yellow)),
+            Span::raw(" para salir"),
         ]),
         Line::from(""),
         Line::from(vec![
             Span::raw("Búsqueda: "),
             Span::styled(
-                search_text,
+                format!("{}_", app.search_query),
                 Style::default()
                     .bg(Color::Yellow)
                     .fg(Color::Black)
@@ -391,45 +412,135 @@ fn draw_search_popup(frame: &mut Frame, app: &App) {
         Line::from(""),
     ];
 
-    // Agregar resultados de búsqueda
+    // Mostrar información sobre la fuente actual
+    content.push(Line::from(vec![
+        Span::raw("Buscando en: "),
+        Span::styled(
+            match app.search_target {
+                SearchTarget::Local => "comandos y secciones guardadas localmente",
+                SearchTarget::CratesIo => "paquetes de Rust en crates.io",
+                SearchTarget::CheatsRs => "ejemplos y trucos en cheat.sh",
+                SearchTarget::All => "todas las fuentes disponibles",
+            },
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]));
+    content.push(Line::from(""));
+
+    if app.searching {
+        content.push(Line::from(vec![
+            Span::styled("⟳ Buscando...", Style::default().fg(Color::Yellow))
+        ]));
+    } else if app.search_results.is_empty() && !app.search_query.is_empty() {
+        content.push(Line::from(vec![
+            Span::styled("❌ No se encontraron resultados", Style::default().fg(Color::Red))
+        ]));
+    }
+
+    let mut scrollbar_state = ScrollbarState::default()
+        .content_length(app.search_results.len());
+
     if !app.search_results.is_empty() {
         content.push(Line::from(vec![
-            Span::styled("Resultados:", Style::default().fg(Color::Green))
+            Span::styled(
+                format!("🔍 {} resultado(s):", app.search_results.len()),
+                Style::default().fg(Color::Green)
+            )
         ]));
         content.push(Line::from(""));
 
         for result in &app.search_results {
+            let source_icon = match result.source {
+                SearchSource::Local => "📝",
+                SearchSource::CratesIo => "📦",
+                SearchSource::CheatsRs => "📚",
+            };
+
             content.push(Line::from(vec![
+                Span::raw(source_icon),
+                Span::raw(" "),
                 Span::styled(&result.title, Style::default().fg(Color::Cyan)),
             ]));
             content.push(Line::from(vec![
-                Span::raw("  "),
+                Span::raw("   "),
                 Span::styled(&result.description, Style::default().fg(Color::White)),
             ]));
-            // Agregar la fuente del resultado
             content.push(Line::from(vec![
-                Span::raw("  "),
+                Span::raw("   "),
                 Span::styled(
                     format!("[{}]", result.source),
                     Style::default().fg(Color::DarkGray)
                 ),
             ]));
-            content.push(Line::from("")); // Línea en blanco para separar resultados
+            content.push(Line::from("")); // Separador
         }
-    } else if !app.search_query.is_empty() {
-        content.push(Line::from(vec![
-            Span::styled("No se encontraron resultados", Style::default().fg(Color::Red))
-        ]));
     }
 
-    let search_message = Paragraph::new(content)
+    // Calcular el número máximo de líneas visibles
+    let max_visible_lines = area.height as usize - 4; // Restar bordes y título
+    
+    // Asegurarse de que el scroll no exceda el límite
+    let max_scroll = content.len().saturating_sub(max_visible_lines);
+    app.search_scroll = app.search_scroll.min(max_scroll);
+
+    // Tomar solo las líneas visibles según la posición del scroll
+    let visible_lines = content.iter()
+        .skip(app.search_scroll)
+        .take(max_visible_lines);
+
+    let mut new_content = vec![];
+    new_content.extend(visible_lines.cloned());
+
+    let search_message = Paragraph::new(new_content)
         .block(Block::default()
-            .title("Búsqueda")
+            .title(format!(
+                "Búsqueda ({}/{})",
+                app.search_scroll + 1,
+                content.len().max(1)
+            ))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Yellow)))
         .wrap(Wrap { trim: true });
 
+    let message_area = Rect {
+        width: area.width - 1,
+        ..area
+    };
+
     let clear = Clear;
     frame.render_widget(clear, area);
-    frame.render_widget(search_message, area);
+    frame.render_widget(search_message, message_area);
+
+    frame.render_stateful_widget(
+        Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None),
+        area,
+        &mut scrollbar_state,
+    );
+
+    // Agregar indicadores de scroll si hay más contenido
+    if app.search_scroll > 0 {
+        frame.render_widget(
+            Paragraph::new("▲").alignment(ratatui::layout::Alignment::Center),
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            },
+        );
+    }
+    if app.search_scroll < max_scroll {
+        frame.render_widget(
+            Paragraph::new("▼").alignment(ratatui::layout::Alignment::Center),
+            Rect {
+                x: area.x,
+                y: area.y + area.height - 1,
+                width: area.width,
+                height: 1,
+            },
+        );
+    }
 }
