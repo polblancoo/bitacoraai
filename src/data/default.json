@@ -2,39 +2,32 @@
   "sections": [
     {
       "id": 1,
-      "title": "📁 Git",
+      "title": "📝 Notas",
       "details": [
         {
           "id": 1,
-          "title": "git status",
-          "description": "Muestra el estado actual del repositorio",
-          "created_at": "2024-03-19 10:00:00"
-        },
-        {
-          "id": 2,
-          "title": "git add",
-          "description": "Agrega archivos al staging area",
-          "created_at": "2024-03-19 10:01:00"
+          "title": "Bienvenido a Rust TUI Manager",
+          "description": "Esta es una aplicación para gestionar notas y snippets. Usa 'h' para ver la ayuda.",
+          "created_at": "2024-03-20 00:00:00"
         }
       ]
     },
     {
       "id": 2,
-      "title": "🦀 Rust",
+      "title": "🔧 Comandos",
       "details": [
         {
           "id": 1,
-          "title": "cargo new",
-          "description": "Crea un nuevo proyecto Rust",
-          "created_at": "2024-03-19 10:02:00"
-        },
-        {
-          "id": 2,
-          "title": "cargo run",
-          "description": "Compila y ejecuta el proyecto",
-          "created_at": "2024-03-19 10:03:00"
+          "title": "Atajos básicos",
+          "description": "Tab: cambiar panel\na: agregar\ne: editar\nd: eliminar\ns: buscar\nx: exportar",
+          "created_at": "2024-03-20 00:00:00"
         }
       ]
     }
-  ]
+  ],
+  "layout_sizes": {
+    "left_panel_width": 30,
+    "right_panel_width": 70
+  },
+  "search_target": "Local"
 } 
