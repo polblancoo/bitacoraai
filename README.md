@@ -75,7 +75,9 @@ Una aplicación TUI (Terminal User Interface) para gestionar notas, comandos y s
 - Los enlaces web se pueden abrir directamente en tu navegador
 
 ## Instalación 🚀
-
+```
+cargo install rust-tui-manager
+```
 ## Estructura del Proyecto 🏗️
 
 ---
