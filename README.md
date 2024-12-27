@@ -25,6 +25,55 @@ Una aplicación TUI (Terminal User Interface) para gestionar notas, comandos y s
 - Diseño minimalista y funcional
 - Indicadores visuales de foco
 
+## 🎮 Guía Completa de Atajos de Teclado
+
+### 📑 Navegación General
+| Tecla | Función |
+|-------|---------|
+| `Tab` | Cambiar entre paneles (Secciones → Detalles → Búsqueda) |
+| `Shift + Tab` | Cambiar entre paneles en reversa |
+| `↑/↓` | Navegar en el panel actual |
+| `Ctrl + ←/→` | Ajustar tamaño de paneles |
+
+### 📝 Gestión de Contenido
+| Tecla | Función |
+|-------|---------|
+| `a` | Agregar nueva sección o detalle |
+| `e` | Editar elemento seleccionado |
+| `d` | Eliminar elemento seleccionado |
+| `Enter` | Confirmar acción |
+| `Esc` | Cancelar/Volver |
+
+### 🔍 Modo Búsqueda (`s` para activar)
+| Tecla | Función |
+|-------|---------|
+| `Tab` | Cambiar fuente de búsqueda (Local → Crates.io → Cheats.sh → Todas) |
+| `↑/↓` | Navegar entre resultados |
+| `PgUp/PgDn` | Scroll rápido |
+| `Enter` | Abrir enlace en navegador (para resultados web) |
+| `c` | Copiar enlace o guardar resultado en sección actual |
+| `Esc` | Cerrar búsqueda |
+
+### 💾 Otras Funciones
+| Tecla | Función |
+|-------|---------|
+| `h` | Mostrar/Ocultar ayuda |
+| `q` | Salir de la aplicación |
+
+### 📝 En Modo Edición
+| Tecla | Función |
+|-------|---------|
+| `Tab` | Cambiar entre campos (título/descripción) |
+| `Enter` | Guardar cambios |
+| `Esc` | Cancelar edición |
+| `Backspace` | Borrar caracteres |
+
+### 🔍 Consejos de Búsqueda
+- La búsqueda es en tiempo real mientras escribes
+- Los resultados se actualizan automáticamente al cambiar la fuente
+- Puedes guardar resultados web en tus secciones locales
+- Los enlaces web se pueden abrir directamente en tu navegador
+
 ## Instalación 🚀
 
 ## Estructura del Proyecto 🏗️
