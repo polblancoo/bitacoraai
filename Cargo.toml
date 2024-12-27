@@ -1,6 +1,6 @@
 [package]
 name = "rust-tui-manager"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Pablo Sánchez <CrewHelmSupport@gmail.com>"]
 description = "Una aplicación TUI para gestionar notas, snippets y búsquedas en múltiples fuentes para desarrolladores Rust"
