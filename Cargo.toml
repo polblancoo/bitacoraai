@@ -2,6 +2,13 @@
 name = "rust-tui-manager"
 version = "0.1.0"
 edition = "2021"
+authors = ["Pablo Sánchez <CrewHelmSupport@gmail.com>"]
+description = "Una aplicación TUI para gestionar notas, snippets y búsquedas en múltiples fuentes para desarrolladores Rust"
+readme = "README.md"
+repository = "https://github.com/psanchezg/rust-tui-manager"
+license = "MIT"
+keywords = ["tui", "notes", "manager", "rust", "search"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 ratatui = "0.24.0"
