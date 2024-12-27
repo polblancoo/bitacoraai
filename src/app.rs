@@ -9,6 +9,7 @@ use crate::search::SearchProvider;
 use tokio::sync::mpsc;
 use arboard::Clipboard;
 use open;
+use crate::export::{export_data, ExportFormat};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Section {
@@ -58,6 +59,7 @@ pub enum Mode {
     Editing,
     Searching,
     Help,
+    Exporting,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -88,6 +90,9 @@ pub struct App {
     pub clipboard: Option<Clipboard>,
     pub copying: bool,
     pub copy_result: Option<SearchResult>,
+    pub selected_export_format: usize,
+    pub export_formats: Vec<ExportFormat>,
+    pub export_message: Option<String>,
 }
 
 impl Clone for App {
@@ -114,6 +119,9 @@ impl Clone for App {
             clipboard: None,
             copying: self.copying,
             copy_result: self.copy_result.clone(),
+            selected_export_format: self.selected_export_format,
+            export_formats: self.export_formats.clone(),
+            export_message: self.export_message.clone(),
         }
     }
 }
@@ -151,6 +159,13 @@ impl App {
             clipboard: Clipboard::new().ok(),
             copying: false,
             copy_result: None,
+            selected_export_format: 0,
+            export_formats: vec![
+                ExportFormat::JSON,
+                ExportFormat::HTML,
+                ExportFormat::CSV,
+            ],
+            export_message: None,
         }
     }
 
@@ -204,6 +219,7 @@ impl App {
             Mode::Editing => self.handle_editing_mode(key),
             Mode::Searching => self.handle_search_mode(key),
             Mode::Help => self.handle_help_mode(key),
+            Mode::Exporting => self.handle_export_mode(key),
         }
     }
 
@@ -215,10 +231,11 @@ impl App {
             (KeyCode::Char('e'), _) => self.start_editing(), // Editar
             (KeyCode::Char('d'), _) => self.delete_current_item(), // Eliminar
             (KeyCode::Char('s'), _) => self.start_search(), // Buscar
-            (KeyCode::Left, KeyModifiers::CONTROL) => self.resize_panel(true), // Redimensionar
-            (KeyCode::Right, KeyModifiers::CONTROL) => self.resize_panel(false), // Redimensionar
-            (KeyCode::Up, _) => self.move_selection_up(), // Mover arriba
-            (KeyCode::Down, _) => self.move_selection_down(), // Mover abajo
+            (KeyCode::Char('x'), _) => self.mode = Mode::Exporting, // Exportar
+            (KeyCode::Left, KeyModifiers::CONTROL) => self.resize_panel(true),
+            (KeyCode::Right, KeyModifiers::CONTROL) => self.resize_panel(false),
+            (KeyCode::Up, _) => self.move_selection_up(),
+            (KeyCode::Down, _) => self.move_selection_down(),
             _ => {}
         }
     }
@@ -800,6 +817,41 @@ impl App {
         }
         
         Ok(())
+    }
+
+    pub fn handle_export_mode(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.mode = Mode::Normal;
+                self.export_message = None;
+            }
+            KeyCode::Up => {
+                if self.selected_export_format > 0 {
+                    self.selected_export_format -= 1;
+                }
+            }
+            KeyCode::Down => {
+                if self.selected_export_format < self.export_formats.len() - 1 {
+                    self.selected_export_format += 1;
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(format) = self.export_formats.get(self.selected_export_format) {
+                    match export_data(self, format.clone()) {
+                        Ok((source, dest)) => {
+                            self.export_message = Some(format!(
+                                "✅ Exportado desde:\n   {}\n   a:\n   {}", 
+                                source, dest
+                            ));
+                        }
+                        Err(e) => {
+                            self.export_message = Some(format!("❌ Error al exportar: {}", e));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }
 

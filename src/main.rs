@@ -4,6 +4,7 @@ mod helper;
 mod search;
 mod storage;
 mod ui;
+mod export;
 
 use crate::app::App;
 use crate::error::Result;
@@ -19,7 +20,7 @@ use std::io;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let storage = Storage::new("data.json".to_string());
+    let storage = Storage::new("data.json");
     
     // Setup terminal
     enable_raw_mode()?;

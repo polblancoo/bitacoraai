@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect, Alignment},
     style::{Color, Modifier, Style},
     text::{Span, Line},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap, Clear, Scrollbar, ScrollbarOrientation, ScrollbarState},
@@ -8,6 +8,8 @@ use ratatui::{
 use crate::app::{App, Focus, Mode, PopupFocus, SearchTarget};
 use crate::helper::KeyBindings;
 use crate::search::SearchSource;
+use crate::export::ExportFormat;
+use std::env;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -34,6 +36,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         Mode::Adding | Mode::Editing => draw_edit_popup(frame, app),
         Mode::Help => draw_help_popup(frame, app),
         Mode::Searching => draw_search_popup(frame, app),
+        Mode::Exporting => draw_export_popup(frame, app),
         _ => {}
     }
 }
@@ -255,7 +258,7 @@ fn draw_edit_popup(frame: &mut Frame, app: &App) {
             vec![
                 Line::from(""),
                 Line::from(vec![
-                    Span::raw("Título: "),
+                    Span::raw("T��tulo: "),
                     Span::styled(
                         format!("{}_", app.input_buffer),
                         title_style
@@ -327,16 +330,20 @@ fn draw_help_popup(frame: &mut Frame, _app: &App) {
             Span::raw(" - Elimina la sección/detalle seleccionado"),
         ]),
         Line::from(vec![
+            Span::styled("s", Style::default().fg(Color::Green)),
+            Span::raw(" - Buscar en secciones y detalles"),
+        ]),
+        Line::from(vec![
+            Span::styled("x", Style::default().fg(Color::Green)),
+            Span::raw(" - Exportar datos (JSON/HTML/CSV)"),
+        ]),
+        Line::from(vec![
             Span::styled("Tab", Style::default().fg(Color::Green)),
             Span::raw(" - Cambia el foco entre paneles"),
         ]),
         Line::from(vec![
             Span::styled("Ctrl + ←/→", Style::default().fg(Color::Green)),
             Span::raw(" - Ajusta el tamaño de los paneles"),
-        ]),
-        Line::from(vec![
-            Span::styled("s", Style::default().fg(Color::Green)),
-            Span::raw(" - Buscar en secciones y detalles"),
         ]),
         Line::from(vec![
             Span::styled("q", Style::default().fg(Color::Green)),
@@ -635,4 +642,79 @@ fn draw_search_popup(frame: &mut Frame, app: &mut App) {
             &mut scroll_state,
         );
     }
+}
+
+pub fn draw_export_popup(frame: &mut Frame, app: &App) {
+    let area = centered_rect(60, 50, frame.size());
+    
+    let clear = Clear;
+    frame.render_widget(clear, area);
+
+    let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let mut content = vec![
+        Line::from(vec![
+            Span::styled("Exportar datos", Style::default().fg(Color::Yellow))
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("Directorio: "),
+            Span::styled(&home, Style::default().fg(Color::Blue)),
+        ]),
+        Line::from(""),
+        Line::from("Selecciona el formato:"),
+        Line::from(""),
+    ];
+
+    for (i, format) in app.export_formats.iter().enumerate() {
+        let prefix = if i == app.selected_export_format { "➤ " } else { "  " };
+        let filename = match format {
+            ExportFormat::JSON => "rust-tui-export.json",
+            ExportFormat::HTML => "rust-tui-export.html",
+            ExportFormat::CSV => "rust-tui-export.csv",
+        };
+        
+        content.push(Line::from(vec![
+            Span::raw(prefix),
+            Span::styled(
+                format.to_string(),
+                if i == app.selected_export_format {
+                    Style::default().fg(Color::Black).bg(Color::Yellow)
+                } else {
+                    Style::default().fg(Color::White)
+                }
+            ),
+            Span::raw(" → "),
+            Span::styled(filename, Style::default().fg(Color::Blue)),
+        ]));
+    }
+
+    content.push(Line::from(""));
+    
+    // Mostrar mensaje de éxito/error si existe
+    if let Some(message) = &app.export_message {
+        content.push(Line::from(""));
+        content.push(Line::from(vec![
+            Span::styled(message, Style::default().fg(Color::Green))
+        ]));
+    }
+
+    content.push(Line::from(""));
+    content.push(Line::from(vec![
+        Span::styled("↑↓", Style::default().fg(Color::Yellow)),
+        Span::raw(" para seleccionar, "),
+        Span::styled("Enter", Style::default().fg(Color::Yellow)),
+        Span::raw(" para exportar, "),
+        Span::styled("Esc", Style::default().fg(Color::Yellow)),
+        Span::raw(" para cancelar"),
+    ]));
+
+    let export_message = Paragraph::new(content)
+        .block(Block::default()
+            .title("Exportar")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow)))
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(export_message, area);
 }
