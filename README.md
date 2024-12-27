@@ -58,6 +58,7 @@ Una aplicación TUI (Terminal User Interface) para gestionar notas, comandos y s
 | Tecla | Función |
 |-------|---------|
 | `h` | Mostrar/Ocultar ayuda |
+| `x` | Exportar <HTML ; JSON ; TXT> |
 | `q` | Salir de la aplicación |
 
 ### 📝 En Modo Edición
