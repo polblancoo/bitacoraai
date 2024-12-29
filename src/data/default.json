@@ -3,26 +3,7 @@
     {
       "id": 1,
       "title": "📝 Notas",
-      "details": [
-        {
-          "id": 1,
-          "title": "Bienvenido a Rust TUI Manager",
-          "description": "Esta es una aplicación para gestionar notas y snippets. Usa 'h' para ver la ayuda.",
-          "created_at": "2024-03-20 00:00:00"
-        }
-      ]
-    },
-    {
-      "id": 2,
-      "title": "🔧 Comandos",
-      "details": [
-        {
-          "id": 1,
-          "title": "Atajos básicos",
-          "description": "Tab: cambiar panel\na: agregar\ne: editar\nd: eliminar\ns: buscar\nx: exportar",
-          "created_at": "2024-03-20 00:00:00"
-        }
-      ]
+      "details": []
     }
   ],
   "layout_sizes": {

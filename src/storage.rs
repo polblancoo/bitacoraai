@@ -1,52 +1,38 @@
 use crate::error::Result;
 use crate::app::App;
-use std::fs;
+use crate::db::Database;
 use std::path::PathBuf;
 use std::env;
 
 pub struct Storage {
-    file_path: PathBuf,
+    db: Database,
 }
 
 impl Storage {
-    pub fn new(file_name: &str) -> Self {
+    pub fn new() -> Result<Self> {
         let config_dir = if let Ok(home) = env::var("HOME") {
-            let mut path = PathBuf::from(home);
-            path.push(".config");
-            path.push("rust-tui-manager");
+            let path = PathBuf::from(home).join(".config/rust-tui-manager");
+            std::fs::create_dir_all(&path)?;
             path
         } else {
-            PathBuf::from(".") // Fallback al directorio actual si no hay HOME
+            PathBuf::from(".")
         };
 
-        // Crear el directorio si no existe
-        fs::create_dir_all(&config_dir).unwrap_or_default();
-
-        let file_path = config_dir.join(file_name);
+        let db_path = config_dir.join("data.db");
+        let db = Database::new(db_path.to_str().unwrap())?;
         
-        // Si el archivo no existe, crear el directorio y copiar el default
-        if !file_path.exists() {
-            let default_content = include_str!("data/default.json");
-            fs::write(&file_path, default_content).unwrap_or_default();
-        }
+        Ok(Self { db })
+    }
 
-        Self { file_path }
+    pub fn load(&self) -> Result<App> {
+        let sections = self.db.load_sections()?;
+        Ok(App::from_sections(sections))
     }
 
     pub fn save(&self, app: &App) -> Result<()> {
-        let json = app.save_state()?;
-        fs::write(&self.file_path, json)?;
-        Ok(())
-    }
-
-    pub fn load(&self) -> Result<String> {
-        match fs::read_to_string(&self.file_path) {
-            Ok(contents) => Ok(contents),
-            Err(_) => {
-                // Si hay error al leer, devolver el contenido por defecto
-                let default_content = include_str!("data/default.json");
-                Ok(default_content.to_string())
-            }
+        for section in &app.sections {
+            self.db.save_section(section)?;
         }
+        Ok(())
     }
 } 

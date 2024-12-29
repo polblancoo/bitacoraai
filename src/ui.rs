@@ -6,12 +6,15 @@ use ratatui::{
     Frame,
 };
 use crate::app::{App, Focus, Mode, PopupFocus, SearchTarget};
-use crate::helper::KeyBindings;
 use crate::search::SearchSource;
 use crate::export::ExportFormat;
 use std::env;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
+    // Limpiar toda la pantalla primero
+    frame.render_widget(Clear, frame.size());
+
+    // Crear layout principal
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -28,16 +31,29 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         ].as_ref())
         .split(chunks[0]);
 
+    // Limpiar cada área individualmente antes de dibujar
+    frame.render_widget(Clear, main_chunks[0]);
+    frame.render_widget(Clear, main_chunks[1]);
+    frame.render_widget(Clear, chunks[1]);
+
+    // Dibujar los paneles principales
     draw_sections(frame, app, main_chunks[0]);
     draw_details(frame, app, main_chunks[1]);
     draw_shortcuts(frame, app, chunks[1]);
 
-    match app.mode {
-        Mode::Adding | Mode::Editing => draw_edit_popup(frame, app),
-        Mode::Help => draw_help_popup(frame, app),
-        Mode::Searching => draw_search_popup(frame, app),
-        Mode::Exporting => draw_export_popup(frame, app),
-        _ => {}
+    // Si hay un popup, limpiar su área y dibujarlo
+    if app.mode != Mode::Normal {
+        let popup_area = centered_rect(80, 80, frame.size());
+        frame.render_widget(Clear, popup_area);
+        
+        match app.mode {
+            Mode::Adding | Mode::Editing => draw_edit_popup(frame, app),
+            Mode::Help => draw_help_popup(frame, app),
+            Mode::Searching => draw_search_popup(frame, app),
+            Mode::Exporting => draw_export_popup(frame, app),
+            Mode::Viewing => draw_view_popup(frame, app),
+            _ => {}
+        }
     }
 }
 
@@ -177,132 +193,303 @@ fn draw_details(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_shortcuts(frame: &mut Frame, app: &App, area: Rect) {
-    let bindings = KeyBindings::new(app.focus.clone());
-    let shortcuts = Line::from(
-        bindings
-            .commands
-            .iter()
-            .flat_map(|(key, desc)| {
+    let shortcuts = match app.mode {
+        Mode::Normal => vec![
+            Line::from(vec![
+                Span::styled("a", Style::default().fg(Color::Yellow)),
+                Span::raw(" agregar | "),
+                Span::styled("e", Style::default().fg(Color::Yellow)),
+                Span::raw(" editar | "),
+                Span::styled("d", Style::default().fg(Color::Yellow)),
+                Span::raw(" eliminar | "),
+                Span::styled("Tab", Style::default().fg(Color::Yellow)),
+                Span::raw(" cambiar panel | "),
+                Span::styled("h", Style::default().fg(Color::Yellow)),
+                Span::raw(" ayuda | "),
+                Span::styled("q", Style::default().fg(Color::Yellow)),
+                Span::raw(" salir"),
+            ]),
+        ],
+        Mode::Adding | Mode::Editing => {
+            if app.focus == Focus::Details {
                 vec![
-                    Span::styled(
-                        key,
-                        Style::default().fg(Color::Yellow),
-                    ),
-                    Span::raw(": "),
-                    Span::raw(desc),
-                    Span::raw(" | "),
+                    Line::from(vec![
+                        Span::styled("Tab", Style::default().fg(Color::Yellow)),
+                        Span::raw(" cambiar campo | "),
+                        Span::styled("Ctrl+S", Style::default().fg(Color::Yellow)),
+                        Span::raw(" guardar | "),
+                        Span::styled("Ctrl+L", Style::default().fg(Color::Yellow)),
+                        Span::raw(" cambiar lenguaje"),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Ctrl+C/V", Style::default().fg(Color::Yellow)),
+                        Span::raw(" copiar/pegar | "),
+                        Span::styled("Enter", Style::default().fg(Color::Yellow)),
+                        Span::raw(" nueva línea | "),
+                        Span::styled("Esc", Style::default().fg(Color::Yellow)),
+                        Span::raw(" cancelar"),
+                    ]),
                 ]
-            })
-            .collect::<Vec<Span>>()
-    );
-
-    let paragraph = Paragraph::new(shortcuts)
-        .block(Block::default().borders(Borders::ALL))
-        .wrap(Wrap { trim: true });
-
-    frame.render_widget(paragraph, area);
-}
-
-fn draw_edit_popup(frame: &mut Frame, app: &App) {
-    let area = centered_rect(70, 50, frame.size());
-    
-    let title = match app.focus {
-        Focus::Sections => "Nueva Sección".to_string(),
-        Focus::Details => {
-            if let Some(section_idx) = app.selected_section {
-                if let Some(section) = app.sections.get(section_idx) {
-                    format!("Nuevo Detalle en \"{}\"", section.title)
-                } else {
-                    "Nuevo Detalle".to_string()
-                }
             } else {
-                "Nuevo Detalle".to_string()
+                vec![
+                    Line::from(vec![
+                        Span::styled("Ctrl+S", Style::default().fg(Color::Yellow)),
+                        Span::raw(" guardar | "),
+                        Span::styled("Esc", Style::default().fg(Color::Yellow)),
+                        Span::raw(" cancelar"),
+                    ]),
+                ]
             }
-        }
-        _ => "Nuevo".to_string(),
-    };
-
-    let title_style = if app.popup_focus == PopupFocus::Title {
-        Style::default().bg(Color::Yellow).fg(Color::Black)
-    } else {
-        Style::default().fg(Color::White)
-    };
-
-    let desc_style = if app.popup_focus == PopupFocus::Description {
-        Style::default().bg(Color::Yellow).fg(Color::Black)
-    } else {
-        Style::default().fg(Color::White)
-    };
-
-    let content = match app.focus {
-        Focus::Sections => {
-            let input_text = format!("{}_", app.input_buffer);
-            vec![
-                Line::from(""),
-                Line::from(vec![
-                    Span::raw("Título: "),
-                    Span::styled(
-                        input_text,
-                        Style::default()
-                            .bg(Color::Yellow)
-                            .fg(Color::Black)
-                    ),
-                ]),
-                Line::from(""),
-                Line::from(vec![
-                    Span::raw("(El ícono 📁 se agregará automáticamente si no lo incluyes)")
-                ]),
-            ]
-        }
-        Focus::Details => {
-            vec![
-                Line::from(""),
-                Line::from(vec![
-                    Span::raw("T��tulo: "),
-                    Span::styled(
-                        format!("{}_", app.input_buffer),
-                        title_style
-                    ),
-                ]),
-                Line::from(""),
-                Line::from(vec![
-                    Span::raw("Descripción: "),
-                    Span::styled(
-                        format!("{}_", app.description_buffer),
-                        desc_style
-                    ),
-                ]),
-                Line::from(""),
-                Line::from(vec![
-                    Span::styled("Tab", Style::default().fg(Color::Green)),
-                    Span::raw(" para cambiar entre campos"),
-                ]),
-                Line::from(""),
-                Line::from(vec![
-                    Span::styled("Enter", Style::default().fg(Color::Green)),
-                    Span::raw(" para guardar, "),
-                    Span::styled("Esc", Style::default().fg(Color::Green)),
-                    Span::raw(" para cancelar"),
-                ]),
-            ]
-        }
+        },
         _ => vec![],
     };
 
-    let edit_message = Paragraph::new(content)
+    let shortcuts_block = Paragraph::new(shortcuts)
         .block(Block::default()
+            .title("Atajos")
+            .borders(Borders::ALL))
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(shortcuts_block, area);
+}
+
+fn draw_edit_popup(frame: &mut Frame, app: &App) {
+    let area = if app.focus == Focus::Details {
+        centered_rect(80, 80, frame.size())
+    } else {
+        centered_rect(60, 40, frame.size())
+    };
+    
+    frame.render_widget(Clear, area);
+
+    if app.focus == Focus::Details {
+        // Marco contenedor
+        let container_block = Block::default()
             .title(Span::styled(
-                title,
+                if app.mode == Mode::Adding {
+                    "Agregar detalle"
+                } else {
+                    "Editar detalle"
+                },
                 Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
             ))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Yellow)))
-        .alignment(ratatui::layout::Alignment::Left)
+            .border_style(Style::default().fg(Color::Yellow));
+
+        frame.render_widget(container_block.clone(), area);
+        let inner_area = container_block.inner(area);
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints([
+                Constraint::Length(3),  // Título
+                Constraint::Length(5),  // Descripción
+                Constraint::Min(10),    // Código
+                Constraint::Length(3),  // Ayuda
+            ])
+            .split(inner_area);
+
+        // Campo título
+        let title_input = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled(
+                    &app.input_buffer,
+                    Style::default().fg(Color::White)
+                ),
+                Span::styled(
+                    if app.popup_focus == PopupFocus::Title { "_" } else { "" },
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::SLOW_BLINK)
+                ),
+            ])
+        ])
+        .block(Block::default()
+            .title("Título")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(
+                if app.popup_focus == PopupFocus::Title {
+                    Color::Yellow
+                } else {
+                    Color::White
+                }
+            )));
+
+        // Campo descripción
+        let desc_input = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled(
+                    &app.description_buffer,
+                    Style::default().fg(Color::White)
+                ),
+                Span::styled(
+                    if app.popup_focus == PopupFocus::Description { "_" } else { "" },
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::SLOW_BLINK)
+                ),
+            ])
+        ])
+        .block(Block::default()
+            .title("Descripción")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(
+                if app.popup_focus == PopupFocus::Description {
+                    Color::Yellow
+                } else {
+                    Color::White
+                }
+            )))
         .wrap(Wrap { trim: true });
 
-    let clear = Clear;
-    frame.render_widget(clear, area);
-    frame.render_widget(edit_message, area);
+        // Campo código
+        let code_lines: Vec<Line> = if app.code_buffer.is_empty() {
+            vec![Line::from(vec![
+                Span::styled(
+                    "1 │ ",
+                    Style::default().fg(Color::DarkGray)
+                ),
+                Span::styled(
+                    if app.popup_focus == PopupFocus::Code { "_" } else { "" },
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::SLOW_BLINK)
+                ),
+            ])]
+        } else {
+            app.code_buffer
+                .lines()
+                .enumerate()
+                .map(|(i, line)| {
+                    Line::from(vec![
+                        Span::styled(
+                            format!("{:4} │ ", i + 1),
+                            Style::default().fg(Color::DarkGray)
+                        ),
+                        Span::styled(line, Style::default().fg(Color::White)),
+                    ])
+                })
+                .collect()
+        };
+
+        let code_block = Paragraph::new(code_lines)
+            .block(Block::default()
+                .title(format!("Código - {} (Ctrl+L para cambiar lenguaje)", app.selected_language))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(
+                    if app.popup_focus == PopupFocus::Code {
+                        Color::Yellow
+                    } else {
+                        Color::White
+                    }
+                )))
+            .style(Style::default().fg(Color::White))
+            .scroll((app.code_scroll as u16, 0));
+
+        // Ayuda
+        let help_text = vec![
+            Line::from(vec![
+                Span::styled("Tab", Style::default().fg(Color::Yellow)),
+                Span::raw(" cambiar campo | "),
+                Span::styled("Ctrl+S", Style::default().fg(Color::Yellow)),
+                Span::raw(" guardar | "),
+                Span::styled("Ctrl+L", Style::default().fg(Color::Yellow)),
+                Span::raw(" cambiar lenguaje"),
+            ]),
+            Line::from(vec![
+                Span::styled("Ctrl+C/V", Style::default().fg(Color::Yellow)),
+                Span::raw(" copiar/pegar | "),
+                Span::styled("Enter", Style::default().fg(Color::Yellow)),
+                Span::raw(" nueva línea | "),
+                Span::styled("Esc", Style::default().fg(Color::Yellow)),
+                Span::raw(" cancelar"),
+            ]),
+        ];
+
+        let help_message = Paragraph::new(help_text)
+            .block(Block::default()
+                .title("Atajos")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray)))
+            .alignment(Alignment::Left);
+
+        frame.render_widget(title_input, chunks[0]);
+        frame.render_widget(desc_input, chunks[1]);
+        frame.render_widget(code_block, chunks[2]);
+        frame.render_widget(help_message, chunks[3]);
+    } else {
+        // Frame para secciones
+        let container_block = Block::default()
+            .title(Span::styled(
+                if app.mode == Mode::Adding { "Nueva Sección" } else { "Editar Sección" },
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            ))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+
+        frame.render_widget(container_block.clone(), area);
+        let inner_area = container_block.inner(area);
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints([
+                Constraint::Length(3),  // Input
+                Constraint::Length(2),  // Espacio
+                Constraint::Length(3),  // Ayuda
+            ])
+            .split(inner_area);
+
+        let input_area = Paragraph::new(vec![
+            Line::from(vec![
+                Span::raw("Título: "),
+                Span::styled(
+                    &app.input_buffer,
+                    Style::default().fg(Color::White)
+                ),
+                Span::styled(
+                    "_",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::SLOW_BLINK)
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled(
+                    "(El ícono 📁 se agregará automáticamente)",
+                    Style::default().fg(Color::DarkGray)
+                )
+            ]),
+        ])
+        .block(Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow)))
+        .alignment(Alignment::Left);
+
+        let help_text = vec![
+            Line::from(vec![
+                Span::styled("Ctrl+S", Style::default().fg(Color::Yellow)),
+                Span::raw(" guardar | "),
+                Span::styled("Enter", Style::default().fg(Color::Yellow)),
+                Span::raw(" guardar | "),
+                Span::styled("Esc", Style::default().fg(Color::Yellow)),
+                Span::raw(" cancelar"),
+            ]),
+        ];
+
+        let help_message = Paragraph::new(help_text)
+            .block(Block::default()
+                .title("Atajos")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray)))
+            .alignment(Alignment::Left);
+
+        frame.render_widget(input_area, chunks[0]);
+        frame.render_widget(help_message, chunks[2]);
+    }
 }
 
 fn draw_help_popup(frame: &mut Frame, _app: &App) {
@@ -717,4 +904,93 @@ pub fn draw_export_popup(frame: &mut Frame, app: &App) {
         .wrap(Wrap { trim: true });
 
     frame.render_widget(export_message, area);
+}
+
+fn draw_view_popup(frame: &mut Frame, app: &App) {
+    let area = centered_rect(80, 80, frame.size());
+    frame.render_widget(Clear, area);
+
+    let container_block = Block::default()
+        .title(Span::styled(
+            "Detalle",
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+        ))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    frame.render_widget(container_block.clone(), area);
+    let inner_area = container_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(3),  // Título
+            Constraint::Length(5),  // Descripción
+            Constraint::Min(10),    // Código
+            Constraint::Length(3),  // Ayuda
+        ])
+        .split(inner_area);
+
+    // Título
+    let title = Paragraph::new(app.input_buffer.as_str())
+        .block(Block::default()
+            .title("Título")
+            .borders(Borders::ALL))
+        .style(Style::default().fg(Color::White));
+
+    // Descripción
+    let desc = Paragraph::new(app.description_buffer.as_str())
+        .block(Block::default()
+            .title("Descripción")
+            .borders(Borders::ALL))
+        .style(Style::default().fg(Color::White))
+        .wrap(Wrap { trim: true });
+
+    // Código
+    let code_lines: Vec<Line> = app.code_buffer
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            Line::from(vec![
+                Span::styled(
+                    format!("{:4} │ ", i + 1),
+                    Style::default().fg(Color::DarkGray)
+                ),
+                Span::styled(line, Style::default().fg(Color::White)),
+            ])
+        })
+        .collect();
+
+    let code = Paragraph::new(code_lines)
+        .block(Block::default()
+            .title(format!("Código - {}", app.selected_language.to_string()))
+            .borders(Borders::ALL))
+        .style(Style::default().fg(Color::White))
+        .scroll((app.code_scroll as u16, 0));
+
+    // Ayuda
+    let help = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled("e", Style::default().fg(Color::Yellow)),
+            Span::raw(" editar | "),
+            Span::styled("↑/↓", Style::default().fg(Color::Yellow)),
+            Span::raw(" scroll | "),
+            Span::styled("PgUp/PgDn", Style::default().fg(Color::Yellow)),
+            Span::raw(" scroll rápido | "),
+            Span::styled("Ctrl+C", Style::default().fg(Color::Yellow)),
+            Span::raw(" copiar | "),
+            Span::styled("Esc", Style::default().fg(Color::Yellow)),
+            Span::raw(" cerrar"),
+        ])
+    ])
+    .block(Block::default()
+        .title("Atajos")
+        .borders(Borders::ALL))
+        .alignment(Alignment::Left);
+
+    frame.render_widget(title, chunks[0]);
+    frame.render_widget(desc, chunks[1]);
+    frame.render_widget(code, chunks[2]);
+    frame.render_widget(help, chunks[3]);
 }

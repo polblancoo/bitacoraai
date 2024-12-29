@@ -5,6 +5,10 @@ mod search;
 mod storage;
 mod ui;
 mod export;
+mod languages;
+mod code_handler;
+mod db;
+mod config;
 
 use crate::app::App;
 use crate::error::Result;
@@ -20,7 +24,7 @@ use std::io;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let storage = Storage::new("data.json");
+    let storage = Storage::new()?;
     
     // Setup terminal
     enable_raw_mode()?;
@@ -30,21 +34,12 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create app and load data
-    let mut app = App::new();
-    
-    // Cargar el estado guardado
-    if let Ok(json) = storage.load() {
-        if let Err(e) = app.load_state(&json) {
-            eprintln!("Error loading state: {}", e);
-        }
-    }
+    let mut app = storage.load()?;
 
     let res = run_app(&mut terminal, &mut app).await;
 
-    // Guardar el estado antes de salir
-    if let Err(e) = storage.save(&app) {
-        eprintln!("Error saving state: {}", e);
-    }
+    // Save state before exit
+    storage.save(&app)?;
 
     // Restore terminal
     disable_raw_mode()?;

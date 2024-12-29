@@ -10,6 +10,10 @@ use tokio::sync::mpsc;
 use arboard::Clipboard;
 use open;
 use crate::export::{export_data, ExportFormat};
+use crate::languages::Language;
+use crate::code_handler::{CodeHandler, MAX_CODE_SIZE};
+use crate::db::Database;
+use std::fs;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Section {
@@ -23,6 +27,8 @@ pub struct Detail {
     pub id: usize,
     pub title: String,
     pub description: String,
+    pub code_path: Option<String>,
+    pub language: Language,
     pub created_at: String,
 }
 
@@ -57,6 +63,7 @@ pub enum Mode {
     Normal,
     Adding,
     Editing,
+    Viewing,
     Searching,
     Help,
     Exporting,
@@ -66,6 +73,7 @@ pub enum Mode {
 pub enum PopupFocus {
     Title,
     Description,
+    Code,
 }
 
 pub struct App {
@@ -93,6 +101,12 @@ pub struct App {
     pub selected_export_format: usize,
     pub export_formats: Vec<ExportFormat>,
     pub export_message: Option<String>,
+    pub code_buffer: String,
+    pub code_cursor: usize,
+    pub code_scroll: usize,
+    pub selected_language: Language,
+    pub code_handler: CodeHandler,
+    pub db: Database,
 }
 
 impl Clone for App {
@@ -122,6 +136,12 @@ impl Clone for App {
             selected_export_format: self.selected_export_format,
             export_formats: self.export_formats.clone(),
             export_message: self.export_message.clone(),
+            code_buffer: self.code_buffer.clone(),
+            code_cursor: self.code_cursor,
+            code_scroll: self.code_scroll,
+            selected_language: self.selected_language.clone(),
+            code_handler: self.code_handler.clone(),
+            db: self.db.clone(),
         }
     }
 }
@@ -134,6 +154,16 @@ pub struct LayoutSizes {
 
 impl App {
     pub fn new() -> Self {
+        let config = crate::config::Config::new().unwrap_or_else(|e| {
+            eprintln!("Error creando configuración: {}", e);
+            std::process::exit(1);
+        });
+        
+        let db = Database::new(config.db_path.to_str().unwrap()).unwrap_or_else(|e| {
+            eprintln!("Error conectando a la base de datos: {}", e);
+            std::process::exit(1);
+        });
+
         Self {
             sections: Vec::new(),
             selected_section: None,
@@ -166,7 +196,25 @@ impl App {
                 ExportFormat::CSV,
             ],
             export_message: None,
+            code_buffer: String::new(),
+            code_cursor: 0,
+            code_scroll: 0,
+            selected_language: Language::default(),
+            code_handler: CodeHandler::new(),
+            db,
         }
+    }
+
+    pub fn from_sections(sections: Vec<Section>) -> Self {
+        let mut app = Self::new();
+        app.sections = sections;
+        if !app.sections.is_empty() {
+            app.selected_section = Some(0);
+            if !app.sections[0].details.is_empty() {
+                app.selected_detail = Some(0);
+            }
+        }
+        app
     }
 
     pub fn next_focus(&mut self) {
@@ -186,112 +234,343 @@ impl App {
     }
 
     pub fn handle_input(&mut self, key: KeyEvent) {
-        if key.code == KeyCode::Tab {
-            match self.mode {
-                Mode::Normal => self.next_focus(),
-                Mode::Adding | Mode::Editing => {
-                    if self.focus == Focus::Details {
-                        self.popup_focus = match self.popup_focus {
-                            PopupFocus::Title => PopupFocus::Description,
-                            PopupFocus::Description => PopupFocus::Title,
-                        };
-                    }
-                }
-                Mode::Searching => {
-                    self.cycle_search_target();
-                    if !self.search_query.is_empty() {
-                        self.perform_local_search(self.search_query.clone());
-                    }
-                }
-                _ => {}
-            }
-            return;
-        }
-
         match self.mode {
+            Mode::Adding | Mode::Editing => {
+                match key.code {
+                    KeyCode::Char(c) => {
+                        if key.modifiers.contains(KeyModifiers::CONTROL) {
+                            match c {
+                                's' => {
+                                    if self.mode == Mode::Editing {
+                                        self.handle_edit_submit();
+                                    } else {
+                                        self.handle_add_submit();
+                                    }
+                                    self.mode = Mode::Normal;
+                                }
+                                'l' => {
+                                    if self.popup_focus == PopupFocus::Code {
+                                        self.cycle_language();
+                                    }
+                                }
+                                'v' => {
+                                    if let Some(clipboard) = &mut self.clipboard {
+                                        if let Ok(text) = clipboard.get_text() {
+                                            match self.popup_focus {
+                                                PopupFocus::Code => {
+                                                    let new_size = self.code_buffer.len() + text.len();
+                                                    if new_size > MAX_CODE_SIZE {
+                                                        let remaining = MAX_CODE_SIZE - self.code_buffer.len();
+                                                        let truncated = text.chars().take(remaining).collect::<String>();
+                                                        self.code_buffer.insert_str(self.code_cursor, &truncated);
+                                                        self.code_cursor += truncated.len();
+                                                        self.show_warning("⚠️ Código truncado: excede el límite de tamaño");
+                                                    } else {
+                                                        self.code_buffer.insert_str(self.code_cursor, &text);
+                                                        self.code_cursor += text.len();
+                                                    }
+                                                }
+                                                PopupFocus::Title => {
+                                                    self.input_buffer.push_str(&text);
+                                                }
+                                                PopupFocus::Description => {
+                                                    self.description_buffer.push_str(&text);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                'c' => {
+                                    if let Some(clipboard) = &mut self.clipboard {
+                                        match self.popup_focus {
+                                            PopupFocus::Code => {
+                                                let _ = clipboard.set_text(&self.code_buffer);
+                                            }
+                                            PopupFocus::Title => {
+                                                let _ = clipboard.set_text(&self.input_buffer);
+                                            }
+                                            PopupFocus::Description => {
+                                                let _ = clipboard.set_text(&self.description_buffer);
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
+                        } else {
+                            // Manejo normal de caracteres
+                            match self.focus {
+                                Focus::Details => {
+                                    match self.popup_focus {
+                                        PopupFocus::Code => {
+                                            self.code_buffer.push(c);
+                                        }
+                                        PopupFocus::Title => self.input_buffer.push(c),
+                                        PopupFocus::Description => self.description_buffer.push(c),
+                                    }
+                                }
+                                Focus::Sections => {
+                                    self.input_buffer.push(c);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    KeyCode::Tab => {
+                        if self.focus == Focus::Details {
+                            if key.modifiers.contains(KeyModifiers::SHIFT) {
+                                // Si es Shift+Tab, retroceder
+                                self.popup_focus = match self.popup_focus {
+                                    PopupFocus::Title => PopupFocus::Code,
+                                    PopupFocus::Description => PopupFocus::Title,
+                                    PopupFocus::Code => PopupFocus::Description,
+                                };
+                            } else if self.popup_focus == PopupFocus::Code {
+                                // Si estamos en el código, insertar tab
+                                self.code_buffer.push_str("    ");
+                            } else {
+                                // Avanzar al siguiente campo
+                                self.popup_focus = match self.popup_focus {
+                                    PopupFocus::Title => PopupFocus::Description,
+                                    PopupFocus::Description => PopupFocus::Code,
+                                    PopupFocus::Code => PopupFocus::Title,
+                                };
+                            }
+                        }
+                    }
+                    KeyCode::Enter => {
+                        if self.popup_focus == PopupFocus::Code {
+                            self.code_buffer.push('\n');
+                        }
+                    }
+                    KeyCode::Backspace => {
+                        match self.focus {
+                            Focus::Sections => {
+                                let _ = self.input_buffer.pop();
+                            }
+                            Focus::Details => {
+                                match self.popup_focus {
+                                    PopupFocus::Title => { let _ = self.input_buffer.pop(); }
+                                    PopupFocus::Description => { let _ = self.description_buffer.pop(); }
+                                    PopupFocus::Code => {
+                                        if self.code_cursor > 0 {
+                                            self.code_cursor -= 1;
+                                            self.code_buffer.remove(self.code_cursor);
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    KeyCode::Left => {
+                        if self.popup_focus == PopupFocus::Code && self.code_cursor > 0 {
+                            self.code_cursor -= 1;
+                        }
+                    }
+                    KeyCode::Right => {
+                        if self.popup_focus == PopupFocus::Code && self.code_cursor < self.code_buffer.len() {
+                            self.code_cursor += 1;
+                        }
+                    }
+                    KeyCode::Esc => {
+                        self.mode = Mode::Normal;
+                        self.input_buffer.clear();
+                        self.description_buffer.clear();
+                        self.code_buffer.clear();
+                        self.popup_focus = PopupFocus::Title;
+                    }
+                    KeyCode::Delete => {
+                        if self.popup_focus == PopupFocus::Code && self.code_cursor < self.code_buffer.len() {
+                            self.code_buffer.remove(self.code_cursor);
+                        }
+                    }
+                    KeyCode::Up => {
+                        if self.popup_focus == PopupFocus::Code {
+                            let lines: Vec<&str> = self.code_buffer.lines().collect();
+                            let current_line = self.code_cursor_line();
+                            if current_line > 0 {
+                                let current_column = self.code_cursor_column();
+                                let mut new_pos = 0;
+                                let target_line = current_line - 1;
+                                
+                                // Encontrar la posición de la línea anterior
+                                for _ in 0..target_line {
+                                    if let Some(idx) = self.code_buffer[new_pos..].find('\n') {
+                                        new_pos += idx + 1;
+                                    }
+                                }
+                                
+                                // Calcular la nueva posición del cursor
+                                let line_length = lines.get(target_line)
+                                    .map(|line| line.len())
+                                    .unwrap_or(0);
+                                
+                                self.code_cursor = new_pos + current_column.min(line_length);
+                                
+                                // Ajustar scroll si es necesario
+                                if self.code_scroll > 0 && current_line <= self.code_scroll {
+                                    self.code_scroll -= 1;
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Down => {
+                        if self.popup_focus == PopupFocus::Code {
+                            let lines: Vec<&str> = self.code_buffer.lines().collect();
+                            let current_line = self.code_cursor_line();
+                            if current_line < lines.len() - 1 {
+                                let current_column = self.code_cursor_column();
+                                let next_line_start = self.code_buffer[self.code_cursor..]
+                                    .find('\n')
+                                    .map(|i| self.code_cursor + i + 1)
+                                    .unwrap_or(self.code_buffer.len());
+                                let next_line_end = self.code_buffer[next_line_start..]
+                                    .find('\n')
+                                    .map(|i| next_line_start + i)
+                                    .unwrap_or(self.code_buffer.len());
+                                self.code_cursor = next_line_start + current_column.min(
+                                    next_line_end - next_line_start
+                                );
+                                self.code_scroll += 1;
+                            }
+                        }
+                    }
+                    KeyCode::PageUp => {
+                        if self.popup_focus == PopupFocus::Code {
+                            let lines: Vec<&str> = self.code_buffer.lines().collect();
+                            let current_line = self.code_cursor_line();
+                            if current_line >= 5 {
+                                let target_line = current_line - 5;
+                                let mut pos = 0;
+                                for _ in 0..target_line {
+                                    if let Some(idx) = self.code_buffer[pos..].find('\n') {
+                                        pos += idx + 1;
+                                    }
+                                }
+                                self.code_cursor = pos;
+                                self.code_scroll = self.code_scroll.saturating_sub(5);
+                            } else {
+                                self.code_cursor = 0;
+                                self.code_scroll = 0;
+                            }
+                        }
+                    }
+                    KeyCode::PageDown => {
+                        if self.popup_focus == PopupFocus::Code {
+                            let lines: Vec<&str> = self.code_buffer.lines().collect();
+                            let current_line = self.code_cursor_line();
+                            if current_line + 5 < lines.len() {
+                                let target_line = current_line + 5;
+                                let mut pos = 0;
+                                for _ in 0..target_line {
+                                    if let Some(idx) = self.code_buffer[pos..].find('\n') {
+                                        pos += idx + 1;
+                                    } else {
+                                        pos = self.code_buffer.len();
+                                        break;
+                                    }
+                                }
+                                self.code_cursor = pos;
+                                self.code_scroll = self.code_scroll.saturating_add(5);
+                            } else {
+                                // Ir al final del código
+                                self.code_cursor = self.code_buffer.len();
+                                let total_lines = lines.len();
+                                let visible_lines = 10;
+                                self.code_scroll = total_lines.saturating_sub(visible_lines);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
             Mode::Normal => {
                 match key.code {
+                    KeyCode::Char('a') => {
+                        self.mode = Mode::Adding;
+                        self.input_buffer.clear();
+                        self.description_buffer.clear();
+                        self.code_buffer.clear();
+                        self.popup_focus = PopupFocus::Title;
+                    }
+                    KeyCode::Char('e') => self.start_editing(),
+                    KeyCode::Char('d') => self.delete_current_item(),
+                    KeyCode::Char('s') => self.start_search(),
+                    KeyCode::Char('h') => self.mode = Mode::Help,
+                    KeyCode::Char('x') => self.mode = Mode::Exporting,
+                    KeyCode::Up => self.move_selection_up(),
+                    KeyCode::Down => self.move_selection_down(),
+                    KeyCode::Tab => self.next_focus(),
                     KeyCode::BackTab => self.previous_focus(),
-                    _ => self.handle_normal_mode(key),
+                    KeyCode::Enter => {
+                        if self.focus == Focus::Details {
+                            if let (Some(section_idx), Some(detail_idx)) = (self.selected_section, self.selected_detail) {
+                                if let Some(section) = self.sections.get(section_idx) {
+                                    if let Some(detail) = section.details.get(detail_idx) {
+                                        self.mode = Mode::Viewing;
+                                        self.input_buffer = detail.title.clone();
+                                        self.description_buffer = detail.description.clone();
+                                        if let Some(ref path) = detail.code_path {
+                                            self.code_buffer = fs::read_to_string(path).unwrap_or_default();
+                                        }
+                                        self.selected_language = detail.language.clone();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
-            Mode::Adding => self.handle_adding_mode(key),
-            Mode::Editing => self.handle_editing_mode(key),
+            Mode::Help | Mode::Exporting => {
+                if key.code == KeyCode::Esc {
+                    self.mode = Mode::Normal;
+                }
+            }
             Mode::Searching => self.handle_search_mode(key),
-            Mode::Help => self.handle_help_mode(key),
-            Mode::Exporting => self.handle_export_mode(key),
-        }
-    }
-
-    fn handle_normal_mode(&mut self, key: KeyEvent) {
-        match (key.code, key.modifiers) {
-            (KeyCode::Char('q'), _) => {}, // Salir
-            (KeyCode::Char('h'), _) => self.mode = Mode::Help, // Ayuda
-            (KeyCode::Char('a'), _) => self.start_adding(), // Agregar
-            (KeyCode::Char('e'), _) => self.start_editing(), // Editar
-            (KeyCode::Char('d'), _) => self.delete_current_item(), // Eliminar
-            (KeyCode::Char('s'), _) => self.start_search(), // Buscar
-            (KeyCode::Char('x'), _) => self.mode = Mode::Exporting, // Exportar
-            (KeyCode::Left, KeyModifiers::CONTROL) => self.resize_panel(true),
-            (KeyCode::Right, KeyModifiers::CONTROL) => self.resize_panel(false),
-            (KeyCode::Up, _) => self.move_selection_up(),
-            (KeyCode::Down, _) => self.move_selection_down(),
-            _ => {}
-        }
-    }
-
-    fn resize_panel(&mut self, decrease: bool) {
-        match self.focus {
-            Focus::Sections => {
-                if decrease && self.layout_sizes.left_panel_width > 20 {
-                    self.layout_sizes.left_panel_width -= 5;
-                    self.layout_sizes.right_panel_width += 5;
-                } else if !decrease && self.layout_sizes.left_panel_width < 50 {
-                    self.layout_sizes.left_panel_width += 5;
-                    self.layout_sizes.right_panel_width -= 5;
+            Mode::Viewing => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.mode = Mode::Normal;
+                        self.input_buffer.clear();
+                        self.description_buffer.clear();
+                        self.code_buffer.clear();
+                        self.code_cursor = 0;
+                        self.code_scroll = 0;
+                    }
+                    KeyCode::Char('e') => {
+                        self.mode = Mode::Editing;
+                    }
+                    KeyCode::Up => {
+                        if self.code_scroll > 0 {
+                            self.code_scroll -= 1;
+                        }
+                    }
+                    KeyCode::Down => {
+                        let total_lines = self.code_buffer.lines().count();
+                        let visible_lines = 10;
+                        if self.code_scroll < total_lines.saturating_sub(visible_lines) {
+                            self.code_scroll += 1;
+                        }
+                    }
+                    KeyCode::PageUp => {
+                        self.code_scroll = self.code_scroll.saturating_sub(5);
+                    }
+                    KeyCode::PageDown => {
+                        let total_lines = self.code_buffer.lines().count();
+                        let visible_lines = 10;
+                        let max_scroll = total_lines.saturating_sub(visible_lines);
+                        self.code_scroll = (self.code_scroll + 5).min(max_scroll);
+                    }
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        if let Some(clipboard) = &mut self.clipboard {
+                            let _ = clipboard.set_text(&self.code_buffer);
+                        }
+                    }
+                    _ => {}
                 }
             }
-            Focus::Details => {
-                if decrease && self.layout_sizes.right_panel_width > 40 {
-                    self.layout_sizes.right_panel_width -= 5;
-                    self.layout_sizes.left_panel_width += 5;
-                } else if !decrease && self.layout_sizes.right_panel_width < 80 {
-                    self.layout_sizes.right_panel_width += 5;
-                    self.layout_sizes.left_panel_width -= 5;
-                }
-            }
-            Focus::Search => {}
-        }
-    }
-
-    pub fn handle_adding_mode(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc => {
-                self.mode = Mode::Normal;
-                self.input_buffer.clear();
-                self.description_buffer.clear();
-                self.popup_focus = PopupFocus::Title;
-            }
-            KeyCode::Enter => {
-                self.handle_add_submit();
-                self.mode = Mode::Normal;
-                self.input_buffer.clear();
-                self.description_buffer.clear();
-                self.popup_focus = PopupFocus::Title;
-            }
-            KeyCode::Char(c) => {
-                match self.popup_focus {
-                    PopupFocus::Title => self.input_buffer.push(c),
-                    PopupFocus::Description => self.description_buffer.push(c),
-                }
-            }
-            KeyCode::Backspace => {
-                match self.popup_focus {
-                    PopupFocus::Title => { self.input_buffer.pop(); }
-                    PopupFocus::Description => { self.description_buffer.pop(); }
-                }
-            }
-            _ => {}
         }
     }
 
@@ -299,103 +578,134 @@ impl App {
         match self.focus {
             Focus::Sections => {
                 if !self.input_buffer.is_empty() {
-                    let new_id = self.sections.len() + 1;
-                    let title = if !self.input_buffer.starts_with("📁") {
+                    let new_id = self.sections.last()
+                        .map(|s| s.id + 1)
+                        .unwrap_or(1);
+
+                    let title = if !self.input_buffer.starts_with('📁') {
                         format!("📁 {}", self.input_buffer.trim())
                     } else {
                         self.input_buffer.clone()
                     };
-                    self.sections.push(Section {
+
+                    let section = Section {
                         id: new_id,
                         title,
                         details: Vec::new(),
-                    });
-                    self.mode = Mode::Normal;
-                    self.input_buffer.clear();
+                    };
+
+                    if let Err(e) = self.db.save_section(&section) {
+                        eprintln!("Error guardando sección: {}", e);
+                    } else {
+                        self.sections.push(section);
+                        self.selected_section = Some(self.sections.len() - 1);
+                        println!("Sección guardada correctamente");
+                    }
                 }
             }
             Focus::Details => {
-                if !self.input_buffer.is_empty() && self.selected_section.is_some() {
-                    if let Some(section) = self.sections.get_mut(self.selected_section.unwrap()) {
-                        let new_id = section.details.len() + 1;
-                        section.details.push(Detail {
-                            id: new_id,
-                            title: self.input_buffer.clone(),
-                            description: self.description_buffer.clone(),
-                            created_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-                        });
-                        self.mode = Mode::Normal;
-                        self.input_buffer.clear();
-                        self.description_buffer.clear();
+                if let Some(section_idx) = self.selected_section {
+                    if !self.input_buffer.is_empty() {
+                        if let Some(section) = self.sections.get_mut(section_idx) {
+                            let new_id = section.details.len() + 1;
+                            
+                            let code_path = if !self.code_buffer.is_empty() {
+                                match self.code_handler.save_code(&self.code_buffer, &self.selected_language) {
+                                    Ok(path) => Some(path),
+                                    Err(e) => {
+                                        eprintln!("Error guardando código: {}", e);
+                                        None
+                                    }
+                                }
+                            } else {
+                                None
+                            };
+
+                            let detail = Detail {
+                                id: new_id,
+                                title: self.input_buffer.clone(),
+                                description: self.description_buffer.clone(),
+                                code_path,
+                                language: self.selected_language.clone(),
+                                created_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                            };
+
+                            section.details.push(detail);
+                            if let Err(e) = self.db.save_section(section) {
+                                eprintln!("Error guardando detalle: {}", e);
+                            }
+                        }
                     }
                 }
             }
             _ => {}
         }
-    }
 
-    pub fn handle_editing_mode(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc => {
-                self.mode = Mode::Normal;
-                self.input_buffer.clear();
-                self.description_buffer.clear();
-                self.popup_focus = PopupFocus::Title;
-            }
-            KeyCode::Enter => {
-                self.handle_edit_submit();
-                self.mode = Mode::Normal;
-                self.input_buffer.clear();
-                self.description_buffer.clear();
-                self.popup_focus = PopupFocus::Title;
-            }
-            KeyCode::Char(c) => {
-                match self.popup_focus {
-                    PopupFocus::Title => self.input_buffer.push(c),
-                    PopupFocus::Description => self.description_buffer.push(c),
-                }
-            }
-            KeyCode::Backspace => {
-                match self.popup_focus {
-                    PopupFocus::Title => { self.input_buffer.pop(); }
-                    PopupFocus::Description => { self.description_buffer.pop(); }
-                }
-            }
-            _ => {}
-        }
+        // Limpiar estado y pantalla
+        self.mode = Mode::Normal;
+        self.input_buffer.clear();
+        self.description_buffer.clear();
+        self.code_buffer.clear();
+        self.code_cursor = 0;
+        self.code_scroll = 0;
     }
 
     fn handle_edit_submit(&mut self) {
         match self.focus {
             Focus::Sections => {
-                if let Some(index) = self.selected_section {
-                    if !self.input_buffer.is_empty() {
-                        if let Some(section) = self.sections.get_mut(index) {
-                            let title = if !self.input_buffer.starts_with("📁") {
-                                format!("📁 {}", self.input_buffer.trim())
-                            } else {
-                                self.input_buffer.clone()
-                            };
-                            section.title = title;
+                if let Some(idx) = self.selected_section {
+                    if let Some(section) = self.sections.get_mut(idx) {
+                        section.title = if !self.input_buffer.starts_with('📁') {
+                            format!("📁 {}", self.input_buffer.trim())
+                        } else {
+                            self.input_buffer.clone()
+                        };
+                        
+                        // Guardar en la base de datos
+                        if let Err(e) = self.db.save_section(section) {
+                            eprintln!("Error guardando sección: {}", e);
                         }
                     }
                 }
             }
             Focus::Details => {
                 if let (Some(section_idx), Some(detail_idx)) = (self.selected_section, self.selected_detail) {
-                    if !self.input_buffer.is_empty() {
-                        if let Some(section) = self.sections.get_mut(section_idx) {
-                            if let Some(detail) = section.details.get_mut(detail_idx) {
-                                detail.title = self.input_buffer.clone();
-                                detail.description = self.description_buffer.clone();
-                                detail.created_at = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                    if let Some(section) = self.sections.get_mut(section_idx) {
+                        if let Some(detail) = section.details.get_mut(detail_idx) {
+                            // Actualizar datos básicos
+                            detail.title = self.input_buffer.clone();
+                            detail.description = self.description_buffer.clone();
+                            
+                            // Guardar código si hay contenido
+                            if !self.code_buffer.is_empty() {
+                                match self.code_handler.save_code(&self.code_buffer, &self.selected_language) {
+                                    Ok(path) => {
+                                        detail.code_path = Some(path);
+                                        detail.language = self.selected_language.clone();
+                                    }
+                                    Err(e) => eprintln!("Error guardando código: {}", e),
+                                }
+                            }
+                            
+                            detail.created_at = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                            
+                            // Guardar en la base de datos
+                            if let Err(e) = self.db.save_section(section) {
+                                eprintln!("Error guardando detalle: {}", e);
                             }
                         }
                     }
                 }
             }
-            Focus::Search => {}
+            _ => {}
         }
+
+        // Limpiar estado y volver a modo normal
+        self.mode = Mode::Normal;
+        self.input_buffer.clear();
+        self.description_buffer.clear();
+        self.code_buffer.clear();
+        self.popup_focus = PopupFocus::Title;
     }
 
     pub fn handle_search_mode(&mut self, key: KeyEvent) {
@@ -573,20 +883,19 @@ impl App {
         self.popup_focus = PopupFocus::Title;
         self.input_buffer.clear();
         self.description_buffer.clear();
+        self.code_buffer.clear();
     }
 
     fn start_editing(&mut self) {
-        self.popup_focus = PopupFocus::Title;
         match self.focus {
             Focus::Sections => {
-                if let Some(index) = self.selected_section {
-                    if let Some(section) = self.sections.get(index) {
+                if let Some(idx) = self.selected_section {
+                    if let Some(section) = self.sections.get(idx) {
+                        self.input_buffer = section.title.clone();
+                        if self.input_buffer.starts_with("📁 ") {
+                            self.input_buffer = self.input_buffer[5..].to_string();
+                        }
                         self.mode = Mode::Editing;
-                        self.input_buffer = if section.title.starts_with("📁") {
-                            section.title[4..].to_string()
-                        } else {
-                            section.title.clone()
-                        };
                     }
                 }
             }
@@ -594,44 +903,82 @@ impl App {
                 if let (Some(section_idx), Some(detail_idx)) = (self.selected_section, self.selected_detail) {
                     if let Some(section) = self.sections.get(section_idx) {
                         if let Some(detail) = section.details.get(detail_idx) {
-                            self.mode = Mode::Editing;
                             self.input_buffer = detail.title.clone();
                             self.description_buffer = detail.description.clone();
+                            self.code_buffer = if let Some(ref path) = detail.code_path {
+                                fs::read_to_string(path).unwrap_or_default()
+                            } else {
+                                String::new()
+                            };
+                            self.selected_language = detail.language.clone();
+                            self.mode = Mode::Editing;
                         }
                     }
                 }
             }
-            Focus::Search => {}
+            _ => {}
         }
     }
 
     fn delete_current_item(&mut self) {
         match self.focus {
             Focus::Sections => {
-                if let Some(index) = self.selected_section {
-                    self.sections.remove(index);
-                    if self.sections.is_empty() {
-                        self.selected_section = None;
-                    } else if index >= self.sections.len() {
-                        self.selected_section = Some(self.sections.len() - 1);
+                if let Some(idx) = self.selected_section {
+                    // Eliminar de la base de datos
+                    if let Err(e) = self.db.delete_section(self.sections[idx].id) {
+                        eprintln!("Error eliminando sección: {}", e);
+                        return;
                     }
+                    
+                    // Eliminar del estado local
+                    self.sections.remove(idx);
+                    
+                    // Actualizar selección
+                    if !self.sections.is_empty() {
+                        self.selected_section = Some(if idx >= self.sections.len() {
+                            self.sections.len() - 1
+                        } else {
+                            idx
+                        });
+                    } else {
+                        self.selected_section = None;
+                    }
+                    self.selected_detail = None;
                 }
             }
             Focus::Details => {
-                if let (Some(section_idx), Some(detail_idx)) =
-                    (self.selected_section, self.selected_detail)
-                {
+                if let (Some(section_idx), Some(detail_idx)) = (self.selected_section, self.selected_detail) {
                     if let Some(section) = self.sections.get_mut(section_idx) {
+                        // Eliminar de la base de datos
+                        if let Err(e) = self.db.delete_detail(section.id, section.details[detail_idx].id) {
+                            eprintln!("Error eliminando detalle: {}", e);
+                            return;
+                        }
+                        
+                        // Eliminar archivo de código si existe
+                        if let Some(ref path) = section.details[detail_idx].code_path {
+                            if let Err(e) = fs::remove_file(path) {
+                                eprintln!("Error eliminando archivo de código: {}", e);
+                            }
+                        }
+                        
+                        // Eliminar del estado local
                         section.details.remove(detail_idx);
-                        if section.details.is_empty() {
+                        
+                        // Actualizar selección
+                        if !section.details.is_empty() {
+                            self.selected_detail = Some(if detail_idx >= section.details.len() {
+                                section.details.len() - 1
+                            } else {
+                                detail_idx
+                            });
+                        } else {
                             self.selected_detail = None;
-                        } else if detail_idx >= section.details.len() {
-                            self.selected_detail = Some(section.details.len() - 1);
                         }
                     }
                 }
             }
-            Focus::Search => {}
+            _ => {}
         }
     }
 
@@ -716,30 +1063,14 @@ impl App {
 
     fn perform_local_search(&mut self, query: String) {
         self.search_results.clear();
-        let query = query.to_lowercase();
         
-        if query.is_empty() {
-            return;
-        }
-
-        for section in &self.sections {
-            if section.title.to_lowercase().contains(&query) {
+        if let Ok(results) = self.db.search_local(&query) {
+            for (section, detail) in results {
                 self.search_results.push(SearchResult {
-                    title: section.title.clone(),
-                    description: format!("Sección encontrada"),
+                    title: format!("{} > {}", section.title, detail.title),
+                    description: detail.description,
                     source: SearchSource::Local,
                 });
-            }
-
-            for detail in &section.details {
-                if detail.title.to_lowercase().contains(&query) 
-                   || detail.description.to_lowercase().contains(&query) {
-                    self.search_results.push(SearchResult {
-                        title: detail.title.clone(),
-                        description: detail.description.clone(),
-                        source: SearchSource::Local,
-                    });
-                }
             }
         }
     }
@@ -748,7 +1079,8 @@ impl App {
         if self.focus == Focus::Details {
             self.popup_focus = match self.popup_focus {
                 PopupFocus::Title => PopupFocus::Description,
-                PopupFocus::Description => PopupFocus::Title,
+                PopupFocus::Description => PopupFocus::Code,
+                PopupFocus::Code => PopupFocus::Title,
             };
         }
     }
@@ -768,6 +1100,8 @@ impl App {
                                 id: new_id,
                                 title: result.title,
                                 description: result.description,
+                                code_path: None,
+                                language: Language::None,
                                 created_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
                             });
                         }
@@ -852,6 +1186,34 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    fn cycle_language(&mut self) {
+        self.selected_language = match self.selected_language {
+            Language::None => Language::Rust,
+            Language::Rust => Language::Python,
+            Language::Python => Language::None,
+        };
+    }
+
+    fn show_warning(&mut self, message: &str) {
+        // TODO: Implementar sistema de mensajes/avisos
+        eprintln!("{}", message);
+    }
+
+    pub fn code_cursor_line(&self) -> usize {
+        self.code_buffer[..self.code_cursor]
+            .chars()
+            .filter(|&c| c == '\n')
+            .count()
+    }
+
+    pub fn code_cursor_column(&self) -> usize {
+        let last_newline = self.code_buffer[..self.code_cursor]
+            .rfind('\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        self.code_cursor - last_newline
     }
 }
 
