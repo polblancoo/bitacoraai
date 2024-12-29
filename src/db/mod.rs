@@ -197,7 +197,7 @@ impl Database {
     }
 
     pub fn get_latest_entries(&self, limit: i64) -> Result<Vec<(Section, Detail)>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare(crat
             "SELECT s.id, s.title, d.id, d.title, d.description, d.code_path, d.language, d.created_at 
              FROM sections s 
              JOIN details d ON s.id = d.section_id 
