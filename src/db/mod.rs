@@ -1,6 +1,6 @@
-use rusqlite::{Connection, Result};
-use crate::app::{Section, Detail};
+use crate::app::{Detail, Section};
 use crate::languages::Language;
+use rusqlite::{Connection, Result};
 use std::str::FromStr;
 
 pub struct Database {
@@ -10,7 +10,7 @@ pub struct Database {
 impl Clone for Database {
     fn clone(&self) -> Self {
         Self {
-            conn: Connection::open(self.conn.path().unwrap()).unwrap()
+            conn: Connection::open(self.conn.path().unwrap()).unwrap(),
         }
     }
 }
@@ -18,7 +18,7 @@ impl Clone for Database {
 impl Database {
     pub fn new(path: &str) -> Result<Self> {
         let conn = Connection::open(path)?;
-        
+
         // Crear tablas si no existen
         conn.execute(
             "CREATE TABLE IF NOT EXISTS sections (
@@ -44,7 +44,7 @@ impl Database {
 
         // Insertar datos por defecto si las tablas están vacías
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM sections", [], |row| row.get(0))?;
-        
+
         if count == 0 {
             // Insertar secciones por defecto
             conn.execute(
@@ -83,39 +83,43 @@ impl Database {
     }
 
     pub fn load_sections(&self) -> Result<Vec<Section>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, title FROM sections ORDER BY id"
-        )?;
-        
-        let sections = stmt.query_map([], |row| {
-            let id: i64 = row.get(0)?;
-            let title: String = row.get(1)?;
-            
-            let mut detail_stmt = self.conn.prepare(
-                "SELECT id, title, description, code_path, language, created_at 
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, title FROM sections ORDER BY id")?;
+
+        let sections = stmt
+            .query_map([], |row| {
+                let id: i64 = row.get(0)?;
+                let title: String = row.get(1)?;
+
+                let mut detail_stmt = self.conn.prepare(
+                    "SELECT id, title, description, code_path, language, created_at 
                  FROM details 
                  WHERE section_id = ? 
-                 ORDER BY id"
-            )?;
-            
-            let details = detail_stmt.query_map([id], |row| {
-                Ok(Detail {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    description: row.get(2)?,
-                    code_path: row.get(3)?,
-                    language: Language::from_str(&row.get::<_, String>(4)?)
-                        .unwrap_or(Language::None),
-                    created_at: row.get(5)?,
-                })
-            })?.collect::<Result<Vec<_>>>()?;
+                 ORDER BY id",
+                )?;
 
-            Ok(Section {
-                id: id as usize,
-                title,
-                details,
-            })
-        })?.collect::<Result<Vec<_>>>()?;
+                let details = detail_stmt
+                    .query_map([id], |row| {
+                        Ok(Detail {
+                            id: row.get(0)?,
+                            title: row.get(1)?,
+                            description: row.get(2)?,
+                            code_path: row.get(3)?,
+                            language: Language::from_str(&row.get::<_, String>(4)?)
+                                .unwrap_or(Language::None),
+                            created_at: row.get(5)?,
+                        })
+                    })?
+                    .collect::<Result<Vec<_>>>()?;
+
+                Ok(Section {
+                    id: id as usize,
+                    title,
+                    details,
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(sections)
     }
@@ -147,8 +151,10 @@ impl Database {
     }
 
     pub fn delete_section(&self, id: usize) -> Result<()> {
-        self.conn.execute("DELETE FROM details WHERE section_id = ?", [id as i64])?;
-        self.conn.execute("DELETE FROM sections WHERE id = ?", [id as i64])?;
+        self.conn
+            .execute("DELETE FROM details WHERE section_id = ?", [id as i64])?;
+        self.conn
+            .execute("DELETE FROM sections WHERE id = ?", [id as i64])?;
         Ok(())
     }
 
@@ -162,7 +168,7 @@ impl Database {
 
     pub fn search_local(&self, query: &str) -> Result<Vec<(Section, Detail)>> {
         let query = format!("%{}%", query.to_lowercase());
-        
+
         let mut stmt = self.conn.prepare(
             "SELECT s.id, s.title, d.id, d.title, d.description, d.code_path, d.language, d.created_at 
              FROM sections s 
@@ -173,31 +179,33 @@ impl Database {
              ORDER BY s.id, d.id"
         )?;
 
-        let results = stmt.query_map([&query], |row| {
-            let section = Section {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                details: vec![],
-            };
-            
-            let detail = Detail {
-                id: row.get(2)?,
-                title: row.get(3)?,
-                description: row.get(4)?,
-                code_path: row.get(5)?,
-                language: Language::from_str(&row.get::<_, String>(6)?)
-                    .unwrap_or(Language::None),
-                created_at: row.get(7)?,
-            };
+        let results = stmt
+            .query_map([&query], |row| {
+                let section = Section {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    details: vec![],
+                };
 
-            Ok((section, detail))
-        })?.collect::<Result<Vec<_>>>()?;
+                let detail = Detail {
+                    id: row.get(2)?,
+                    title: row.get(3)?,
+                    description: row.get(4)?,
+                    code_path: row.get(5)?,
+                    language: Language::from_str(&row.get::<_, String>(6)?)
+                        .unwrap_or(Language::None),
+                    created_at: row.get(7)?,
+                };
+
+                Ok((section, detail))
+            })?
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(results)
     }
 
     pub fn get_latest_entries(&self, limit: i64) -> Result<Vec<(Section, Detail)>> {
-        let mut stmt = self.conn.prepare(crat
+        let mut stmt = self.conn.prepare(
             "SELECT s.id, s.title, d.id, d.title, d.description, d.code_path, d.language, d.created_at 
              FROM sections s 
              JOIN details d ON s.id = d.section_id 
@@ -205,26 +213,29 @@ impl Database {
              LIMIT ?"
         )?;
 
-        let results = stmt.query_map([limit], |row| {
-            let section = Section {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                details: vec![],
-            };
-            
-            let detail = Detail {
-                id: row.get(2)?,
-                title: row.get(3)?,
-                description: row.get(4)?,
-                code_path: row.get(5)?,
-                language: Language::from_str(&row.get::<_, String>(6)?)
-                    .unwrap_or(Language::None),
-                created_at: row.get(7)?,
-            };
+        let results = stmt
+            .query_map([limit], |row| {
+                let section = Section {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    details: vec![],
+                };
 
-            Ok((section, detail))
-        })?.collect::<Result<Vec<_>>>()?;
+                let detail = Detail {
+                    id: row.get(2)?,
+                    title: row.get(3)?,
+                    description: row.get(4)?,
+                    code_path: row.get(5)?,
+                    language: Language::from_str(&row.get::<_, String>(6)?)
+                        .unwrap_or(Language::None),
+                    created_at: row.get(7)?,
+                };
+
+                Ok((section, detail))
+            })?
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(results)
     }
-} 
+}
+
