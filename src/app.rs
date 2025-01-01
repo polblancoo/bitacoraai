@@ -107,6 +107,7 @@ pub struct App {
     pub selected_language: Language,
     pub code_handler: CodeHandler,
     pub db: Database,
+    pub details_scroll: usize,
 }
 
 impl Clone for App {
@@ -142,6 +143,7 @@ impl Clone for App {
             selected_language: self.selected_language.clone(),
             code_handler: self.code_handler.clone(),
             db: self.db.clone(),
+            details_scroll: self.details_scroll,
         }
     }
 }
@@ -202,6 +204,7 @@ impl App {
             selected_language: Language::default(),
             code_handler: CodeHandler::new(),
             db,
+            details_scroll: 0,
         }
     }
 
@@ -387,7 +390,6 @@ impl App {
                     }
                     KeyCode::Up => {
                         if self.popup_focus == PopupFocus::Code {
-                            let lines: Vec<&str> = self.code_buffer.lines().collect();
                             let current_line = self.code_cursor_line();
                             if current_line > 0 {
                                 let current_column = self.code_cursor_column();
@@ -402,9 +404,10 @@ impl App {
                                 }
                                 
                                 // Calcular la nueva posición del cursor
-                                let line_length = lines.get(target_line)
-                                    .map(|line| line.len())
-                                    .unwrap_or(0);
+                                let line_length = self.code_buffer[new_pos..]
+                                    .find('\n')
+                                    .map(|i| i)
+                                    .unwrap_or(self.code_buffer.len());
                                 
                                 self.code_cursor = new_pos + current_column.min(line_length);
                                 
@@ -417,9 +420,8 @@ impl App {
                     }
                     KeyCode::Down => {
                         if self.popup_focus == PopupFocus::Code {
-                            let lines: Vec<&str> = self.code_buffer.lines().collect();
                             let current_line = self.code_cursor_line();
-                            if current_line < lines.len() - 1 {
+                            if current_line < self.code_buffer.lines().count() - 1 {
                                 let current_column = self.code_cursor_column();
                                 let next_line_start = self.code_buffer[self.code_cursor..]
                                     .find('\n')
@@ -438,10 +440,8 @@ impl App {
                     }
                     KeyCode::PageUp => {
                         if self.popup_focus == PopupFocus::Code {
-                            let lines: Vec<&str> = self.code_buffer.lines().collect();
-                            let current_line = self.code_cursor_line();
-                            if current_line >= 5 {
-                                let target_line = current_line - 5;
+                            if self.code_cursor >= 5 {
+                                let target_line = self.code_cursor - 5;
                                 let mut pos = 0;
                                 for _ in 0..target_line {
                                     if let Some(idx) = self.code_buffer[pos..].find('\n') {
@@ -458,9 +458,8 @@ impl App {
                     }
                     KeyCode::PageDown => {
                         if self.popup_focus == PopupFocus::Code {
-                            let lines: Vec<&str> = self.code_buffer.lines().collect();
                             let current_line = self.code_cursor_line();
-                            if current_line + 5 < lines.len() {
+                            if current_line + 5 < self.code_buffer.lines().count() {
                                 let target_line = current_line + 5;
                                 let mut pos = 0;
                                 for _ in 0..target_line {
@@ -476,7 +475,7 @@ impl App {
                             } else {
                                 // Ir al final del código
                                 self.code_cursor = self.code_buffer.len();
-                                let total_lines = lines.len();
+                                let total_lines = self.code_buffer.lines().count();
                                 let visible_lines = 10;
                                 self.code_scroll = total_lines.saturating_sub(visible_lines);
                             }
@@ -498,7 +497,7 @@ impl App {
                     KeyCode::Char('d') => self.delete_current_item(),
                     KeyCode::Char('s') => self.start_search(),
                     KeyCode::Char('h') => self.mode = Mode::Help,
-                    KeyCode::Char('x') => self.mode = Mode::Exporting,
+                    KeyCode::Char('x') => self.start_export(),
                     KeyCode::Up => self.move_selection_up(),
                     KeyCode::Down => self.move_selection_down(),
                     KeyCode::Tab => self.next_focus(),
@@ -523,9 +522,58 @@ impl App {
                     _ => {}
                 }
             }
-            Mode::Help | Mode::Exporting => {
+            Mode::Help => {
                 if key.code == KeyCode::Esc {
                     self.mode = Mode::Normal;
+                }
+            }
+            Mode::Exporting => {
+                // Manejar las teclas del modo exportación
+                if self.export_message.is_some() {
+                    if key.code == KeyCode::Esc {
+                        self.mode = Mode::Normal;
+                        self.export_message = None;
+                    }
+                    return;
+                }
+
+                match key.code {
+                    KeyCode::Esc => {
+                        self.mode = Mode::Normal;
+                    }
+                    KeyCode::Up => {
+                        if self.selected_export_format > 0 {
+                            self.selected_export_format -= 1;
+                        } else {
+                            self.selected_export_format = self.export_formats.len() - 1;
+                        }
+                    }
+                    KeyCode::Down => {
+                        if self.selected_export_format < self.export_formats.len() - 1 {
+                            self.selected_export_format += 1;
+                        } else {
+                            self.selected_export_format = 0;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        if let Some(format) = self.export_formats.get(self.selected_export_format).cloned() {
+                            match export_data(self, format) {
+                                Ok((source, dest)) => {
+                                    self.export_message = Some(format!(
+                                        "✅ Exportación exitosa!\n\nDesde: {}\nA: {}\n\nPresiona Esc para cerrar", 
+                                        source, dest
+                                    ));
+                                }
+                                Err(e) => {
+                                    self.export_message = Some(format!(
+                                        "❌ Error al exportar:\n\n{}\n\nPresiona Esc para cerrar", 
+                                        e
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
             Mode::Searching => self.handle_search_mode(key),
@@ -599,7 +647,7 @@ impl App {
                     } else {
                         self.sections.push(section);
                         self.selected_section = Some(self.sections.len() - 1);
-                        println!("Sección guardada correctamente");
+                        //println!("Sección guardada correctamente");
                     }
                 }
             }
@@ -1153,39 +1201,10 @@ impl App {
         Ok(())
     }
 
-    pub fn handle_export_mode(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc => {
-                self.mode = Mode::Normal;
-                self.export_message = None;
-            }
-            KeyCode::Up => {
-                if self.selected_export_format > 0 {
-                    self.selected_export_format -= 1;
-                }
-            }
-            KeyCode::Down => {
-                if self.selected_export_format < self.export_formats.len() - 1 {
-                    self.selected_export_format += 1;
-                }
-            }
-            KeyCode::Enter => {
-                if let Some(format) = self.export_formats.get(self.selected_export_format) {
-                    match export_data(self, format.clone()) {
-                        Ok((source, dest)) => {
-                            self.export_message = Some(format!(
-                                "✅ Exportado desde:\n   {}\n   a:\n   {}", 
-                                source, dest
-                            ));
-                        }
-                        Err(e) => {
-                            self.export_message = Some(format!("❌ Error al exportar: {}", e));
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
+    pub fn start_export(&mut self) {
+        self.mode = Mode::Exporting;
+        self.selected_export_format = 0;
+        self.export_message = None;
     }
 
     fn cycle_language(&mut self) {

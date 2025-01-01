@@ -29,7 +29,7 @@ impl Storage {
         Ok(App::from_sections(sections))
     }
 
-    pub fn save(&self, app: &App) -> Result<()> {
+    pub fn save(&mut self, app: &App) -> Result<()> {
         for section in &app.sections {
             self.db.save_section(section)?;
         }

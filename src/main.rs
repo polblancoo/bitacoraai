@@ -14,7 +14,7 @@ use crate::app::App;
 use crate::error::Result;
 use crate::storage::Storage;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -24,7 +24,7 @@ use std::io;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let storage = Storage::new()?;
+    let mut storage = Storage::new()?;
     
     // Setup terminal
     enable_raw_mode()?;
@@ -62,7 +62,7 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mu
         terminal.draw(|f| ui::draw(f, app))?;
 
         if let Event::Key(key) = event::read()? {
-            if key.code == KeyCode::Char('q') {
+            if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
                 return Ok(());
             }
             app.handle_input(key);
