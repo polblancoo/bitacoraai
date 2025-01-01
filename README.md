@@ -10,7 +10,7 @@ Una aplicación TUI (Terminal User Interface) para gestionar notas, comandos y s
 ### Organización
 - 📚 Sistema jerárquico de secciones y detalles
 - 📁 Iconos visuales automáticos para secciones
-- 💾 Persistencia automática en JSON
+- 💾 Persistencia SqlLite
 - 📅 Timestamps automáticos en entradas
 
 ### Búsqueda Avanzada 🔍
