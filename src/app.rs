@@ -1,19 +1,15 @@
 use crate::search::SearchResult;
 use crate::search::SearchSource;
-use chrono::Local;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde::{Deserialize, Serialize};
-use crate::search::cheats::CheatsRsSearch;
-use crate::search::crates_io::CratesIoSearch;
-use crate::search::SearchProvider;
-use tokio::sync::mpsc;
 use arboard::Clipboard;
-use open;
-use crate::export::{export_data, ExportFormat};
+use crate::export::ExportFormat;
 use crate::languages::Language;
-use crate::code_handler::{CodeHandler, MAX_CODE_SIZE};
+use crate::code_handler::CodeHandler;
 use crate::db::Database;
-use std::fs;
+use std::sync::mpsc;
+//use tokio::sync::mpsc;
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Section {
@@ -108,6 +104,8 @@ pub struct App {
     pub code_handler: CodeHandler,
     pub db: Database,
     pub details_scroll: usize,
+    pub selection_start: Option<usize>,
+    pub selection_end: Option<usize>,
 }
 
 impl Clone for App {
@@ -144,6 +142,8 @@ impl Clone for App {
             code_handler: self.code_handler.clone(),
             db: self.db.clone(),
             details_scroll: self.details_scroll,
+            selection_start: self.selection_start,
+            selection_end: self.selection_end,
         }
     }
 }
@@ -205,6 +205,8 @@ impl App {
             code_handler: CodeHandler::new(),
             db,
             details_scroll: 0,
+            selection_start: None,
+            selection_end: None,
         }
     }
 
@@ -220,817 +222,76 @@ impl App {
         app
     }
 
-    pub fn next_focus(&mut self) {
-        self.focus = match self.focus {
-            Focus::Sections => Focus::Details,
-            Focus::Details => Focus::Search,
-            Focus::Search => Focus::Sections,
-        };
-    }
-
-    pub fn previous_focus(&mut self) {
-        self.focus = match self.focus {
-            Focus::Sections => Focus::Search,
-            Focus::Details => Focus::Sections,
-            Focus::Search => Focus::Details,
-        };
-    }
-
     pub fn handle_input(&mut self, key: KeyEvent) {
         match self.mode {
-            Mode::Adding | Mode::Editing => {
-                match key.code {
-                    KeyCode::Char(c) => {
-                        if key.modifiers.contains(KeyModifiers::CONTROL) {
-                            match c {
-                                's' => {
-                                    if self.mode == Mode::Editing {
-                                        self.handle_edit_submit();
-                                    } else {
-                                        self.handle_add_submit();
-                                    }
-                                    self.mode = Mode::Normal;
-                                }
-                                'l' => {
-                                    if self.popup_focus == PopupFocus::Code {
-                                        self.cycle_language();
-                                    }
-                                }
-                                'v' => {
-                                    if let Some(clipboard) = &mut self.clipboard {
-                                        if let Ok(text) = clipboard.get_text() {
-                                            match self.popup_focus {
-                                                PopupFocus::Code => {
-                                                    let new_size = self.code_buffer.len() + text.len();
-                                                    if new_size > MAX_CODE_SIZE {
-                                                        let remaining = MAX_CODE_SIZE - self.code_buffer.len();
-                                                        let truncated = text.chars().take(remaining).collect::<String>();
-                                                        self.code_buffer.insert_str(self.code_cursor, &truncated);
-                                                        self.code_cursor += truncated.len();
-                                                        self.show_warning("⚠️ Código truncado: excede el límite de tamaño");
-                                                    } else {
-                                                        self.code_buffer.insert_str(self.code_cursor, &text);
-                                                        self.code_cursor += text.len();
-                                                    }
-                                                }
-                                                PopupFocus::Title => {
-                                                    self.input_buffer.push_str(&text);
-                                                }
-                                                PopupFocus::Description => {
-                                                    self.description_buffer.push_str(&text);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                'c' => {
-                                    if let Some(clipboard) = &mut self.clipboard {
-                                        match self.popup_focus {
-                                            PopupFocus::Code => {
-                                                let _ = clipboard.set_text(&self.code_buffer);
-                                            }
-                                            PopupFocus::Title => {
-                                                let _ = clipboard.set_text(&self.input_buffer);
-                                            }
-                                            PopupFocus::Description => {
-                                                let _ = clipboard.set_text(&self.description_buffer);
-                                            }
-                                        }
-                                    }
-                                }
-                                _ => {}
-                            }
-                        } else {
-                            // Manejo normal de caracteres
-                            match self.focus {
-                                Focus::Details => {
-                                    match self.popup_focus {
-                                        PopupFocus::Code => {
-                                            self.code_buffer.push(c);
-                                        }
-                                        PopupFocus::Title => self.input_buffer.push(c),
-                                        PopupFocus::Description => self.description_buffer.push(c),
-                                    }
-                                }
-                                Focus::Sections => {
-                                    self.input_buffer.push(c);
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    KeyCode::Tab => {
-                        if self.focus == Focus::Details {
-                            if key.modifiers.contains(KeyModifiers::SHIFT) {
-                                // Si es Shift+Tab, retroceder
-                                self.popup_focus = match self.popup_focus {
-                                    PopupFocus::Title => PopupFocus::Code,
-                                    PopupFocus::Description => PopupFocus::Title,
-                                    PopupFocus::Code => PopupFocus::Description,
-                                };
-                            } else if self.popup_focus == PopupFocus::Code {
-                                // Si estamos en el código, insertar tab
-                                self.code_buffer.push_str("    ");
-                            } else {
-                                // Avanzar al siguiente campo
-                                self.popup_focus = match self.popup_focus {
-                                    PopupFocus::Title => PopupFocus::Description,
-                                    PopupFocus::Description => PopupFocus::Code,
-                                    PopupFocus::Code => PopupFocus::Title,
-                                };
-                            }
-                        }
-                    }
-                    KeyCode::Enter => {
-                        if self.popup_focus == PopupFocus::Code {
-                            self.code_buffer.push('\n');
-                        }
-                    }
-                    KeyCode::Backspace => {
-                        match self.focus {
-                            Focus::Sections => {
-                                let _ = self.input_buffer.pop();
-                            }
-                            Focus::Details => {
-                                match self.popup_focus {
-                                    PopupFocus::Title => { let _ = self.input_buffer.pop(); }
-                                    PopupFocus::Description => { let _ = self.description_buffer.pop(); }
-                                    PopupFocus::Code => {
-                                        if self.code_cursor > 0 {
-                                            self.code_cursor -= 1;
-                                            self.code_buffer.remove(self.code_cursor);
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    KeyCode::Left => {
-                        if self.popup_focus == PopupFocus::Code && self.code_cursor > 0 {
-                            self.code_cursor -= 1;
-                        }
-                    }
-                    KeyCode::Right => {
-                        if self.popup_focus == PopupFocus::Code && self.code_cursor < self.code_buffer.len() {
-                            self.code_cursor += 1;
-                        }
-                    }
-                    KeyCode::Esc => {
-                        self.mode = Mode::Normal;
-                        self.input_buffer.clear();
-                        self.description_buffer.clear();
-                        self.code_buffer.clear();
-                        self.popup_focus = PopupFocus::Title;
-                    }
-                    KeyCode::Delete => {
-                        if self.popup_focus == PopupFocus::Code && self.code_cursor < self.code_buffer.len() {
-                            self.code_buffer.remove(self.code_cursor);
-                        }
-                    }
-                    KeyCode::Up => {
-                        if self.popup_focus == PopupFocus::Code {
-                            let current_line = self.code_cursor_line();
-                            if current_line > 0 {
-                                let current_column = self.code_cursor_column();
-                                let mut new_pos = 0;
-                                let target_line = current_line - 1;
-                                
-                                // Encontrar la posición de la línea anterior
-                                for _ in 0..target_line {
-                                    if let Some(idx) = self.code_buffer[new_pos..].find('\n') {
-                                        new_pos += idx + 1;
-                                    }
-                                }
-                                
-                                // Calcular la nueva posición del cursor
-                                let line_length = self.code_buffer[new_pos..]
-                                    .find('\n')
-                                    .map(|i| i)
-                                    .unwrap_or(self.code_buffer.len());
-                                
-                                self.code_cursor = new_pos + current_column.min(line_length);
-                                
-                                // Ajustar scroll si es necesario
-                                if self.code_scroll > 0 && current_line <= self.code_scroll {
-                                    self.code_scroll -= 1;
-                                }
-                            }
-                        }
-                    }
-                    KeyCode::Down => {
-                        if self.popup_focus == PopupFocus::Code {
-                            let current_line = self.code_cursor_line();
-                            if current_line < self.code_buffer.lines().count() - 1 {
-                                let current_column = self.code_cursor_column();
-                                let next_line_start = self.code_buffer[self.code_cursor..]
-                                    .find('\n')
-                                    .map(|i| self.code_cursor + i + 1)
-                                    .unwrap_or(self.code_buffer.len());
-                                let next_line_end = self.code_buffer[next_line_start..]
-                                    .find('\n')
-                                    .map(|i| next_line_start + i)
-                                    .unwrap_or(self.code_buffer.len());
-                                self.code_cursor = next_line_start + current_column.min(
-                                    next_line_end - next_line_start
-                                );
-                                self.code_scroll += 1;
-                            }
-                        }
-                    }
-                    KeyCode::PageUp => {
-                        if self.popup_focus == PopupFocus::Code {
-                            if self.code_cursor >= 5 {
-                                let target_line = self.code_cursor - 5;
-                                let mut pos = 0;
-                                for _ in 0..target_line {
-                                    if let Some(idx) = self.code_buffer[pos..].find('\n') {
-                                        pos += idx + 1;
-                                    }
-                                }
-                                self.code_cursor = pos;
-                                self.code_scroll = self.code_scroll.saturating_sub(5);
-                            } else {
-                                self.code_cursor = 0;
-                                self.code_scroll = 0;
-                            }
-                        }
-                    }
-                    KeyCode::PageDown => {
-                        if self.popup_focus == PopupFocus::Code {
-                            let current_line = self.code_cursor_line();
-                            if current_line + 5 < self.code_buffer.lines().count() {
-                                let target_line = current_line + 5;
-                                let mut pos = 0;
-                                for _ in 0..target_line {
-                                    if let Some(idx) = self.code_buffer[pos..].find('\n') {
-                                        pos += idx + 1;
-                                    } else {
-                                        pos = self.code_buffer.len();
-                                        break;
-                                    }
-                                }
-                                self.code_cursor = pos;
-                                self.code_scroll = self.code_scroll.saturating_add(5);
-                            } else {
-                                // Ir al final del código
-                                self.code_cursor = self.code_buffer.len();
-                                let total_lines = self.code_buffer.lines().count();
-                                let visible_lines = 10;
-                                self.code_scroll = total_lines.saturating_sub(visible_lines);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
             Mode::Normal => {
                 match key.code {
-                    KeyCode::Char('a') => {
-                        self.mode = Mode::Adding;
-                        self.input_buffer.clear();
-                        self.description_buffer.clear();
-                        self.code_buffer.clear();
-                        self.popup_focus = PopupFocus::Title;
-                    }
-                    KeyCode::Char('e') => self.start_editing(),
-                    KeyCode::Char('d') => self.delete_current_item(),
                     KeyCode::Char('s') => self.start_search(),
-                    KeyCode::Char('h') => self.mode = Mode::Help,
                     KeyCode::Char('x') => self.start_export(),
                     KeyCode::Up => self.move_selection_up(),
                     KeyCode::Down => self.move_selection_down(),
-                    KeyCode::Tab => self.next_focus(),
-                    KeyCode::BackTab => self.previous_focus(),
-                    KeyCode::Enter => {
-                        if self.focus == Focus::Details {
-                            if let (Some(section_idx), Some(detail_idx)) = (self.selected_section, self.selected_detail) {
-                                if let Some(section) = self.sections.get(section_idx) {
-                                    if let Some(detail) = section.details.get(detail_idx) {
-                                        self.mode = Mode::Viewing;
-                                        self.input_buffer = detail.title.clone();
-                                        self.description_buffer = detail.description.clone();
-                                        if let Some(ref path) = detail.code_path {
-                                            self.code_buffer = fs::read_to_string(path).unwrap_or_default();
-                                        }
-                                        self.selected_language = detail.language.clone();
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            Mode::Help => {
-                if key.code == KeyCode::Esc {
-                    self.mode = Mode::Normal;
-                }
-            }
-            Mode::Exporting => {
-                // Manejar las teclas del modo exportación
-                if self.export_message.is_some() {
-                    if key.code == KeyCode::Esc {
-                        self.mode = Mode::Normal;
-                        self.export_message = None;
-                    }
-                    return;
-                }
-
-                match key.code {
-                    KeyCode::Esc => {
-                        self.mode = Mode::Normal;
-                    }
-                    KeyCode::Up => {
-                        if self.selected_export_format > 0 {
-                            self.selected_export_format -= 1;
+                    KeyCode::Tab => {
+                        if key.modifiers.contains(KeyModifiers::SHIFT) {
+                            self.previous_focus();
                         } else {
-                            self.selected_export_format = self.export_formats.len() - 1;
-                        }
-                    }
-                    KeyCode::Down => {
-                        if self.selected_export_format < self.export_formats.len() - 1 {
-                            self.selected_export_format += 1;
-                        } else {
-                            self.selected_export_format = 0;
+                            self.next_focus();
                         }
                     }
                     KeyCode::Enter => {
-                        if let Some(format) = self.export_formats.get(self.selected_export_format).cloned() {
-                            match export_data(self, format) {
-                                Ok((source, dest)) => {
-                                    self.export_message = Some(format!(
-                                        "✅ Exportación exitosa!\n\nDesde: {}\nA: {}\n\nPresiona Esc para cerrar", 
-                                        source, dest
-                                    ));
-                                }
-                                Err(e) => {
-                                    self.export_message = Some(format!(
-                                        "❌ Error al exportar:\n\n{}\n\nPresiona Esc para cerrar", 
-                                        e
-                                    ));
-                                }
-                            }
+                        if self.focus == Focus::Details {
+                            self.view_current_detail();
                         }
                     }
                     _ => {}
                 }
             }
             Mode::Searching => self.handle_search_mode(key),
-            Mode::Viewing => {
-                match key.code {
-                    KeyCode::Esc => {
-                        self.mode = Mode::Normal;
-                        self.input_buffer.clear();
-                        self.description_buffer.clear();
-                        self.code_buffer.clear();
-                        self.code_cursor = 0;
-                        self.code_scroll = 0;
-                    }
-                    KeyCode::Char('e') => {
-                        self.mode = Mode::Editing;
-                    }
-                    KeyCode::Up => {
-                        if self.code_scroll > 0 {
-                            self.code_scroll -= 1;
-                        }
-                    }
-                    KeyCode::Down => {
-                        let total_lines = self.code_buffer.lines().count();
-                        let visible_lines = 10;
-                        if self.code_scroll < total_lines.saturating_sub(visible_lines) {
-                            self.code_scroll += 1;
-                        }
-                    }
-                    KeyCode::PageUp => {
-                        self.code_scroll = self.code_scroll.saturating_sub(5);
-                    }
-                    KeyCode::PageDown => {
-                        let total_lines = self.code_buffer.lines().count();
-                        let visible_lines = 10;
-                        let max_scroll = total_lines.saturating_sub(visible_lines);
-                        self.code_scroll = (self.code_scroll + 5).min(max_scroll);
-                    }
-                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        if let Some(clipboard) = &mut self.clipboard {
-                            let _ = clipboard.set_text(&self.code_buffer);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    fn handle_add_submit(&mut self) {
-        match self.focus {
-            Focus::Sections => {
-                if !self.input_buffer.is_empty() {
-                    let new_id = self.sections.last()
-                        .map(|s| s.id + 1)
-                        .unwrap_or(1);
-
-                    let title = if !self.input_buffer.starts_with('📁') {
-                        format!("📁 {}", self.input_buffer.trim())
-                    } else {
-                        self.input_buffer.clone()
-                    };
-
-                    let section = Section {
-                        id: new_id,
-                        title,
-                        details: Vec::new(),
-                    };
-
-                    if let Err(e) = self.db.save_section(&section) {
-                        eprintln!("Error guardando sección: {}", e);
-                    } else {
-                        self.sections.push(section);
-                        self.selected_section = Some(self.sections.len() - 1);
-                        //println!("Sección guardada correctamente");
-                    }
-                }
-            }
-            Focus::Details => {
-                if let Some(section_idx) = self.selected_section {
-                    if !self.input_buffer.is_empty() {
-                        if let Some(section) = self.sections.get_mut(section_idx) {
-                            let new_id = section.details.len() + 1;
-                            
-                            let code_path = if !self.code_buffer.is_empty() {
-                                match self.code_handler.save_code(&self.code_buffer, &self.selected_language) {
-                                    Ok(path) => Some(path),
-                                    Err(e) => {
-                                        eprintln!("Error guardando código: {}", e);
-                                        None
-                                    }
-                                }
-                            } else {
-                                None
-                            };
-
-                            let detail = Detail {
-                                id: new_id,
-                                title: self.input_buffer.clone(),
-                                description: self.description_buffer.clone(),
-                                code_path,
-                                language: self.selected_language.clone(),
-                                created_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-                            };
-
-                            section.details.push(detail);
-                            if let Err(e) = self.db.save_section(section) {
-                                eprintln!("Error guardando detalle: {}", e);
-                            }
-                        }
-                    }
-                }
-            }
+            Mode::Viewing => self.handle_view_mode(key),
             _ => {}
         }
-
-        // Limpiar estado y pantalla
-        self.mode = Mode::Normal;
-        self.input_buffer.clear();
-        self.description_buffer.clear();
-        self.code_buffer.clear();
-        self.code_cursor = 0;
-        self.code_scroll = 0;
-    }
-
-    fn handle_edit_submit(&mut self) {
-        match self.focus {
-            Focus::Sections => {
-                if let Some(idx) = self.selected_section {
-                    if let Some(section) = self.sections.get_mut(idx) {
-                        section.title = if !self.input_buffer.starts_with('📁') {
-                            format!("📁 {}", self.input_buffer.trim())
-                        } else {
-                            self.input_buffer.clone()
-                        };
-                        
-                        // Guardar en la base de datos
-                        if let Err(e) = self.db.save_section(section) {
-                            eprintln!("Error guardando sección: {}", e);
-                        }
-                    }
-                }
-            }
-            Focus::Details => {
-                if let (Some(section_idx), Some(detail_idx)) = (self.selected_section, self.selected_detail) {
-                    if let Some(section) = self.sections.get_mut(section_idx) {
-                        if let Some(detail) = section.details.get_mut(detail_idx) {
-                            // Actualizar datos básicos
-                            detail.title = self.input_buffer.clone();
-                            detail.description = self.description_buffer.clone();
-                            
-                            // Guardar código si hay contenido
-                            if !self.code_buffer.is_empty() {
-                                match self.code_handler.save_code(&self.code_buffer, &self.selected_language) {
-                                    Ok(path) => {
-                                        detail.code_path = Some(path);
-                                        detail.language = self.selected_language.clone();
-                                    }
-                                    Err(e) => eprintln!("Error guardando código: {}", e),
-                                }
-                            }
-                            
-                            detail.created_at = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-                            
-                            // Guardar en la base de datos
-                            if let Err(e) = self.db.save_section(section) {
-                                eprintln!("Error guardando detalle: {}", e);
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        // Limpiar estado y volver a modo normal
-        self.mode = Mode::Normal;
-        self.input_buffer.clear();
-        self.description_buffer.clear();
-        self.code_buffer.clear();
-        self.popup_focus = PopupFocus::Title;
-    }
-
-    pub fn handle_search_mode(&mut self, key: KeyEvent) {
-        if self.copying {
-            self.handle_copy_mode(key);
-            return;
-        }
-
-        match key.code {
-            KeyCode::Esc => {
-                self.mode = Mode::Normal;
-                self.search_query.clear();
-                self.search_results.clear();
-                self.search_scroll = 0;
-                self.selected_link = None;
-                self.links.clear();
-                self.searching = false;
-            }
-            KeyCode::Backspace => {
-                self.search_query.pop();
-                if !self.search_query.is_empty() {
-                    self.searching = true;
-                    self.perform_search_based_on_target();
-                }
-            }
-            KeyCode::Tab => {
-                self.cycle_search_target();
-                if !self.search_query.is_empty() {
-                    self.searching = true;
-                    self.perform_search_based_on_target();
-                }
-            }
-            KeyCode::Up => {
-                if self.search_scroll > 0 {
-                    self.search_scroll -= 1;
-                    if !self.links.is_empty() {
-                        self.selected_link = Some(self.search_scroll);
-                    }
-                }
-            }
-            KeyCode::Down => {
-                if self.search_scroll + 1 < self.search_results.len() {
-                    self.search_scroll += 1;
-                    if !self.links.is_empty() {
-                        self.selected_link = Some(self.search_scroll);
-                    }
-                }
-            }
-            KeyCode::PageUp => {
-                self.search_scroll = self.search_scroll.saturating_sub(5);
-                if !self.links.is_empty() {
-                    self.selected_link = Some(self.search_scroll);
-                }
-            }
-            KeyCode::PageDown => {
-                let max_scroll = self.search_results.len().saturating_sub(1);
-                self.search_scroll = (self.search_scroll + 5).min(max_scroll);
-                if !self.links.is_empty() {
-                    self.selected_link = Some(self.search_scroll);
-                }
-            }
-            KeyCode::Enter => {
-                if let Some(selected) = self.selected_link {
-                    if let Some(url) = self.links.get(selected) {
-                        let _ = open::that(url);
-                    }
-                }
-            }
-            KeyCode::Char('c') => {
-                if !self.search_results.is_empty() {
-                    self.copying = true;
-                    self.copy_result = Some(self.search_results[self.search_scroll].clone());
-                }
-            }
-            KeyCode::Char(c) => {
-                if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
-                    self.search_query.push(c);
-                    self.searching = true;
-                    self.perform_search_based_on_target();
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn setup_search_channel(&mut self) {
-        let (tx, mut rx) = mpsc::channel(32);
-        let (results_tx, results_rx) = mpsc::channel(32);
-        self.search_tx = Some(tx);
-        self.results_rx = Some(results_rx);
-
-        let search_target = self.search_target.clone();
-
-        // Spawn background task
-        tokio::spawn(async move {
-            let mut crates_search = CratesIoSearch::new();
-            let mut cheats_search = CheatsRsSearch::new();
-
-            while let Some(query) = rx.recv().await {
-                let mut results = Vec::new();
-                
-                match search_target {
-                    SearchTarget::CratesIo => {
-                        if let Ok(search_results) = crates_search.search(&query).await {
-                            results = search_results;
-                        }
-                    }
-                    SearchTarget::CheatsRs => {
-                        if let Ok(search_results) = cheats_search.search(&query).await {
-                            results = search_results;
-                        }
-                    }
-                    SearchTarget::All => {
-                        if let Ok(crates_results) = crates_search.search(&query).await {
-                            results.extend(crates_results);
-                            if let Ok(cheats_results) = cheats_search.search(&query).await {
-                                results.extend(cheats_results);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                let _ = results_tx.send(results).await;
-            }
-        });
     }
 
     pub fn check_search_results(&mut self) {
         if let Some(rx) = &mut self.results_rx {
-            match rx.try_recv() {
-                Ok(results) => {
-                    self.search_results = results;
-                    self.searching = false;
-                }
-                Err(_) => {} // Ignorar errores de try_recv
+            if let Ok(results) = rx.try_recv() {
+                self.search_results = results;
+                self.searching = false;
             }
         }
     }
 
-    pub fn perform_search_based_on_target(&mut self) {
+    fn view_current_detail(&mut self) {
+        if let (Some(section_idx), Some(detail_idx)) = (self.selected_section, self.selected_detail) {
+            if let Some(section) = self.sections.get(section_idx) {
+                if let Some(detail) = section.details.get(detail_idx) {
+                    self.mode = Mode::Viewing;
+                    self.input_buffer = detail.title.clone();
+                    self.description_buffer = detail.description.clone();
+                    if let Some(ref path) = detail.code_path {
+                        self.code_buffer = std::fs::read_to_string(path).unwrap_or_default();
+                    }
+                    self.selected_language = detail.language.clone();
+                }
+            }
+        }
+    }
+
+    pub fn start_search(&mut self) {
+        self.mode = Mode::Searching;
+        self.search_query.clear();
         self.search_results.clear();
-        self.links.clear();
+        self.search_scroll = 0;
         self.selected_link = None;
-        
-        if self.search_query.is_empty() {
-            return;
-        }
-
-        match self.search_target {
-            SearchTarget::Local => {
-                self.perform_local_search(self.search_query.clone());
-            }
-            _ => {
-                if self.search_tx.is_none() {
-                    self.setup_search_channel();
-                }
-                
-                if let Some(tx) = &self.search_tx {
-                    self.searching = true;
-                    let _ = tx.try_send(self.search_query.clone());
-                }
-            }
-        }
+        self.links.clear();
     }
 
-    pub fn handle_help_mode(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('h') => self.mode = Mode::Normal,
-            _ => {}
-        }
+    pub fn start_export(&mut self) {
+        self.mode = Mode::Exporting;
+        self.selected_export_format = 0;
+        self.export_message = None;
     }
 
-    fn start_adding(&mut self) {
-        self.mode = Mode::Adding;
-        self.popup_focus = PopupFocus::Title;
-        self.input_buffer.clear();
-        self.description_buffer.clear();
-        self.code_buffer.clear();
-    }
-
-    fn start_editing(&mut self) {
-        match self.focus {
-            Focus::Sections => {
-                if let Some(idx) = self.selected_section {
-                    if let Some(section) = self.sections.get(idx) {
-                        self.input_buffer = section.title.clone();
-                        if self.input_buffer.starts_with("📁 ") {
-                            self.input_buffer = self.input_buffer[5..].to_string();
-                        }
-                        self.mode = Mode::Editing;
-                    }
-                }
-            }
-            Focus::Details => {
-                if let (Some(section_idx), Some(detail_idx)) = (self.selected_section, self.selected_detail) {
-                    if let Some(section) = self.sections.get(section_idx) {
-                        if let Some(detail) = section.details.get(detail_idx) {
-                            self.input_buffer = detail.title.clone();
-                            self.description_buffer = detail.description.clone();
-                            self.code_buffer = if let Some(ref path) = detail.code_path {
-                                fs::read_to_string(path).unwrap_or_default()
-                            } else {
-                                String::new()
-                            };
-                            self.selected_language = detail.language.clone();
-                            self.mode = Mode::Editing;
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn delete_current_item(&mut self) {
-        match self.focus {
-            Focus::Sections => {
-                if let Some(idx) = self.selected_section {
-                    // Eliminar de la base de datos
-                    if let Err(e) = self.db.delete_section(self.sections[idx].id) {
-                        eprintln!("Error eliminando sección: {}", e);
-                        return;
-                    }
-                    
-                    // Eliminar del estado local
-                    self.sections.remove(idx);
-                    
-                    // Actualizar selección
-                    if !self.sections.is_empty() {
-                        self.selected_section = Some(if idx >= self.sections.len() {
-                            self.sections.len() - 1
-                        } else {
-                            idx
-                        });
-                    } else {
-                        self.selected_section = None;
-                    }
-                    self.selected_detail = None;
-                }
-            }
-            Focus::Details => {
-                if let (Some(section_idx), Some(detail_idx)) = (self.selected_section, self.selected_detail) {
-                    if let Some(section) = self.sections.get_mut(section_idx) {
-                        // Eliminar de la base de datos
-                        if let Err(e) = self.db.delete_detail(section.id, section.details[detail_idx].id) {
-                            eprintln!("Error eliminando detalle: {}", e);
-                            return;
-                        }
-                        
-                        // Eliminar archivo de código si existe
-                        if let Some(ref path) = section.details[detail_idx].code_path {
-                            if let Err(e) = fs::remove_file(path) {
-                                eprintln!("Error eliminando archivo de código: {}", e);
-                            }
-                        }
-                        
-                        // Eliminar del estado local
-                        section.details.remove(detail_idx);
-                        
-                        // Actualizar selección
-                        if !section.details.is_empty() {
-                            self.selected_detail = Some(if detail_idx >= section.details.len() {
-                                section.details.len() - 1
-                            } else {
-                                detail_idx
-                            });
-                        } else {
-                            self.selected_detail = None;
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn move_selection_up(&mut self) {
+    pub fn move_selection_up(&mut self) {
         match self.focus {
             Focus::Sections => {
                 if let Some(current) = self.selected_section {
@@ -1062,7 +323,7 @@ impl App {
         }
     }
 
-    fn move_selection_down(&mut self) {
+    pub fn move_selection_down(&mut self) {
         match self.focus {
             Focus::Sections => {
                 if let Some(current) = self.selected_section {
@@ -1094,130 +355,259 @@ impl App {
         }
     }
 
-    fn start_search(&mut self) {
-        self.mode = Mode::Searching;
-        self.search_query.clear();
-        self.search_results.clear();
-    }
-
-    fn cycle_search_target(&mut self) {
-        self.search_target = match self.search_target {
-            SearchTarget::Local => SearchTarget::CratesIo,
-            SearchTarget::CratesIo => SearchTarget::CheatsRs,
-            SearchTarget::CheatsRs => SearchTarget::All,
-            SearchTarget::All => SearchTarget::Local,
-        };
-    }
-
-    fn perform_local_search(&mut self, query: String) {
-        self.search_results.clear();
-        
-        if let Ok(results) = self.db.search_local(&query) {
-            for (section, detail) in results {
-                self.search_results.push(SearchResult {
-                    title: format!("{} > {}", section.title, detail.title),
-                    description: detail.description,
-                    source: SearchSource::Local,
-                });
-            }
-        }
-    }
-
-    fn toggle_popup_focus(&mut self) {
-        if self.focus == Focus::Details {
-            self.popup_focus = match self.popup_focus {
-                PopupFocus::Title => PopupFocus::Description,
-                PopupFocus::Description => PopupFocus::Code,
-                PopupFocus::Code => PopupFocus::Title,
-            };
-        }
-    }
-
-    fn handle_copy_mode(&mut self, key: KeyEvent) {
+    fn handle_search_mode(&mut self, key: KeyEvent) {
         match key.code {
+            KeyCode::Tab => {
+                self.search_target = match self.search_target {
+                    SearchTarget::Local => SearchTarget::CratesIo,
+                    SearchTarget::CratesIo => SearchTarget::CheatsRs,
+                    SearchTarget::CheatsRs => SearchTarget::All,
+                    SearchTarget::All => SearchTarget::Local,
+                };
+                self.perform_search();
+            }
             KeyCode::Esc => {
-                self.copying = false;
-                self.copy_result = None;
+                self.mode = Mode::Normal;
+                self.search_query.clear();
+                self.search_results.clear();
+                self.search_scroll = 0;
+                self.selected_link = None;
+                self.links.clear();
             }
             KeyCode::Enter => {
-                if let Some(result) = self.copy_result.take() {
-                    if let Some(section_idx) = self.selected_section {
-                        if let Some(section) = self.sections.get_mut(section_idx) {
-                            let new_id = section.details.len() + 1;
-                            section.details.push(Detail {
-                                id: new_id,
-                                title: result.title,
-                                description: result.description,
-                                code_path: None,
-                                language: Language::None,
-                                created_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-                            });
+                if self.search_target == SearchTarget::Local {
+                    if let Some(result) = self.search_results.get(self.search_scroll) {
+                        for (section_idx, section) in self.sections.iter().enumerate() {
+                            for (detail_idx, detail) in section.details.iter().enumerate() {
+                                if detail.title == result.title {
+                                    self.selected_section = Some(section_idx);
+                                    self.selected_detail = Some(detail_idx);
+                                    self.mode = Mode::Viewing;
+                                    self.input_buffer = detail.title.clone();
+                                    self.description_buffer = detail.description.clone();
+                                    if let Some(ref path) = detail.code_path {
+                                        self.code_buffer = std::fs::read_to_string(path).unwrap_or_default();
+                                    }
+                                    self.selected_language = detail.language.clone();
+                                    return;
+                                }
+                            }
                         }
                     }
+                } else if let Some(selected) = self.selected_link {
+                    if let Some(url) = self.links.get(selected) {
+                        let _ = open::that(url);
+                    }
                 }
-                self.copying = false;
             }
-            KeyCode::Up | KeyCode::Down => {
-                // Navegar entre resultados de búsqueda
-                if let Some(current_idx) = self.search_results.iter()
-                    .position(|r| Some(r) == self.copy_result.as_ref()) {
-                    let new_idx = if key.code == KeyCode::Up {
-                        if current_idx > 0 { current_idx - 1 } else { self.search_results.len() - 1 }
-                    } else {
-                        if current_idx < self.search_results.len() - 1 { current_idx + 1 } else { 0 }
-                    };
-                    self.copy_result = Some(self.search_results[new_idx].clone());
+            KeyCode::Up => {
+                if self.search_scroll > 0 {
+                    self.search_scroll -= 1;
                 }
+            }
+            KeyCode::Down => {
+                if self.search_scroll + 1 < self.search_results.len() {
+                    self.search_scroll += 1;
+                }
+            }
+            KeyCode::Char(c) => {
+                self.search_query.push(c);
+                self.perform_search();
+            }
+            KeyCode::Backspace => {
+                self.search_query.pop();
+                self.perform_search();
             }
             _ => {}
         }
     }
 
-    pub fn save_state(&self) -> Result<String, serde_json::Error> {
-        // Solo guardar los campos necesarios
-        let state = serde_json::json!({
-            "sections": self.sections,
-            "layout_sizes": self.layout_sizes,
-            "search_target": self.search_target,
-        });
-        serde_json::to_string_pretty(&state)
+    fn perform_search(&mut self) {
+        self.search_results.clear();
+        if self.search_query.is_empty() {
+            return;
+        }
+
+        if self.search_target == SearchTarget::Local {
+            if let Ok(results) = self.db.search_local(&self.search_query) {
+                for (_section, detail) in results {
+                    self.search_results.push(SearchResult {
+                        title: detail.title,
+                        description: detail.description,
+                        source: SearchSource::Local,
+                    });
+                }
+            }
+        }
     }
 
-    pub fn load_state(&mut self, json: &str) -> Result<(), serde_json::Error> {
-        let state: serde_json::Value = serde_json::from_str(json)?;
-        
-        if let Some(sections) = state.get("sections") {
-            self.sections = serde_json::from_value(sections.clone())?;
+    fn handle_view_mode(&mut self, key: KeyEvent) {
+        match key.code {
+            // Movimiento normal del cursor sin selección
+            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down 
+                if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                match key.code {
+                    KeyCode::Left => if self.code_cursor > 0 { self.code_cursor -= 1 },
+                    KeyCode::Right => if self.code_cursor < self.code_buffer.len() { self.code_cursor += 1 },
+                    KeyCode::Up => {
+                        let current_line = self.code_cursor_line();
+                        if current_line > 0 {
+                            let current_column = self.code_cursor_column();
+                            let prev_line_start = self.code_buffer[..self.code_cursor]
+                                .rfind('\n')
+                                .map(|i| i + 1)
+                                .unwrap_or(0);
+                            self.code_cursor = prev_line_start + current_column;
+                        }
+                    },
+                    KeyCode::Down => {
+                        if let Some(next_line_start) = self.code_buffer[self.code_cursor..]
+                            .find('\n')
+                            .map(|i| self.code_cursor + i + 1) {
+                            let current_column = self.code_cursor_column();
+                            self.code_cursor = next_line_start + current_column;
+                        }
+                    },
+                    _ => {}
+                }
+            },
+
+            // Selección de texto con Ctrl + flechas
+            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down 
+                if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Iniciar selección si no existe
+                if self.selection_start.is_none() {
+                    self.selection_start = Some(self.code_cursor);
+                }
+
+                // Mover el cursor carácter por carácter
+                match key.code {
+                    KeyCode::Left => {
+                        if self.code_cursor > 0 {
+                            self.code_cursor -= 1;
+                        }
+                    }
+                    KeyCode::Right => {
+                        if self.code_cursor < self.code_buffer.len() {
+                            self.code_cursor += 1;
+                        }
+                    }
+                    KeyCode::Up => {
+                        let current_line = self.code_cursor_line();
+                        if current_line > 0 {
+                            let current_column = self.code_cursor_column();
+                            self.move_cursor(current_line - 1, current_column);
+                        }
+                    }
+                    KeyCode::Down => {
+                        let current_line = self.code_cursor_line();
+                        let total_lines = self.code_buffer.lines().count();
+                        if current_line < total_lines - 1 {
+                            let current_column = self.code_cursor_column();
+                            self.move_cursor(current_line + 1, current_column);
+                        }
+                    }
+                    _ => {}
+                }
+
+                // Actualizar el final de la selección
+                self.selection_end = Some(self.code_cursor);
+            },
+
+            KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if self.selection_start.is_none() {
+                    self.selection_start = Some(self.code_cursor);
+                    self.selection_end = Some(self.code_cursor);
+                } else {
+                    self.selection_start = None;
+                    self.selection_end = None;
+                }
+            },
+            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
+                    let (start_idx, end_idx) = if start <= end {
+                        (start, end)
+                    } else {
+                        (end, start)
+                    };
+                    
+                    let text = self.code_buffer[start_idx..=end_idx].to_string();
+                    
+                    // Intentar copiar directamente al portapapeles
+                    if let Ok(mut clipboard) = Clipboard::new() {
+                        if clipboard.set_text(&text).is_ok() {
+                            self.selection_start = None;
+                            self.selection_end = None;
+                        }
+                    }
+                }
+            },
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                eprintln!("Ctrl+C detectado"); // Debug
+                if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
+                    let (start_idx, end_idx) = if start <= end {
+                        (start, end)
+                    } else {
+                        (end, start)
+                    };
+                    
+                    let text = self.code_buffer[start_idx..=end_idx].to_string();
+                    eprintln!("Texto a copiar: {}", text); // Debug
+
+                    // Intentar copiar directamente al portapapeles
+                    if let Ok(mut clipboard) = Clipboard::new() {
+                        if clipboard.set_text(&text).is_ok() {
+                            eprintln!("Copiado exitoso con arboard"); // Debug
+                            self.selection_start = None;
+                            self.selection_end = None;
+                        }
+                    }
+                }
+            },
+            KeyCode::Insert if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
+                    // ... mismo código de copiado que arriba ...
+                }
+            },
+            KeyCode::Esc => {
+                self.selection_start = None;
+                self.selection_end = None;
+                self.mode = Mode::Normal;
+                self.input_buffer.clear();
+                self.description_buffer.clear();
+                self.code_buffer.clear();
+                self.code_cursor = 0;
+                self.code_scroll = 0;
+            },
+            KeyCode::Up => {
+                if self.code_scroll > 0 {
+                    self.code_scroll -= 1;
+                }
+            },
+            KeyCode::Down => {
+                let total_lines = self.code_buffer.lines().count();
+                if self.code_scroll < total_lines.saturating_sub(1) {
+                    self.code_scroll += 1;
+                }
+            },
+            _ => {}
         }
-        
-        if let Some(layout) = state.get("layout_sizes") {
-            self.layout_sizes = serde_json::from_value(layout.clone())?;
-        }
-        
-        if let Some(target) = state.get("search_target") {
-            self.search_target = serde_json::from_value(target.clone())?;
-        }
-        
-        Ok(())
     }
 
-    pub fn start_export(&mut self) {
-        self.mode = Mode::Exporting;
-        self.selected_export_format = 0;
-        self.export_message = None;
-    }
-
-    fn cycle_language(&mut self) {
-        self.selected_language = match self.selected_language {
-            Language::None => Language::Rust,
-            Language::Rust => Language::Python,
-            Language::Python => Language::None,
+    pub fn next_focus(&mut self) {
+        self.focus = match self.focus {
+            Focus::Sections => Focus::Details,
+            Focus::Details => Focus::Search,
+            Focus::Search => Focus::Sections,
         };
     }
 
-    fn show_warning(&mut self, message: &str) {
-        // TODO: Implementar sistema de mensajes/avisos
-        eprintln!("{}", message);
+    pub fn previous_focus(&mut self) {
+        self.focus = match self.focus {
+            Focus::Sections => Focus::Search,
+            Focus::Details => Focus::Sections,
+            Focus::Search => Focus::Details,
+        };
     }
 
     pub fn code_cursor_line(&self) -> usize {
@@ -1233,6 +623,76 @@ impl App {
             .map(|i| i + 1)
             .unwrap_or(0);
         self.code_cursor - last_newline
+    }
+
+    fn get_line_number(&self, pos: usize) -> usize {
+        self.code_buffer[..pos]
+            .chars()
+            .filter(|&c| c == '\n')
+            .count()
+    }
+
+    pub fn get_position_in_buffer(&self, line: usize, column: usize) -> usize {
+        let mut pos = 0;
+        let mut current_line = 0;
+
+        for (i, c) in self.code_buffer.chars().enumerate() {
+            if current_line == line {
+                if pos == column {
+                    return i;
+                }
+                pos += 1;
+            }
+            if c == '\n' {
+                if current_line == line {
+                    return i;
+                }
+                current_line += 1;
+                pos = 0;
+            }
+        }
+
+        // Si estamos en la última línea y no hay \n
+        if current_line == line && pos == column {
+            return self.code_buffer.len();
+        }
+
+        // Fallback seguro
+        self.code_buffer.len().saturating_sub(1)
+    }
+
+    // Método auxiliar para manejar el cursor
+    pub fn move_cursor(&mut self, line: usize, column: usize) {
+        self.code_cursor = self.get_position_in_buffer(line, column);
+    }
+
+    // Método para obtener la posición actual del cursor como (línea, columna)
+    pub fn get_cursor_position(&self) -> (usize, usize) {
+        let line = self.code_cursor_line();
+        let column = self.code_cursor_column();
+        (line, column)
+    }
+
+    fn copy_to_clipboard(&mut self, text: &str) -> bool {
+        // Primero intentar con xclip
+        use std::process::Command;
+        let xclip_success = Command::new("xclip")
+            .args(["-selection", "clipboard"])
+            .arg(text)
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+
+        if xclip_success {
+            return true;
+        }
+
+        // Si xclip falla, intentar con arboard
+        if let Ok(mut clipboard) = Clipboard::new() {
+            return clipboard.set_text(text).is_ok();
+        }
+
+        false
     }
 }
 

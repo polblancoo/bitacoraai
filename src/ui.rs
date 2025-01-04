@@ -6,9 +6,6 @@ use ratatui::{
     Frame,
 };
 use crate::app::{App, Focus, Mode, PopupFocus, SearchTarget};
-use crate::search::SearchSource;
-use crate::export::ExportFormat;
-use std::env;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     // Limpiar toda la pantalla primero
@@ -556,264 +553,114 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-fn draw_search_popup(frame: &mut Frame, app: &mut App) {
+pub fn draw_search_popup(frame: &mut Frame, app: &App) {
     let area = centered_rect(80, 90, frame.size());
-    
-    // Limpiar el área antes de dibujar
-    let clear = Clear;
-    frame.render_widget(clear, area);
+    frame.render_widget(Clear, area);
 
-    // Obtener el nombre de la sección actual
-    let section_name = app.selected_section
-        .and_then(|idx| app.sections.get(idx))
-        .map_or("ninguna", |section| section.title.as_str());
+    let block = Block::default()
+        .title(Span::styled(
+            "👁 Búsqueda",
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+        ))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
 
-    let mut content = vec![
+    frame.render_widget(block.clone(), area);
+    let inner_area = block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(3),  // Área de búsqueda
+            Constraint::Min(1),     // Resultados
+            Constraint::Length(5),  // Ayuda
+        ])
+        .split(inner_area);
+
+    // Área de búsqueda
+    let search_input = Paragraph::new(vec![
         Line::from(vec![
             Span::raw("Buscar en "),
             Span::styled(
-                match app.search_target {
-                    SearchTarget::Local => "📝 Local",
-                    SearchTarget::CratesIo => "📦 Crates.io",
-                    SearchTarget::CheatsRs => "📚 Cheats.sh",
-                    SearchTarget::All => "🔍 Todas las fuentes",
-                },
+                format!("{}", app.search_target),
                 Style::default().fg(Color::Yellow)
             ),
-            Span::raw(" ("),
-            Span::styled("Tab", Style::default().fg(Color::Yellow)),
-            Span::raw(" para cambiar)"),
-        ]),
-        Line::from(vec![
-            Span::raw("Término: "),
+            Span::raw(": "),
             Span::styled(
                 format!("{}_", app.search_query),
-                Style::default()
-                    .fg(Color::Yellow)
-                    .bg(if app.searching { Color::DarkGray } else { Color::Reset })
+                Style::default().fg(Color::White)
             ),
-            if app.searching {
-                Span::styled(" 🔄 Buscando...", Style::default().fg(Color::Blue))
-            } else {
-                Span::raw("")
-            },
-        ]),
-        Line::from(""),
-    ];
+        ])
+    ])
+    .block(Block::default().borders(Borders::NONE));
+    frame.render_widget(search_input, chunks[0]);
 
-    if !app.search_results.is_empty() {
-        content.push(Line::from(vec![
-            Span::styled(
-                format!("🔍 {} resultado(s):", app.search_results.len()),
-                Style::default().fg(Color::Green)
-            )
-        ]));
-        content.push(Line::from(""));
-
-        app.links.clear();
-
-        for (index, result) in app.search_results.iter().enumerate() {
-            let source_icon = match result.source {
-                SearchSource::Local => "📝",
-                SearchSource::CratesIo => "📦",
-                SearchSource::CheatsRs => "📚",
-            };
-
-            let is_focused = app.search_scroll == index;
-            let focus_indicator = if is_focused { "➤ " } else { "  " };
-            
-            let title_style = if is_focused {
-                Style::default().fg(Color::Black).bg(Color::Blue)
-            } else {
-                Style::default().fg(Color::Cyan)
-            };
-
-            if is_focused {
-                app.selected_link = match result.source {
-                    SearchSource::CratesIo | SearchSource::CheatsRs => Some(index),
-                    _ => None,
-                };
-            }
-
-            content.push(Line::from(vec![
-                Span::raw(focus_indicator),
-                Span::styled(source_icon, Style::default().fg(Color::Yellow)),
-                Span::raw(" "),
-                Span::styled(&result.title, title_style),
-            ]));
-
-            content.push(Line::from(vec![
-                Span::raw("      "),
-                Span::styled(&result.description, Style::default().fg(Color::White)),
-            ]));
-
-            let url = match result.source {
-                SearchSource::CratesIo => {
-                    let url = format!("https://crates.io/crates/{}", result.title);
-                    app.links.push(url.clone());
-                    format!("   🌐 {}", url)
-                }
-                SearchSource::CheatsRs => {
-                    let url = format!("https://cheat.sh/rust/{}", result.title);
-                    app.links.push(url.clone());
-                    format!("   🌐 {}", url)
-                }
-                SearchSource::Local => String::new(),
-            };
-
-            if !url.is_empty() {
-                let link_style = if Some(app.links.len() - 1) == app.selected_link {
-                    Style::default().fg(Color::Blue).bg(Color::White)
-                } else {
-                    Style::default().fg(Color::Blue)
-                };
-
-                content.push(Line::from(vec![
-                    Span::styled(url, link_style)
-                ]));
-            }
-
-            content.push(Line::from(vec![
-                Span::raw("   "),
-                Span::styled(
-                    format!("[{}]", result.source),
-                    Style::default().fg(Color::DarkGray)
-                ),
-            ]));
-            content.push(Line::from("")); // Separador
-        }
-
-        if app.copying {
-            content.push(Line::from(vec![
-                Span::styled("💡 ", Style::default().fg(Color::Yellow)),
-                Span::raw("Usa "),
-                Span::styled("↑↓", Style::default().fg(Color::Yellow)),
-                Span::raw(" para seleccionar y "),
-                Span::styled("Enter", Style::default().fg(Color::Yellow)),
-                Span::raw(" para guardar"),
-            ]));
-        } else if !app.links.is_empty() {
-            content.push(Line::from(vec![
-                Span::styled("💡 ", Style::default().fg(Color::Yellow)),
-                Span::raw("Usa "),
-                Span::styled("↑↓", Style::default().fg(Color::Yellow)),
-                Span::raw(" para navegar | "),
-                Span::styled("Enter", Style::default().fg(Color::Yellow)),
-                Span::raw(" para abrir | "),
-                Span::styled("c", Style::default().fg(Color::Yellow)),
-                Span::raw(" para copiar"),
-            ]));
+    // Resultados de búsqueda
+    let results: Vec<Line> = app.search_results.iter().enumerate().map(|(i, result)| {
+        let style = if i == app.search_scroll {
+            Style::default().bg(Color::DarkGray)
         } else {
-            content.push(Line::from(vec![
-                Span::styled("💡 ", Style::default().fg(Color::Yellow)),
-                Span::raw("Usa "),
-                Span::styled("↑↓", Style::default().fg(Color::Yellow)),
-                Span::raw(" para navegar y "),
-                Span::styled("c", Style::default().fg(Color::Yellow)),
-                Span::raw(" para guardar el resultado seleccionado"),
-            ]));
-        }
-    } else if !app.search_query.is_empty() && !app.searching {
-        content.push(Line::from(vec![
-            Span::styled("❌ No se encontraron resultados", Style::default().fg(Color::Red))
-        ]));
-    }
+            Style::default()
+        };
 
-    // Agregar ayuda en un recuadro separado
-    let help_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray));
-
-    let help_content = vec![
         Line::from(vec![
-            Span::styled("Comandos:", Style::default().fg(Color::DarkGray))
-        ]),
-        Line::from(vec![
-            Span::styled("Tab", Style::default().fg(Color::DarkGray)),
-            Span::raw(" - Cambiar fuente"),
-            Span::styled(" | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("↑/↓", Style::default().fg(Color::DarkGray)),
-            Span::raw(" - Navegar"),
-            Span::styled(" | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("PgUp/PgDn", Style::default().fg(Color::DarkGray)),
-            Span::raw(" - Scroll"),
-        ]),
-        Line::from(vec![
-            Span::styled("Enter", Style::default().fg(Color::DarkGray)),
-            Span::raw(" - Abrir enlace"),
-            Span::styled(" | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("c", Style::default().fg(Color::DarkGray)),
-            Span::raw(" - Copiar/Guardar"),
-            Span::styled(" | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Esc", Style::default().fg(Color::DarkGray)),
-            Span::raw(" - Cerrar"),
-        ]),
-    ];
-
-    let help_paragraph = Paragraph::new(help_content)
-        .block(help_block)
-        .style(Style::default().fg(Color::DarkGray));
-
-    let content_area = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(1),
-            Constraint::Length(5),  // Altura para el área de ayuda
+            Span::styled(
+                if i == app.search_scroll { "▶ " } else { "  " },
+                style
+            ),
+            Span::styled(&result.title, style.fg(Color::Green)),
+            Span::raw(" - "),
+            Span::styled(&result.description, style),
         ])
-        .split(area);
+    }).collect();
 
-    let main_area = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Min(0),
-            Constraint::Length(1),
-        ])
-        .split(content_area[0]);
+    let results_widget = Paragraph::new(results)
+        .block(Block::default()
+            .title("Resultados")
+            .borders(Borders::ALL))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(results_widget, chunks[1]);
 
-    // Calcular el scroll para mantener el ítem seleccionado visible
-    let viewport_height = main_area[0].height.saturating_sub(4);
-    let total_items = content.len() as u16;
-
-    // Cada resultado ocupa aproximadamente 5 líneas (título, descripción, URL, fuente, separador)
-    let lines_per_result = 5;
-    let real_selected_position = (app.search_scroll * lines_per_result) as u16;
-
-    // Ajustar el scroll para mantener el ítem seleccionado visible
-    let scroll_offset = if real_selected_position > viewport_height {
-        real_selected_position - (viewport_height / 2)
-    } else {
-        0
+    // Ayuda
+    let help_text = match app.search_target {
+        SearchTarget::Local => vec![
+            Line::from(vec![
+                Span::styled("Tab", Style::default().fg(Color::Yellow)),
+                Span::raw(" cambiar fuente | "),
+                Span::styled("↑/↓", Style::default().fg(Color::Yellow)),
+                Span::raw(" navegar | "),
+                Span::styled("Enter", Style::default().fg(Color::Yellow)),
+                Span::raw(" ver detalle"),
+            ]),
+            Line::from(vec![
+                Span::styled("Esc", Style::default().fg(Color::Yellow)),
+                Span::raw(" cerrar"),
+            ]),
+        ],
+        _ => vec![
+            Line::from(vec![
+                Span::styled("Tab", Style::default().fg(Color::Yellow)),
+                Span::raw(" cambiar fuente | "),
+                Span::styled("↑/↓", Style::default().fg(Color::Yellow)),
+                Span::raw(" navegar | "),
+                Span::styled("Enter", Style::default().fg(Color::Yellow)),
+                Span::raw(" abrir enlace"),
+            ]),
+            Line::from(vec![
+                Span::styled("Esc", Style::default().fg(Color::Yellow)),
+                Span::raw(" cerrar"),
+            ]),
+        ],
     };
 
-    // Asegurarse de que no excedamos el máximo scroll posible
-    let max_scroll = (content.len() as u16).saturating_sub(viewport_height);
-    let scroll_offset = scroll_offset.min(max_scroll);
-
-    let paragraph = Paragraph::new(content.clone())
+    let help = Paragraph::new(help_text)
         .block(Block::default()
-            .title(format!("Búsqueda [Sección: {}]", section_name))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Yellow)))
-        .scroll((scroll_offset, 0))
-        .wrap(Wrap { trim: true });
+            .title("Atajos")
+            .borders(Borders::ALL))
+        .alignment(Alignment::Center);
 
-    // Actualizar el estado del scrollbar
-    let mut scroll_state = ScrollbarState::new((content.len() / lines_per_result as usize) + 1)
-        .position(app.search_scroll);
-
-    frame.render_widget(paragraph, main_area[0]);
-    frame.render_widget(help_paragraph, content_area[1]);
-
-    // Renderizar scrollbar solo si es necesario
-    if total_items > viewport_height {
-        frame.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(None)
-                .end_symbol(None),
-            main_area[1],
-            &mut scroll_state,
-        );
-    }
+    frame.render_widget(help, chunks[2]);
 }
 
 pub fn draw_export_popup(frame: &mut Frame, app: &App) {
@@ -929,16 +776,16 @@ fn draw_view_popup(frame: &mut Frame, app: &App) {
     let area = centered_rect(80, 80, frame.size());
     frame.render_widget(Clear, area);
 
-    let container_block = Block::default()
+    let block = Block::default()
         .title(Span::styled(
-            "Detalle",
+            "👁 Visualizando Detalle",
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
         ))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Yellow));
 
-    frame.render_widget(container_block.clone(), area);
-    let inner_area = container_block.inner(area);
+    frame.render_widget(block.clone(), area);
+    let inner_area = block.inner(area);
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -952,53 +799,89 @@ fn draw_view_popup(frame: &mut Frame, app: &App) {
         .split(inner_area);
 
     // Título
-    let title = Paragraph::new(app.input_buffer.as_str())
+    let title = Paragraph::new(app.input_buffer.clone())
         .block(Block::default()
             .title("Título")
-            .borders(Borders::ALL))
-        .style(Style::default().fg(Color::White));
+            .borders(Borders::ALL));
+    frame.render_widget(title, chunks[0]);
 
     // Descripción
-    let desc = Paragraph::new(app.description_buffer.as_str())
+    let description = Paragraph::new(app.description_buffer.clone())
         .block(Block::default()
             .title("Descripción")
             .borders(Borders::ALL))
-        .style(Style::default().fg(Color::White))
         .wrap(Wrap { trim: true });
+    frame.render_widget(description, chunks[1]);
 
-    // Código
+    // Código con resaltado de selección y cursor
     let code_lines: Vec<Line> = app.code_buffer
         .lines()
         .enumerate()
         .map(|(i, line)| {
-            Line::from(vec![
+            let mut spans = vec![
                 Span::styled(
                     format!("{:4} │ ", i + 1),
                     Style::default().fg(Color::DarkGray)
                 ),
-                Span::styled(line, Style::default().fg(Color::White)),
-            ])
+            ];
+
+            let mut line_spans = Vec::new();
+            for (j, c) in line.chars().enumerate() {
+                let pos = app.get_position_in_buffer(i, j);
+                let mut style = Style::default();
+
+                // Aplicar estilo de selección si corresponde
+                if let (Some(start), Some(end)) = (app.selection_start, app.selection_end) {
+                    let (start, end) = if start <= end { (start, end) } else { (end, start) };
+                    if pos >= start && pos <= end {
+                        style = style.bg(Color::DarkGray);
+                    }
+                }
+
+                // Mostrar cursor
+                if pos == app.code_cursor {
+                    style = Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::White)
+                        .add_modifier(Modifier::SLOW_BLINK);
+                }
+
+                line_spans.push(Span::styled(c.to_string(), style));
+            }
+
+            // Cursor al final de la línea
+            if app.code_cursor == app.get_position_in_buffer(i, line.len()) {
+                line_spans.push(Span::styled(
+                    "█",
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::SLOW_BLINK)
+                ));
+            }
+
+            spans.extend(line_spans);
+            Line::from(spans)
         })
         .collect();
 
     let code = Paragraph::new(code_lines)
         .block(Block::default()
-            .title(format!("Código - {}", app.selected_language.to_string()))
+            .title(format!("Código - {}", app.selected_language))
             .borders(Borders::ALL))
-        .style(Style::default().fg(Color::White))
         .scroll((app.code_scroll as u16, 0));
+    frame.render_widget(code, chunks[2]);
 
     // Ayuda
     let help = Paragraph::new(vec![
         Line::from(vec![
-            Span::styled("e", Style::default().fg(Color::Yellow)),
-            Span::raw(" editar | "),
+            Span::styled("Ctrl + ←/→/↑/↓", Style::default().fg(Color::Yellow)),
+            Span::raw(" seleccionar texto | "),
+            Span::styled("Ctrl+Y", Style::default().fg(Color::Yellow)),
+            Span::raw(" copiar selección | "),
+        ]),
+        Line::from(vec![
             Span::styled("↑/↓", Style::default().fg(Color::Yellow)),
             Span::raw(" scroll | "),
-            Span::styled("PgUp/PgDn", Style::default().fg(Color::Yellow)),
-            Span::raw(" scroll rápido | "),
-            Span::styled("Ctrl+C", Style::default().fg(Color::Yellow)),
-            Span::raw(" copiar | "),
             Span::styled("Esc", Style::default().fg(Color::Yellow)),
             Span::raw(" cerrar"),
         ])
@@ -1006,10 +889,28 @@ fn draw_view_popup(frame: &mut Frame, app: &App) {
     .block(Block::default()
         .title("Atajos")
         .borders(Borders::ALL))
-        .alignment(Alignment::Left);
-
-    frame.render_widget(title, chunks[0]);
-    frame.render_widget(desc, chunks[1]);
-    frame.render_widget(code, chunks[2]);
+        .alignment(Alignment::Center);
     frame.render_widget(help, chunks[3]);
+
+    // Si hay texto seleccionado, mostrar un indicador debajo del frame
+    if app.selection_start.is_some() {
+        let help_area = Rect {
+            x: area.x,
+            y: area.y + area.height,
+            width: area.width,
+            height: 1,
+        };
+
+        let help = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("✏️ ", Style::default().fg(Color::Yellow)),
+                Span::raw("Texto seleccionado - "),
+                Span::styled("Ctrl+Y", Style::default().fg(Color::Yellow)),
+                Span::raw(" para copiar"),
+            ])
+        ])
+        .alignment(Alignment::Center);
+
+        frame.render_widget(help, help_area);
+    }
 }
