@@ -1,8 +1,8 @@
 [package]
 name = "rust-tui-manager"
-version = "0.1.5"
+version = "0.1.7"
 edition = "2021"
-authors = ["Pablo Sánchez <CrewHelmSupport@gmail.com>"]
+authors = ["Pablo Blanco <CrewHelmSupport@gmail.com>"]
 description = "Una aplicación TUI para gestionar notas, snippets y búsquedas en múltiples fuentes para desarrolladores Rust"
 readme = "README.md"
 repository = "https://github.com/psanchezg/rust-tui-manager"
@@ -21,7 +21,7 @@ serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 reqwest = { version = "0.11", features = ["json"] }
 async-trait = "0.1.73"
-open = "5.0"
+open = "5.0"    
 arboard = "3.2"
 directories = "5.0"
 syntect = "5.0"

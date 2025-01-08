@@ -9,7 +9,7 @@ use crate::code_handler::CodeHandler;
 use crate::db::Database;
 use std::sync::mpsc;
 //use tokio::sync::mpsc;
-
+use std::process::Stdio;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Section {
@@ -230,23 +230,208 @@ impl App {
                     KeyCode::Char('x') => self.start_export(),
                     KeyCode::Up => self.move_selection_up(),
                     KeyCode::Down => self.move_selection_down(),
+                    KeyCode::Char('a') => {
+                        self.mode = Mode::Adding;
+                        self.input_buffer.clear();
+                        self.description_buffer.clear();
+                        self.code_buffer.clear();
+                        self.popup_focus = PopupFocus::Title;
+                    },
+                    KeyCode::Char('e') => {
+                        if let Some(section_idx) = self.selected_section {
+                            if self.focus == Focus::Sections {
+                                self.mode = Mode::Editing;
+                                if let Some(section) = self.sections.get(section_idx) {
+                                    self.input_buffer = section.title.clone();
+                                }
+                            } else if let Some(detail_idx) = self.selected_detail {
+                                if let Some(section) = self.sections.get(section_idx) {
+                                    if let Some(detail) = section.details.get(detail_idx) {
+                                        self.mode = Mode::Editing;
+                                        self.input_buffer = detail.title.clone();
+                                        self.description_buffer = detail.description.clone();
+                                        if let Some(ref path) = detail.code_path {
+                                            self.code_buffer = std::fs::read_to_string(path)
+                                                .unwrap_or_default();
+                                        }
+                                        self.selected_language = detail.language.clone();
+                                        self.popup_focus = PopupFocus::Title;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    KeyCode::Char('d') => {
+                        if let Some(section_idx) = self.selected_section {
+                            if self.focus == Focus::Sections {
+                                self.db.delete_section(section_idx).ok();
+                                self.sections.remove(section_idx);
+                                if section_idx >= self.sections.len() {
+                                    self.selected_section = self.sections.len().checked_sub(1);
+                                }
+                            } else if let Some(detail_idx) = self.selected_detail {
+                                if let Some(section) = self.sections.get_mut(section_idx) {
+                                    if let Some(detail) = section.details.get(detail_idx) {
+                                        if let Some(ref path) = detail.code_path {
+                                            self.code_handler.delete_code(path).ok();
+                                        }
+                                    }
+                                    section.details.remove(detail_idx);
+                                    if detail_idx >= section.details.len() {
+                                        self.selected_detail = section.details.len().checked_sub(1);
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    KeyCode::Char('h') => {
+                        self.mode = Mode::Help;
+                    },
                     KeyCode::Tab => {
                         if key.modifiers.contains(KeyModifiers::SHIFT) {
                             self.previous_focus();
                         } else {
                             self.next_focus();
                         }
-                    }
+                    },
                     KeyCode::Enter => {
                         if self.focus == Focus::Details {
                             self.view_current_detail();
                         }
-                    }
+                    },
                     _ => {}
                 }
-            }
+            },
+            Mode::Adding | Mode::Editing => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.mode = Mode::Normal;
+                        self.input_buffer.clear();
+                        self.description_buffer.clear();
+                        self.code_buffer.clear();
+                    },
+                    KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        if self.focus == Focus::Sections {
+                            // Guardar sección
+                            if !self.input_buffer.is_empty() {
+                                let section = Section {
+                                    id: if self.mode == Mode::Adding { 0 } else { 
+                                        self.selected_section.unwrap_or(0) 
+                                    },
+                                    title: self.input_buffer.clone(),
+                                    details: Vec::new(),
+                                };
+                                
+                                // Guardar en la base de datos primero
+                                self.db.save_section(&section).ok();
+                                
+                                // Luego actualizar el vector de secciones
+                                if self.mode == Mode::Adding {
+                                    self.sections.push(section.clone());
+                                    self.selected_section = Some(self.sections.len() - 1);
+                                } else if let Some(idx) = self.selected_section {
+                                    self.sections[idx] = section;
+                                }
+                            }
+                        } else {
+                            // Guardar detalle
+                            if let Some(section_idx) = self.selected_section {
+                                let detail = Detail {
+                                    id: if self.mode == Mode::Adding { 0 } else {
+                                        self.selected_detail.unwrap_or(0)
+                                    },
+                                    title: self.input_buffer.clone(),
+                                    description: self.description_buffer.clone(),
+                                    code_path: if self.code_buffer.is_empty() {
+                                        None
+                                    } else {
+                                        Some(self.code_handler.save_code(
+                                            &self.code_buffer,
+                                            &self.selected_language
+                                        ).unwrap_or_default())
+                                    },
+                                    language: self.selected_language.clone(),
+                                    created_at: chrono::Local::now().to_string(),
+                                };
+
+                                if let Some(section) = self.sections.get_mut(section_idx) {
+                                    if self.mode == Mode::Adding {
+                                        section.details.push(detail);
+                                        self.selected_detail = Some(section.details.len() - 1);
+                                    } else if let Some(detail_idx) = self.selected_detail {
+                                        section.details[detail_idx] = detail;
+                                    }
+                                    self.db.save_section(section).ok();
+                                }
+                            }
+                        }
+                        self.mode = Mode::Normal;
+                        self.input_buffer.clear();
+                        self.description_buffer.clear();
+                        self.code_buffer.clear();
+                    },
+                    KeyCode::Tab => {
+                        if self.focus == Focus::Details {
+                            self.popup_focus = match self.popup_focus {
+                                PopupFocus::Title => PopupFocus::Description,
+                                PopupFocus::Description => PopupFocus::Code,
+                                PopupFocus::Code => PopupFocus::Title,
+                            };
+                        }
+                    },
+                    KeyCode::Enter => {
+                        match self.popup_focus {
+                            PopupFocus::Description => self.description_buffer.push('\n'),
+                            PopupFocus::Code => {
+                                self.code_buffer.insert(self.code_cursor, '\n');
+                                self.code_cursor += 1;
+                            },
+                            _ => {}
+                        }
+                    },
+                    KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        // Pegar solo en el buffer activo
+                        if let Ok(mut clipboard) = Clipboard::new() {
+                            if let Ok(text) = clipboard.get_text() {
+                                match self.popup_focus {
+                                    PopupFocus::Title => self.input_buffer.push_str(&text),
+                                    PopupFocus::Description => self.description_buffer.push_str(&text),
+                                    PopupFocus::Code => {
+                                        // Para el código, insertar en la posición del cursor
+                                        self.code_buffer.insert_str(self.code_cursor, &text);
+                                        self.code_cursor += text.len();
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    KeyCode::Char(c) => {
+                        match self.popup_focus {
+                            PopupFocus::Title => self.input_buffer.push(c),
+                            PopupFocus::Description => self.description_buffer.push(c),
+                            PopupFocus::Code => {
+                                self.code_buffer.insert(self.code_cursor, c);
+                                self.code_cursor += 1;
+                            }
+                        }
+                    },
+                    KeyCode::Backspace => {
+                        match self.popup_focus {
+                            PopupFocus::Title => { self.input_buffer.pop(); },
+                            PopupFocus::Description => { self.description_buffer.pop(); },
+                            PopupFocus::Code => { self.code_buffer.pop(); },
+                        }
+                    },
+                    _ => {}
+                }
+            },
             Mode::Searching => self.handle_search_mode(key),
             Mode::Viewing => self.handle_view_mode(key),
+            Mode::Help => {
+                if key.code == KeyCode::Esc {
+                    self.mode = Mode::Normal;
+                }
+            },
             _ => {}
         }
     }
@@ -443,6 +628,56 @@ impl App {
 
     fn handle_view_mode(&mut self, key: KeyEvent) {
         match key.code {
+            KeyCode::Esc => {
+                self.mode = Mode::Normal;
+                self.input_buffer.clear();
+                self.description_buffer.clear();
+                self.code_buffer.clear();
+                self.selection_start = None;
+                self.selection_end = None;
+            },
+            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
+                    let (start_idx, end_idx) = if start <= end {
+                        (start, end)
+                    } else {
+                        (end, start)
+                    };
+                    
+                    let text = self.code_buffer[start_idx..=end_idx].to_string();
+                    
+                    // Intentar copiar usando xclip
+                    use std::process::Command;
+                    use std::io::Write;
+                    
+                    let success = Command::new("xclip")
+                        .arg("-selection")
+                        .arg("clipboard")
+                        .stdin(Stdio::piped())
+                        .spawn()
+                        .map(|mut child| {
+                            child.stdin.as_mut()
+                                .unwrap()
+                                .write_all(text.as_bytes())
+                                .and_then(|_| child.wait())
+                                .is_ok()
+                        })
+                        .unwrap_or(false);
+
+                    if success {
+                        self.selection_start = None;
+                        self.selection_end = None;
+                    } else {
+                        // Intentar con arboard como fallback
+                        if let Ok(mut clipboard) = Clipboard::new() {
+                            if clipboard.set_text(&text).is_ok() {
+                                self.selection_start = None;
+                                self.selection_end = None;
+                            }
+                        }
+                    }
+                }
+            },
             // Movimiento normal del cursor sin selección
             KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down 
                 if !key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -453,19 +688,15 @@ impl App {
                         let current_line = self.code_cursor_line();
                         if current_line > 0 {
                             let current_column = self.code_cursor_column();
-                            let prev_line_start = self.code_buffer[..self.code_cursor]
-                                .rfind('\n')
-                                .map(|i| i + 1)
-                                .unwrap_or(0);
-                            self.code_cursor = prev_line_start + current_column;
+                            self.move_cursor(current_line - 1, current_column);
                         }
                     },
                     KeyCode::Down => {
-                        if let Some(next_line_start) = self.code_buffer[self.code_cursor..]
-                            .find('\n')
-                            .map(|i| self.code_cursor + i + 1) {
+                        let current_line = self.code_cursor_line();
+                        let total_lines = self.code_buffer.lines().count();
+                        if current_line < total_lines - 1 {
                             let current_column = self.code_cursor_column();
-                            self.code_cursor = next_line_start + current_column;
+                            self.move_cursor(current_line + 1, current_column);
                         }
                     },
                     _ => {}
@@ -514,80 +745,24 @@ impl App {
                 self.selection_end = Some(self.code_cursor);
             },
 
-            KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if self.selection_start.is_none() {
-                    self.selection_start = Some(self.code_cursor);
-                    self.selection_end = Some(self.code_cursor);
-                } else {
-                    self.selection_start = None;
-                    self.selection_end = None;
+            // Edición de texto
+            KeyCode::Char(c) => {
+                self.code_buffer.insert(self.code_cursor, c);
+                self.code_cursor += 1;
+            },
+            KeyCode::Enter => {
+                self.code_buffer.insert(self.code_cursor, '\n');
+                self.code_cursor += 1;
+            },
+            KeyCode::Backspace => {
+                if self.code_cursor > 0 {
+                    self.code_buffer.remove(self.code_cursor - 1);
+                    self.code_cursor -= 1;
                 }
             },
-            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
-                    let (start_idx, end_idx) = if start <= end {
-                        (start, end)
-                    } else {
-                        (end, start)
-                    };
-                    
-                    let text = self.code_buffer[start_idx..=end_idx].to_string();
-                    
-                    // Intentar copiar directamente al portapapeles
-                    if let Ok(mut clipboard) = Clipboard::new() {
-                        if clipboard.set_text(&text).is_ok() {
-                            self.selection_start = None;
-                            self.selection_end = None;
-                        }
-                    }
-                }
-            },
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                eprintln!("Ctrl+C detectado"); // Debug
-                if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
-                    let (start_idx, end_idx) = if start <= end {
-                        (start, end)
-                    } else {
-                        (end, start)
-                    };
-                    
-                    let text = self.code_buffer[start_idx..=end_idx].to_string();
-                    eprintln!("Texto a copiar: {}", text); // Debug
-
-                    // Intentar copiar directamente al portapapeles
-                    if let Ok(mut clipboard) = Clipboard::new() {
-                        if clipboard.set_text(&text).is_ok() {
-                            eprintln!("Copiado exitoso con arboard"); // Debug
-                            self.selection_start = None;
-                            self.selection_end = None;
-                        }
-                    }
-                }
-            },
-            KeyCode::Insert if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
-                    // ... mismo código de copiado que arriba ...
-                }
-            },
-            KeyCode::Esc => {
-                self.selection_start = None;
-                self.selection_end = None;
-                self.mode = Mode::Normal;
-                self.input_buffer.clear();
-                self.description_buffer.clear();
-                self.code_buffer.clear();
-                self.code_cursor = 0;
-                self.code_scroll = 0;
-            },
-            KeyCode::Up => {
-                if self.code_scroll > 0 {
-                    self.code_scroll -= 1;
-                }
-            },
-            KeyCode::Down => {
-                let total_lines = self.code_buffer.lines().count();
-                if self.code_scroll < total_lines.saturating_sub(1) {
-                    self.code_scroll += 1;
+            KeyCode::Delete => {
+                if self.code_cursor < self.code_buffer.len() {
+                    self.code_buffer.remove(self.code_cursor);
                 }
             },
             _ => {}

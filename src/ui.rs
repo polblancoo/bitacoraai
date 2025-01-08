@@ -60,25 +60,25 @@ fn draw_sections(frame: &mut Frame, app: &App, area: Rect) {
 
     let block = Block::default()
         .title(Span::styled(
-            "📚 Secciones",
+            "Secciones",
             Style::default().fg(if app.focus == Focus::Sections {
                 Color::Yellow
             } else {
                 Color::White
             })
         ))
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(if app.focus == Focus::Sections {
-            Color::Yellow
-        } else {
-            Color::White
-        }));
+        .borders(Borders::ALL);
 
     let items: Vec<ListItem> = app.sections.iter()
         .map(|section| {
+            let title = section.title
+                .trim_start_matches('📁')
+                .trim_start_matches('📝')
+                .trim();
+            
             ListItem::new(Line::from(vec![
                 Span::styled(
-                    &section.title,
+                    format!("{:<30} 📁", title), // Padding fijo para alinear iconos
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(if app.focus == Focus::Sections {
@@ -474,7 +474,7 @@ fn draw_edit_popup(frame: &mut Frame, app: &App) {
     }
 }
 
-fn draw_help_popup(frame: &mut Frame, _app: &App) {
+fn draw_help_popup(frame: &mut Frame, app: &App) {
     let area = centered_rect(60, 60, frame.size());
     
     let help_text = vec![
@@ -518,6 +518,10 @@ fn draw_help_popup(frame: &mut Frame, _app: &App) {
             Span::styled("Ctrl+q", Style::default().fg(Color::Green)),
             Span::raw(" - Salir"),
         ]),
+        Line::from(vec![
+            Span::styled("Esc", Style::default().fg(Color::Green)),
+            Span::raw(" - Cerrar ayuda"),
+        ]),
     ];
 
     let help_message = Paragraph::new(help_text)
@@ -527,8 +531,7 @@ fn draw_help_popup(frame: &mut Frame, _app: &App) {
             .border_style(Style::default().fg(Color::Yellow)))
         .wrap(Wrap { trim: true });
 
-    let clear = Clear;
-    frame.render_widget(clear, area);
+    frame.render_widget(Clear, area);
     frame.render_widget(help_message, area);
 }
 
@@ -772,21 +775,9 @@ pub fn draw_export_popup(frame: &mut Frame, app: &App) {
     frame.render_widget(help, chunks[1]);
 }
 
-fn draw_view_popup(frame: &mut Frame, app: &App) {
+fn draw_view_popup(frame: &mut Frame, app: &mut App) {
     let area = centered_rect(80, 80, frame.size());
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title(Span::styled(
-            "👁 Visualizando Detalle",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-        ))
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow));
-
-    frame.render_widget(block.clone(), area);
-    let inner_area = block.inner(area);
-
+    
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -794,9 +785,9 @@ fn draw_view_popup(frame: &mut Frame, app: &App) {
             Constraint::Length(3),  // Título
             Constraint::Length(5),  // Descripción
             Constraint::Min(10),    // Código
-            Constraint::Length(3),  // Ayuda
+            Constraint::Length(5),  // Ayuda
         ])
-        .split(inner_area);
+        .split(area);
 
     // Título
     let title = Paragraph::new(app.input_buffer.clone())
@@ -871,46 +862,60 @@ fn draw_view_popup(frame: &mut Frame, app: &App) {
         .scroll((app.code_scroll as u16, 0));
     frame.render_widget(code, chunks[2]);
 
-    // Ayuda
+    // Ayuda mejorada
     let help = Paragraph::new(vec![
         Line::from(vec![
+            Span::styled("Navegación", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::raw(": "),
+            Span::styled("←/→/↑/↓", Style::default().fg(Color::Yellow)),
+            Span::raw(" mover cursor | "),
             Span::styled("Ctrl + ←/→/↑/↓", Style::default().fg(Color::Yellow)),
-            Span::raw(" seleccionar texto | "),
-            Span::styled("Ctrl+Y", Style::default().fg(Color::Yellow)),
-            Span::raw(" copiar selección | "),
+            Span::raw(" seleccionar"),
         ]),
         Line::from(vec![
-            Span::styled("↑/↓", Style::default().fg(Color::Yellow)),
-            Span::raw(" scroll | "),
+            Span::styled("Acciones", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::raw(": "),
+            Span::styled("Ctrl+Y", Style::default().fg(Color::Yellow)),
+            Span::raw(" copiar | "),
             Span::styled("Esc", Style::default().fg(Color::Yellow)),
-            Span::raw(" cerrar"),
+            Span::raw(" salir"),
         ])
     ])
     .block(Block::default()
         .title("Atajos")
         .borders(Borders::ALL))
-        .alignment(Alignment::Center);
+    .alignment(Alignment::Left);
+
     frame.render_widget(help, chunks[3]);
 
-    // Si hay texto seleccionado, mostrar un indicador debajo del frame
-    if app.selection_start.is_some() {
-        let help_area = Rect {
-            x: area.x,
-            y: area.y + area.height,
-            width: area.width,
-            height: 1,
-        };
-
-        let help = Paragraph::new(vec![
-            Line::from(vec![
-                Span::styled("✏️ ", Style::default().fg(Color::Yellow)),
-                Span::raw("Texto seleccionado - "),
-                Span::styled("Ctrl+Y", Style::default().fg(Color::Yellow)),
-                Span::raw(" para copiar"),
-            ])
-        ])
-        .alignment(Alignment::Center);
-
-        frame.render_widget(help, help_area);
+    // Actualizar scroll horizontal según la posición del cursor
+    let current_column = app.code_cursor_column();
+    let visible_columns = chunks[2].width as usize - 6; // Restar el ancho del número de línea
+    
+    if current_column > app.code_scroll + visible_columns {
+        app.code_scroll = current_column - visible_columns + 1;
+    } else if current_column < app.code_scroll {
+        app.code_scroll = current_column;
     }
+
+    // Scrollbar horizontal
+    let scrollbar = Scrollbar::default()
+        .orientation(ScrollbarOrientation::HorizontalBottom)
+        .begin_symbol(Some("◄"))
+        .end_symbol(Some("►"));
+
+    let max_line_length = app.code_buffer.lines()
+        .map(|l| l.len())
+        .max()
+        .unwrap_or(0);
+
+    let mut scrollbar_state = ScrollbarState::default()
+        .content_length(max_line_length)
+        .position(app.code_scroll);
+
+    frame.render_stateful_widget(
+        scrollbar,
+        chunks[2],
+        &mut scrollbar_state,
+    );
 }
