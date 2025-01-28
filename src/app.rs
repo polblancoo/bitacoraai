@@ -100,12 +100,15 @@ pub struct App {
     pub code_buffer: String,
     pub code_cursor: usize,
     pub code_scroll: usize,
+    pub code_scroll_vertical: usize,
     pub selected_language: Language,
     pub code_handler: CodeHandler,
     pub db: Database,
     pub details_scroll: usize,
     pub selection_start: Option<usize>,
     pub selection_end: Option<usize>,
+    pub title_cursor: usize,
+    pub description_cursor: usize,
 }
 
 impl Clone for App {
@@ -138,12 +141,15 @@ impl Clone for App {
             code_buffer: self.code_buffer.clone(),
             code_cursor: self.code_cursor,
             code_scroll: self.code_scroll,
+            code_scroll_vertical: self.code_scroll_vertical,
             selected_language: self.selected_language.clone(),
             code_handler: self.code_handler.clone(),
             db: self.db.clone(),
             details_scroll: self.details_scroll,
             selection_start: self.selection_start,
             selection_end: self.selection_end,
+            title_cursor: self.title_cursor,
+            description_cursor: self.description_cursor,
         }
     }
 }
@@ -201,12 +207,15 @@ impl App {
             code_buffer: String::new(),
             code_cursor: 0,
             code_scroll: 0,
+            code_scroll_vertical: 0,
             selected_language: Language::default(),
             code_handler: CodeHandler::new(),
             db,
             details_scroll: 0,
             selection_start: None,
             selection_end: None,
+            title_cursor: 0,
+            description_cursor: 0,
         }
     }
 
@@ -235,6 +244,9 @@ impl App {
                         self.input_buffer.clear();
                         self.description_buffer.clear();
                         self.code_buffer.clear();
+                        self.title_cursor = 0;
+                        self.description_cursor = 0;
+                        self.code_cursor = 0;
                         self.popup_focus = PopupFocus::Title;
                     },
                     KeyCode::Char('e') => {
@@ -264,14 +276,25 @@ impl App {
                     KeyCode::Char('d') => {
                         if let Some(section_idx) = self.selected_section {
                             if self.focus == Focus::Sections {
-                                self.db.delete_section(section_idx).ok();
-                                self.sections.remove(section_idx);
-                                if section_idx >= self.sections.len() {
-                                    self.selected_section = self.sections.len().checked_sub(1);
+                                // Eliminar sección
+                                if let Some(section) = self.sections.get(section_idx) {
+                                    // Primero eliminar de la base de datos usando el ID correcto
+                                    self.db.delete_section(section.id).ok();
+                                    
+                                    // Luego eliminar del vector en memoria
+                                    self.sections.remove(section_idx);
+                                    
+                                    // Actualizar la selección
+                                    if section_idx >= self.sections.len() {
+                                        self.selected_section = self.sections.len().checked_sub(1);
+                                    }
+                                    self.selected_detail = None;
                                 }
                             } else if let Some(detail_idx) = self.selected_detail {
+                                // Eliminar detalle
                                 if let Some(section) = self.sections.get_mut(section_idx) {
                                     if let Some(detail) = section.details.get(detail_idx) {
+                                        // Eliminar archivo de código si existe
                                         if let Some(ref path) = detail.code_path {
                                             self.code_handler.delete_code(path).ok();
                                         }
@@ -280,6 +303,8 @@ impl App {
                                     if detail_idx >= section.details.len() {
                                         self.selected_detail = section.details.len().checked_sub(1);
                                     }
+                                    // Guardar cambios en la base de datos
+                                    self.db.save_section(section).ok();
                                 }
                             }
                         }
@@ -309,6 +334,18 @@ impl App {
                         self.input_buffer.clear();
                         self.description_buffer.clear();
                         self.code_buffer.clear();
+                        self.title_cursor = 0;
+                        self.description_cursor = 0;
+                        self.code_cursor = 0;
+                    },
+                    KeyCode::Tab => {
+                        if self.focus == Focus::Details {
+                            self.popup_focus = match self.popup_focus {
+                                PopupFocus::Title => PopupFocus::Description,
+                                PopupFocus::Description => PopupFocus::Code,
+                                PopupFocus::Code => PopupFocus::Title,
+                            };
+                        }
                     },
                     KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         if self.focus == Focus::Sections {
@@ -366,28 +403,9 @@ impl App {
                             }
                         }
                         self.mode = Mode::Normal;
-                        self.input_buffer.clear();
-                        self.description_buffer.clear();
-                        self.code_buffer.clear();
-                    },
-                    KeyCode::Tab => {
-                        if self.focus == Focus::Details {
-                            self.popup_focus = match self.popup_focus {
-                                PopupFocus::Title => PopupFocus::Description,
-                                PopupFocus::Description => PopupFocus::Code,
-                                PopupFocus::Code => PopupFocus::Title,
-                            };
-                        }
-                    },
-                    KeyCode::Enter => {
-                        match self.popup_focus {
-                            PopupFocus::Description => self.description_buffer.push('\n'),
-                            PopupFocus::Code => {
-                                self.code_buffer.insert(self.code_cursor, '\n');
-                                self.code_cursor += 1;
-                            },
-                            _ => {}
-                        }
+                        self.title_cursor = 0;
+                        self.description_cursor = 0;
+                        self.code_cursor = 0;
                     },
                     KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         // Pegar solo en el buffer activo
@@ -405,24 +423,7 @@ impl App {
                             }
                         }
                     },
-                    KeyCode::Char(c) => {
-                        match self.popup_focus {
-                            PopupFocus::Title => self.input_buffer.push(c),
-                            PopupFocus::Description => self.description_buffer.push(c),
-                            PopupFocus::Code => {
-                                self.code_buffer.insert(self.code_cursor, c);
-                                self.code_cursor += 1;
-                            }
-                        }
-                    },
-                    KeyCode::Backspace => {
-                        match self.popup_focus {
-                            PopupFocus::Title => { self.input_buffer.pop(); },
-                            PopupFocus::Description => { self.description_buffer.pop(); },
-                            PopupFocus::Code => { self.code_buffer.pop(); },
-                        }
-                    },
-                    _ => {}
+                    _ => self.handle_edit_mode(key),
                 }
             },
             Mode::Searching => self.handle_search_mode(key),
@@ -571,9 +572,15 @@ impl App {
                                     self.input_buffer = detail.title.clone();
                                     self.description_buffer = detail.description.clone();
                                     if let Some(ref path) = detail.code_path {
-                                        self.code_buffer = std::fs::read_to_string(path).unwrap_or_default();
+                                        self.code_buffer = std::fs::read_to_string(path)
+                                            .unwrap_or_default();
                                     }
                                     self.selected_language = detail.language.clone();
+                                    self.code_cursor = 0;
+                                    self.code_scroll = 0;
+                                    self.code_scroll_vertical = 0;
+                                    self.selection_start = None;
+                                    self.selection_end = None;
                                     return;
                                 }
                             }
@@ -635,6 +642,66 @@ impl App {
                 self.code_buffer.clear();
                 self.selection_start = None;
                 self.selection_end = None;
+                self.code_cursor = 0;
+                self.code_scroll = 0;
+                self.code_scroll_vertical = 0;
+            },
+            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => {
+                if !key.modifiers.contains(KeyModifiers::CONTROL) {
+                    match key.code {
+                        KeyCode::Left => if self.code_cursor > 0 { self.code_cursor -= 1 },
+                        KeyCode::Right => if self.code_cursor < self.code_buffer.len() { self.code_cursor += 1 },
+                        KeyCode::Up => {
+                            let current_line = self.code_cursor_line();
+                            if current_line > 0 {
+                                let current_column = self.code_cursor_column();
+                                self.move_cursor(current_line - 1, current_column);
+                            }
+                        },
+                        KeyCode::Down => {
+                            let current_line = self.code_cursor_line();
+                            let total_lines = self.code_buffer.lines().count();
+                            if current_line < total_lines - 1 {
+                                let current_column = self.code_cursor_column();
+                                self.move_cursor(current_line + 1, current_column);
+                            }
+                        },
+                        _ => {}
+                    }
+                } else {
+                    if self.selection_start.is_none() {
+                        self.selection_start = Some(self.code_cursor);
+                    }
+                    match key.code {
+                        KeyCode::Left => {
+                            if self.code_cursor > 0 {
+                                self.code_cursor -= 1;
+                            }
+                        },
+                        KeyCode::Right => {
+                            if self.code_cursor < self.code_buffer.len() {
+                                self.code_cursor += 1;
+                            }
+                        },
+                        KeyCode::Up => {
+                            let current_line = self.code_cursor_line();
+                            if current_line > 0 {
+                                let current_column = self.code_cursor_column();
+                                self.move_cursor(current_line - 1, current_column);
+                            }
+                        },
+                        KeyCode::Down => {
+                            let current_line = self.code_cursor_line();
+                            let total_lines = self.code_buffer.lines().count();
+                            if current_line < total_lines - 1 {
+                                let current_column = self.code_cursor_column();
+                                self.move_cursor(current_line + 1, current_column);
+                            }
+                        },
+                        _ => {}
+                    }
+                    self.selection_end = Some(self.code_cursor);
+                }
             },
             KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
@@ -676,93 +743,6 @@ impl App {
                             }
                         }
                     }
-                }
-            },
-            // Movimiento normal del cursor sin selección
-            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down 
-                if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                match key.code {
-                    KeyCode::Left => if self.code_cursor > 0 { self.code_cursor -= 1 },
-                    KeyCode::Right => if self.code_cursor < self.code_buffer.len() { self.code_cursor += 1 },
-                    KeyCode::Up => {
-                        let current_line = self.code_cursor_line();
-                        if current_line > 0 {
-                            let current_column = self.code_cursor_column();
-                            self.move_cursor(current_line - 1, current_column);
-                        }
-                    },
-                    KeyCode::Down => {
-                        let current_line = self.code_cursor_line();
-                        let total_lines = self.code_buffer.lines().count();
-                        if current_line < total_lines - 1 {
-                            let current_column = self.code_cursor_column();
-                            self.move_cursor(current_line + 1, current_column);
-                        }
-                    },
-                    _ => {}
-                }
-            },
-
-            // Selección de texto con Ctrl + flechas
-            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down 
-                if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                // Iniciar selección si no existe
-                if self.selection_start.is_none() {
-                    self.selection_start = Some(self.code_cursor);
-                }
-
-                // Mover el cursor carácter por carácter
-                match key.code {
-                    KeyCode::Left => {
-                        if self.code_cursor > 0 {
-                            self.code_cursor -= 1;
-                        }
-                    }
-                    KeyCode::Right => {
-                        if self.code_cursor < self.code_buffer.len() {
-                            self.code_cursor += 1;
-                        }
-                    }
-                    KeyCode::Up => {
-                        let current_line = self.code_cursor_line();
-                        if current_line > 0 {
-                            let current_column = self.code_cursor_column();
-                            self.move_cursor(current_line - 1, current_column);
-                        }
-                    }
-                    KeyCode::Down => {
-                        let current_line = self.code_cursor_line();
-                        let total_lines = self.code_buffer.lines().count();
-                        if current_line < total_lines - 1 {
-                            let current_column = self.code_cursor_column();
-                            self.move_cursor(current_line + 1, current_column);
-                        }
-                    }
-                    _ => {}
-                }
-
-                // Actualizar el final de la selección
-                self.selection_end = Some(self.code_cursor);
-            },
-
-            // Edición de texto
-            KeyCode::Char(c) => {
-                self.code_buffer.insert(self.code_cursor, c);
-                self.code_cursor += 1;
-            },
-            KeyCode::Enter => {
-                self.code_buffer.insert(self.code_cursor, '\n');
-                self.code_cursor += 1;
-            },
-            KeyCode::Backspace => {
-                if self.code_cursor > 0 {
-                    self.code_buffer.remove(self.code_cursor - 1);
-                    self.code_cursor -= 1;
-                }
-            },
-            KeyCode::Delete => {
-                if self.code_cursor < self.code_buffer.len() {
-                    self.code_buffer.remove(self.code_cursor);
                 }
             },
             _ => {}
@@ -868,6 +848,207 @@ impl App {
         }
 
         false
+    }
+
+    fn handle_edit_mode(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Enter => {
+                match self.popup_focus {
+                    PopupFocus::Description => {
+                        self.description_buffer.insert(self.description_cursor, '\n');
+                        self.description_cursor += 1;
+                    },
+                    PopupFocus::Code => {
+                        self.code_buffer.insert(self.code_cursor, '\n');
+                        self.code_cursor += 1;
+                    },
+                    _ => {}
+                }
+            },
+            KeyCode::Backspace => {
+                match self.popup_focus {
+                    PopupFocus::Title => {
+                        if self.title_cursor > 0 {
+                            self.input_buffer.remove(self.title_cursor - 1);
+                            self.title_cursor -= 1;
+                        }
+                    },
+                    PopupFocus::Description => {
+                        if self.description_cursor > 0 {
+                            self.description_buffer.remove(self.description_cursor - 1);
+                            self.description_cursor -= 1;
+                        }
+                    },
+                    PopupFocus::Code => {
+                        if self.code_cursor > 0 {
+                            self.code_buffer.remove(self.code_cursor - 1);
+                            self.code_cursor -= 1;
+                        }
+                    }
+                }
+            },
+            KeyCode::Delete => {
+                match self.popup_focus {
+                    PopupFocus::Title => {
+                        if self.title_cursor < self.input_buffer.len() {
+                            self.input_buffer.remove(self.title_cursor);
+                        }
+                    },
+                    PopupFocus::Description => {
+                        if self.description_cursor < self.description_buffer.len() {
+                            self.description_buffer.remove(self.description_cursor);
+                        }
+                    },
+                    PopupFocus::Code => {
+                        if self.code_cursor < self.code_buffer.len() {
+                            self.code_buffer.remove(self.code_cursor);
+                        }
+                    }
+                }
+            },
+            KeyCode::Left => {
+                match self.popup_focus {
+                    PopupFocus::Title => {
+                        if self.title_cursor > 0 {
+                            self.title_cursor -= 1;
+                        }
+                    },
+                    PopupFocus::Description => {
+                        if self.description_cursor > 0 {
+                            self.description_cursor -= 1;
+                        }
+                    },
+                    PopupFocus::Code => {
+                        if self.code_cursor > 0 {
+                            self.code_cursor -= 1;
+                        }
+                    }
+                }
+            },
+            KeyCode::Right => {
+                match self.popup_focus {
+                    PopupFocus::Title => {
+                        if self.title_cursor < self.input_buffer.len() {
+                            self.title_cursor += 1;
+                        }
+                    },
+                    PopupFocus::Description => {
+                        if self.description_cursor < self.description_buffer.len() {
+                            self.description_cursor += 1;
+                        }
+                    },
+                    PopupFocus::Code => {
+                        if self.code_cursor < self.code_buffer.len() {
+                            self.code_cursor += 1;
+                        }
+                    }
+                }
+            },
+            KeyCode::Char(c) => {
+                match self.popup_focus {
+                    PopupFocus::Title => {
+                        self.input_buffer.insert(self.title_cursor, c);
+                        self.title_cursor += 1;
+                    },
+                    PopupFocus::Description => {
+                        self.description_buffer.insert(self.description_cursor, c);
+                        self.description_cursor += 1;
+                    },
+                    PopupFocus::Code => {
+                        self.code_buffer.insert(self.code_cursor, c);
+                        self.code_cursor += 1;
+                    }
+                }
+            },
+            KeyCode::Up => {
+                match self.popup_focus {
+                    PopupFocus::Code => {
+                        let current_line = self.code_cursor_line();
+                        if current_line > 0 {
+                            let current_column = self.code_cursor_column();
+                            self.move_cursor(current_line - 1, current_column);
+                            
+                            // Actualizar scroll vertical si es necesario
+                            if current_line <= self.code_scroll_vertical {
+                                self.code_scroll_vertical = current_line.saturating_sub(1);
+                            }
+                        }
+                    },
+                    PopupFocus::Description => {
+                        let current_line = self.description_buffer[..self.description_cursor]
+                            .chars()
+                            .filter(|&c| c == '\n')
+                            .count();
+                        if current_line > 0 {
+                            let current_column = self.description_cursor - 
+                                self.description_buffer[..self.description_cursor]
+                                    .rfind('\n')
+                                    .map(|i| i + 1)
+                                    .unwrap_or(0);
+                            
+                            let prev_line_start = self.description_buffer[..self.description_cursor]
+                                .rfind('\n')
+                                .map(|i| {
+                                    self.description_buffer[..i]
+                                        .rfind('\n')
+                                        .map(|j| j + 1)
+                                        .unwrap_or(0)
+                                })
+                                .unwrap_or(0);
+                            
+                            self.description_cursor = prev_line_start + 
+                                current_column.min(
+                                    self.description_buffer[prev_line_start..]
+                                        .find('\n')
+                                        .unwrap_or_else(|| self.description_buffer[prev_line_start..].len())
+                                );
+                        }
+                    },
+                    _ => {}
+                }
+            },
+            KeyCode::Down => {
+                match self.popup_focus {
+                    PopupFocus::Code => {
+                        let current_line = self.code_cursor_line();
+                        let total_lines = self.code_buffer.lines().count();
+                        if current_line < total_lines - 1 {
+                            let current_column = self.code_cursor_column();
+                            self.move_cursor(current_line + 1, current_column);
+                            
+                            // Actualizar scroll vertical si es necesario
+                            if current_line >= self.code_scroll_vertical + 10 {
+                                self.code_scroll_vertical = current_line - 9;
+                            }
+                        }
+                    },
+                    PopupFocus::Description => {
+                        let next_newline = self.description_buffer[self.description_cursor..]
+                            .find('\n')
+                            .map(|i| self.description_cursor + i);
+                        
+                        if let Some(newline_pos) = next_newline {
+                            let current_column = self.description_cursor - 
+                                self.description_buffer[..self.description_cursor]
+                                    .rfind('\n')
+                                    .map(|i| i + 1)
+                                    .unwrap_or(0);
+                            
+                            let next_line_start = newline_pos + 1;
+                            let next_line_end = self.description_buffer[next_line_start..]
+                                .find('\n')
+                                .map(|i| next_line_start + i)
+                                .unwrap_or_else(|| self.description_buffer.len());
+                            
+                            self.description_cursor = next_line_start + 
+                                current_column.min(next_line_end - next_line_start);
+                        }
+                    },
+                    _ => {}
+                }
+            },
+            _ => {}
+        }
     }
 }
 

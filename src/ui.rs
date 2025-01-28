@@ -278,7 +278,7 @@ fn draw_shortcuts(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_edit_popup(frame: &mut Frame, app: &App) {
     let area = centered_rect(80, 80, frame.size());
     frame.render_widget(Clear, area);
-
+    
     if app.focus == Focus::Details {
         // Marco contenedor
         let container_block = Block::default()
@@ -296,93 +296,72 @@ fn draw_edit_popup(frame: &mut Frame, app: &App) {
             .direction(Direction::Vertical)
             .margin(1)
             .constraints([
-                Constraint::Length(3),  // Título
-                Constraint::Length(5),  // Descripción
-                Constraint::Length(10), // Código (cambiado de Min a Length)
-                Constraint::Length(3),  // Ayuda
+                Constraint::Length(3),   // Título
+                Constraint::Length(8),   // Descripción
+                Constraint::Min(10),     // Código
+                Constraint::Length(3),   // Ayuda
             ])
             .split(inner_area);
 
-        // Campo título con cursor
-        let title_input = Paragraph::new(vec![
-            Line::from(vec![
-                Span::raw(&app.input_buffer),
-                Span::styled(
-                    if app.popup_focus == PopupFocus::Title { "_" } else { "" },
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::SLOW_BLINK)
-                ),
-            ])
-        ])
-        .block(Block::default()
-            .title("Título")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(
-                if app.popup_focus == PopupFocus::Title {
-                    Color::Yellow
-                } else {
-                    Color::White
-                }
-            )));
-
-        // Campo descripción con cursor
-        let desc_input = Paragraph::new(vec![
-            Line::from(vec![
-                Span::raw(&app.description_buffer),
-                Span::styled(
-                    if app.popup_focus == PopupFocus::Description { "_" } else { "" },
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::SLOW_BLINK)
-                ),
-            ])
-        ])
-        .block(Block::default()
-            .title("Descripción")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(
-                if app.popup_focus == PopupFocus::Description {
-                    Color::Yellow
-                } else {
-                    Color::White
-                }
-            )))
-        .wrap(Wrap { trim: true });
-
-        // Campo código
-        let code_lines: Vec<Line> = if app.code_buffer.is_empty() {
-            vec![Line::from(vec![
-                Span::styled(
-                    "1 │ ",
-                    Style::default().fg(Color::DarkGray)
-                ),
-                Span::styled(
-                    if app.popup_focus == PopupFocus::Code { "_" } else { "" },
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::SLOW_BLINK)
-                ),
-            ])]
-        } else {
-            app.code_buffer
-                .lines()
-                .enumerate()
-                .map(|(i, line)| {
-                    Line::from(vec![
-                        Span::styled(
-                            format!("{:4} │ ", i + 1),
-                            Style::default().fg(Color::DarkGray)
-                        ),
-                        Span::styled(line, Style::default().fg(Color::White)),
-                    ])
-                })
-                .collect()
+        // Renderizar título con cursor
+        let title_content = {
+            let mut content = app.input_buffer.clone();
+            if app.popup_focus == PopupFocus::Title {
+                content.insert(app.title_cursor, '█');
+            }
+            content
         };
 
-        let code_block = Paragraph::new(code_lines)
+        let title = Paragraph::new(title_content)
             .block(Block::default()
-                .title(format!("Código - {} (Ctrl+L para cambiar lenguaje)", app.selected_language))
+                .title("Título")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(
+                    if app.popup_focus == PopupFocus::Title {
+                        Color::Yellow
+                    } else {
+                        Color::White
+                    }
+                )));
+
+        frame.render_widget(title, chunks[0]);
+
+        // Renderizar descripción con cursor
+        let description_content = {
+            let mut content = app.description_buffer.clone();
+            if app.popup_focus == PopupFocus::Description {
+                content.insert(app.description_cursor, '█');
+            }
+            content
+        };
+
+        let description = Paragraph::new(description_content)
+            .block(Block::default()
+                .title("Descripción")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(
+                    if app.popup_focus == PopupFocus::Description {
+                        Color::Yellow
+                    } else {
+                        Color::White
+                    }
+                )))
+            .wrap(Wrap { trim: true });
+
+        frame.render_widget(description, chunks[1]);
+
+        // Renderizar código con cursor
+        let code_content = {
+            let mut content = app.code_buffer.clone();
+            if app.popup_focus == PopupFocus::Code {
+                content.insert(app.code_cursor, '█');
+            }
+            content
+        };
+
+        let code = Paragraph::new(code_content)
+            .block(Block::default()
+                .title(format!("Código - {}", app.selected_language))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(
                     if app.popup_focus == PopupFocus::Code {
@@ -390,32 +369,28 @@ fn draw_edit_popup(frame: &mut Frame, app: &App) {
                     } else {
                         Color::White
                     }
-                )))
-            .scroll((app.code_scroll as u16, 0));
+                )));
 
-        // Ayuda
-        let help = Paragraph::new(vec![
-            Line::from(vec![
-                Span::styled("Tab", Style::default().fg(Color::Yellow)),
-                Span::raw(" cambiar campo | "),
-                Span::styled("Ctrl+S", Style::default().fg(Color::Yellow)),
-                Span::raw(" guardar | "),
-                Span::styled("Ctrl+L", Style::default().fg(Color::Yellow)),
-                Span::raw(" cambiar lenguaje | "),
-                Span::styled("Esc", Style::default().fg(Color::Yellow)),
-                Span::raw(" cancelar"),
+        frame.render_widget(code, chunks[2]);
+
+        // Renderizar ayuda
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::from(vec![
+                    Span::styled("Tab", Style::default().fg(Color::Yellow)),
+                    Span::raw(" cambiar campo | "),
+                    Span::styled("Ctrl+S", Style::default().fg(Color::Yellow)),
+                    Span::raw(" guardar | "),
+                    Span::styled("Esc", Style::default().fg(Color::Yellow)),
+                    Span::raw(" cancelar"),
+                ])
             ])
-        ])
-        .block(Block::default()
-            .title("Atajos")
-            .borders(Borders::ALL))
-        .alignment(Alignment::Left);
-
-        // Renderizar todos los widgets
-        frame.render_widget(title_input, chunks[0]);
-        frame.render_widget(desc_input, chunks[1]);
-        frame.render_widget(code_block, chunks[2]);
-        frame.render_widget(help, chunks[3]);
+            .block(Block::default()
+                .title("Atajos")
+                .borders(Borders::ALL))
+            .alignment(Alignment::Left),
+            chunks[3]
+        );
     } else {
         // Frame para secciones
         let container_block = Block::default()
@@ -440,20 +415,16 @@ fn draw_edit_popup(frame: &mut Frame, app: &App) {
             .split(inner_area);
 
         // Input con cursor
-        let input = Paragraph::new(vec![
-            Line::from(vec![
-                Span::raw(&app.input_buffer),
-                Span::styled(
-                    "_",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::SLOW_BLINK)
-                ),
-            ])
-        ])
-        .block(Block::default()
-            .title("Título")
-            .borders(Borders::ALL));
+        let title_content = {
+            let mut content = app.input_buffer.clone();
+            content.insert(app.title_cursor, '█');
+            content
+        };
+
+        let input = Paragraph::new(title_content)
+            .block(Block::default()
+                .title("Título")
+                .borders(Borders::ALL));
 
         // Ayuda
         let help = Paragraph::new(vec![
