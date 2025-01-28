@@ -641,51 +641,46 @@ pub fn draw_export_popup(frame: &mut Frame, app: &App) {
     let area = centered_rect(60, 70, frame.size());
     frame.render_widget(Clear, area);
 
-    // Crear el bloque contenedor con título
     let block = Block::default()
-        .title(
-            Span::styled(
-                "📤 Exportar Datos",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD)
-            )
-        )
+        .title(Span::styled(
+            "📤 Exportar Datos",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        ))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Yellow));
 
     let inner_area = block.inner(area);
+    frame.render_widget(block, area);
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
         .constraints([
-            Constraint::Min(3),    // Área de contenido
-            Constraint::Length(3), // Área de ayuda
+            Constraint::Min(3),    // Contenido
+            Constraint::Length(3), // Ayuda
         ])
         .split(inner_area);
 
-    // Renderizar el bloque contenedor
-    frame.render_widget(block, area);
-
-    // Preparar el contenido
+    // Contenido
     let content = if let Some(message) = &app.export_message {
-        // Mostrar mensaje de éxito/error
         vec![
             Line::from(""),
             Line::from(vec![
                 Span::styled(
                     message,
                     if message.starts_with('✅') {
-                        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                        Style::default().fg(Color::Green)
+                    } else if message.starts_with('❌') {
+                        Style::default().fg(Color::Red)
                     } else {
-                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                        Style::default().fg(Color::Yellow)
                     }
                 )
             ])
         ]
     } else {
-        // Mostrar opciones de exportación
         let mut lines = vec![
             Line::from(vec![
                 Span::styled(
@@ -696,7 +691,6 @@ pub fn draw_export_popup(frame: &mut Frame, app: &App) {
             Line::from(""),
         ];
 
-        // Agregar formatos disponibles
         for (i, format) in app.export_formats.iter().enumerate() {
             lines.push(Line::from(vec![
                 Span::raw(if i == app.selected_export_format { "▶ " } else { "  " }),
@@ -704,11 +698,10 @@ pub fn draw_export_popup(frame: &mut Frame, app: &App) {
                     format.to_string(),
                     if i == app.selected_export_format {
                         Style::default()
-                            .fg(Color::Black)
-                            .bg(Color::Yellow)
+                            .fg(Color::Yellow)
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(Color::White)
+                        Style::default()
                     }
                 )
             ]));
@@ -716,24 +709,25 @@ pub fn draw_export_popup(frame: &mut Frame, app: &App) {
         lines
     };
 
-    // Renderizar contenido
     let content_widget = Paragraph::new(content)
         .alignment(Alignment::Left)
         .wrap(Wrap { trim: true });
     frame.render_widget(content_widget, chunks[0]);
 
-    // Renderizar ayuda
+    // Ayuda
     let help_text = if app.export_message.is_some() {
         vec![
+            Span::styled("Enter", Style::default().fg(Color::Yellow)),
+            Span::raw(" o "),
             Span::styled("Esc", Style::default().fg(Color::Yellow)),
             Span::raw(" para cerrar"),
         ]
     } else {
         vec![
-            Span::styled("↑↓", Style::default().fg(Color::Yellow)),
-            Span::raw(" mover   "),
+            Span::styled("↑/↓", Style::default().fg(Color::Yellow)),
+            Span::raw(" seleccionar | "),
             Span::styled("Enter", Style::default().fg(Color::Yellow)),
-            Span::raw(" seleccionar   "),
+            Span::raw(" confirmar | "),
             Span::styled("Esc", Style::default().fg(Color::Yellow)),
             Span::raw(" cancelar"),
         ]

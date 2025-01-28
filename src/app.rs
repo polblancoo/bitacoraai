@@ -10,6 +10,7 @@ use crate::db::Database;
 use std::sync::mpsc;
 //use tokio::sync::mpsc;
 use std::process::Stdio;
+use crate::export;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Section {
@@ -433,6 +434,7 @@ impl App {
                     self.mode = Mode::Normal;
                 }
             },
+            Mode::Exporting => self.handle_export_mode(key),
             _ => {}
         }
     }
@@ -1045,6 +1047,50 @@ impl App {
                         }
                     },
                     _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
+
+    fn handle_export_mode(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.mode = Mode::Normal;
+                self.export_message = None;
+            },
+            KeyCode::Up => {
+                if self.selected_export_format > 0 {
+                    self.selected_export_format -= 1;
+                }
+            },
+            KeyCode::Down => {
+                if self.selected_export_format < self.export_formats.len() - 1 {
+                    self.selected_export_format += 1;
+                }
+            },
+            KeyCode::Enter => {
+                if self.export_message.is_none() {
+                    // Mostrar mensaje de proceso
+                    self.export_message = Some("⏳ Exportando datos...".to_string());
+                    
+                    // Realizar la exportación
+                    let format = self.export_formats[self.selected_export_format].clone();
+                    match export::export_data(self, format) {
+                        Ok((source, dest)) => {
+                            self.export_message = Some(format!(
+                                "✅ Datos exportados correctamente\nOrigen: {}\nDestino: {}",
+                                source, dest
+                            ));
+                        },
+                        Err(e) => {
+                            self.export_message = Some(format!("❌ Error al exportar: {}", e));
+                        }
+                    }
+                } else {
+                    // Si hay un mensaje, Enter cierra el popup
+                    self.mode = Mode::Normal;
+                    self.export_message = None;
                 }
             },
             _ => {}
