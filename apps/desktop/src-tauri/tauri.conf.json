@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Rust TUI Manager",
+  "version": "0.2.0",
+  "identifier": "com.polblancoo.rust-tui-manager",
+  "build": { "frontendDist": "../ui" },
+  "app": {
+    "windows": [
+      { "title": "Rust TUI Manager", "width": 1280, "height": 800, "minWidth": 900, "minHeight": 600 }
+    ],
+    "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src http: https: ws: wss:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" }
+  },
+  "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.png"] }
+}

@@ -1,118 +1,41 @@
-# Rust TUI Manager 📝
+# Rust TUI Manager
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un servidor único con tres clientes posibles:
 
-Una aplicación TUI (Terminal User Interface) para gestionar notas, comandos y snippets de código de manera eficiente. Perfecta para desarrolladores que prefieren trabajar en la terminal.
+- **`tm-server`**: API REST + WebSocket (axum + SQLite).
+- **`rust-tui-manager`**: cliente de terminal con ratatui (tablero kanban).
+- **`apps/desktop`**: cliente gráfico con Tauri 2.
 
-## Características 🌟
+> La versión anterior (gestor local de notas y snippets) está en [`legacy/`](legacy/) y en las versiones 0.1.x del crate.
 
-### Organización
-- 📚 Sistema jerárquico de secciones y detalles
-- 📁 Iconos visuales automáticos para secciones
-- 💾 Persistencia SqlLite
-- 📅 Timestamps automáticos en entradas
+## Funciones
 
-### Búsqueda Avanzada 🔍
-- Búsqueda local instantánea
-- Integración con crates.io para búsqueda de paquetes
-- Integración con cheats.rs para referencias de Rust
-- Múltiples fuentes de búsqueda configurables
+- Equipos con roles (lector, miembro, admin, dueño) e invitaciones por código.
+- Proyectos, tablero kanban, prioridades, fechas límite, asignación, comentarios.
+- Etiquetas por equipo y subtareas con progreso.
+- Vista de calendario (escritorio) y actualizaciones en tiempo real en todos los clientes.
 
-### Interfaz Intuitiva ⌨️
-- Navegación completa con teclado
-- Paneles redimensionables con Ctrl + ←/→
-- Diseño minimalista y funcional
-- Indicadores visuales de foco
+## Seguridad
 
-## 🎮 Guía Completa de Atajos de Teclado
+Contraseñas con argon2, JWT de 7 días revocables ("cerrar sesión en todos los dispositivos"), bloqueo por cuenta y por IP, límites de tamaño y de cantidad en cada endpoint, CORS restringido, cabeceras de seguridad, token de WebSocket fuera de la URL y TLS opcional.
 
-### 📑 Navegación General
-| Tecla | Función |
-|-------|---------|
-| `Tab` | Cambiar entre paneles (Secciones → Detalles → Búsqueda) |
-| `Shift + Tab` | Cambiar entre paneles en reversa |
-| `↑/↓` | Navegar en el panel actual |
-| `Ctrl + ←/→` | Ajustar tamaño de paneles |
+## Uso
 
-### 📝 Gestión de Contenido
-| Tecla | Función |
-|-------|---------|
-| `a` | Agregar nueva sección o detalle |
-| `e` | Editar elemento seleccionado |
-| `d` | Eliminar elemento seleccionado |
-| `Enter` | Confirmar acción |
-| `Esc` | Cancelar/Volver |
+```sh
+# servidor
+cargo run -p tm-server            # 0.0.0.0:7878, base SQLite en ./tm-server.db
 
-### 🔍 Modo Búsqueda (`s` para activar)
-| Tecla | Función |
-|-------|---------|
-| `Tab` | Cambiar fuente de búsqueda (Local → Crates.io → Cheats.sh → Todas) |
-| `↑/↓` | Navegar entre resultados |
-| `PgUp/PgDn` | Scroll rápido |
-| `Enter` | Abrir enlace en navegador (para resultados web) |
-| `c` | Copiar enlace o guardar resultado en sección actual |
-| `Esc` | Cerrar búsqueda |
+# cliente de terminal (? = ayuda de atajos)
+cargo run -p rust-tui-manager -- http://127.0.0.1:7878
 
-### 💾 Otras Funciones
-| Tecla | Función |
-|-------|---------|
-| `h` | Mostrar/Ocultar ayuda |
-| `x` | Exportar <HTML ; JSON ; TXT> |
-| `q` | Salir de la aplicación |
-
-### 📝 En Modo Edición
-| Tecla | Función |
-|-------|---------|
-| `Tab` | Cambiar entre campos (título/descripción) |
-| `Enter` | Guardar cambios |
-| `Esc` | Cancelar edición |
-| `Backspace` | Borrar caracteres |
-
-### 🔍 Consejos de Búsqueda
-- La búsqueda es en tiempo real mientras escribes
-- Los resultados se actualizan automáticamente al cambiar la fuente
-- Puedes guardar resultados web en tus secciones locales
-- Los enlaces web se pueden abrir directamente en tu navegador
-
-## Instalación 🚀
+# cliente gráfico
+cargo run -p tm-desktop
 ```
-cargo install rust-tui-manager
-```
-## Estructura del Proyecto 🏗️
 
----
+Variables del servidor: `TM_ADDR`, `TM_DATABASE`, `TM_JWT_SECRET` (≥ 32 caracteres), `TM_CORS_ORIGINS`, `TM_TLS_CERT` / `TM_TLS_KEY`, `TM_TRUSTED_PROXY=1` (si corre detrás de un proxy inverso propio).
 
-## Tecnologías 🛠️
+Sin TLS propio, ponelo detrás de un proxy TLS antes de exponerlo a internet.
 
-- [Rust](https://www.rust-lang.org/) - Lenguaje de programación
-- [Ratatui](https://github.com/ratatui-org/ratatui) - Framework TUI
-- [Crossterm](https://github.com/crossterm-rs/crossterm) - Manipulación terminal
-- [Serde](https://serde.rs/) - Serialización
-- [Tokio](https://tokio.rs/) - Runtime asíncrono
+## Licencia
 
-## Roadmap 🗺️
-
-- [ ] Soporte para markdown en descripciones
-- [ ] Exportación a diferentes formatos
-- [ ] Temas personalizables
-- [ ] Sincronización en la nube
-- [ ] Más integraciones de búsqueda
-
-## Licencia 📄
-
-Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para más detalles.
-
-## Contribuir 🤝
-
-Las contribuciones son bienvenidas:
-
-1. Fork del proyecto
-2. Crear rama (`git checkout -b feature/NuevaCaracteristica`)
-3. Commit (`git commit -m 'Agrega nueva característica'`)
-4. Push (`git push origin feature/NuevaCaracteristica`)
-5. Pull Request
-
----
-
-Desarrollado con ❤️ usando Rust
+MIT
