@@ -4,7 +4,7 @@ members = ["crates/core", "crates/server", "crates/tui", "apps/desktop/src-tauri
 default-members = ["crates/core", "crates/server", "crates/tui"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Pablo Blanco <CrewHelmSupport@gmail.com>"]
 license = "MIT"
