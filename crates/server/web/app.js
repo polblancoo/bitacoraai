@@ -76,10 +76,44 @@ async function saveFile(path, filename) {
   const a = h("a", { href: URL.createObjectURL(blob), download: filename });
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
+// Vista previa segura: el tipo se decide por los primeros bytes (no por la extensión ni por lo que diga el
+// archivo) y solo se muestran imágenes raster y texto plano. Nunca HTML, SVG ni PDF.
+function sniff(buf) {
+  const b = new Uint8Array(buf.slice(0, 12)), is = (...s) => s.every((v, i) => b[i] === v);
+  if (is(0x89, 0x50, 0x4e, 0x47)) return "image/png";
+  if (is(0xff, 0xd8, 0xff)) return "image/jpeg";
+  if (is(0x47, 0x49, 0x46, 0x38)) return "image/gif";
+  if (is(0x52, 0x49, 0x46, 0x46) && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
+  return null;
+}
+const TEXT_EXT = /\.(txt|md|csv|log|json|ini|yml|yaml|toml|rs|js|py|sh)$/i;
+const isPreviewable = (name) => /\.(png|jpe?g|gif|webp)$/i.test(name) || TEXT_EXT.test(name);
+async function loadPreview(id, name) {
+  const buf = await (await apiRaw("GET", `/api/attachments/${id}`)).arrayBuffer();
+  const mime = sniff(buf);
+  if (mime) return { kind: "image", url: URL.createObjectURL(new Blob([buf], { type: mime })) };
+  if (TEXT_EXT.test(name)) {
+    try { return { kind: "text", text: new TextDecoder("utf-8", { fatal: true }).decode(buf.slice(0, 200000)), cut: buf.byteLength > 200000 }; } catch {}
+  }
+  return null;
+}
+async function openPreviewRaw(a) {
+  const p = await loadPreview(a.id, a.name);
+  if (!p) throw new Error("este archivo no se puede mostrar: descargalo");
+  document.getElementById("preview-modal")?.remove();
+  const close = () => { document.getElementById("preview-modal")?.remove(); if (p.url) URL.revokeObjectURL(p.url); };
+  document.body.append(h("div", { class: "overlay", id: "preview-modal", onmousedown: (e) => e.target.id === "preview-modal" && close() },
+    h("div", { class: "modal wide", onkeydown: (e) => e.key === "Escape" && (e.stopPropagation(), close()) },
+      h("h3", {}, a.name),
+      p.kind === "image" ? h("img", { class: "preview-img", src: p.url, alt: a.name }) : h("pre", { class: "preview-text" }, p.text + (p.cut ? "\n… (se muestra el inicio)" : "")),
+      h("div", { class: "row" }, h("button", { onclick: guard(() => saveFile(`/api/attachments/${a.id}`, a.name)) }, "Descargar"), h("button", { class: "primary", onclick: close }, "Cerrar")))));
+}
+
 const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 const RECUR = [["", "No se repite"], ["daily", "Cada día"], ["weekly", "Cada semana"], ["monthly", "Cada mes"]];
 
 const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, true); } };
+const openPreview = guard(openPreviewRaw);
 const color = (name) => AVATAR[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR.length];
 const avatar = (name) => h("span", { class: "avatar", title: name, style: `background:${color(name)}` }, name.slice(0, 2).toUpperCase());
 
@@ -488,10 +522,18 @@ const openTask = guard(async (task) => {
     S.tasks.filter((t) => !t.parent_id && t.id !== task.id).map((t) => h("option", { value: t.id }, clip(t.title, 50))));
   // adjuntos: hasta 10 por tarea y 2 MB cada uno; siempre se descargan, nunca se abren en la página
   const attBox = h("div", { class: "subs" });
+  // miniatura de imágenes: se carga con la sesión y se valida por bytes; si no es imagen, no se muestra
+  const thumb = (a) => {
+    const img = h("img", { class: "thumb", alt: "", hidden: true, onclick: () => openPreview(a) });
+    loadPreview(a.id, a.name).then((p) => { if (p?.kind === "image") { img.src = p.url; img.hidden = false; } }).catch(() => {});
+    return img;
+  };
   const drawAtts = async () => {
     const list = await api("GET", `/api/tasks/${task.id}/attachments`).catch(() => []);
     attBox.replaceChildren(...list.map((a) => h("div", { class: "sub" },
+      /\.(png|jpe?g|gif|webp)$/i.test(a.name) ? thumb(a) : null,
       h("span", {}, "📎 " + a.name), h("small", {}, `${fmtSize(a.size)} · ${a.username}`),
+      isPreviewable(a.name) && h("button", { class: "ghost", title: "Ver", onclick: () => openPreview(a) }, "👁"),
       h("button", { class: "ghost", title: "Descargar", onclick: guard(() => saveFile(`/api/attachments/${a.id}`, a.name)) }, "⬇"),
       (can("admin") || a.user_id === S.user?.id) && can("member") && h("button", { class: "ghost danger", title: "Borrar", onclick: guard(async () => {
         await api("DELETE", `/api/attachments/${a.id}`); drawAtts();
@@ -654,11 +696,11 @@ function appView() {
       S.team && h("div", {}, h("h2", {}, "Proyectos", h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
         h("div", { class: "nav" }, S.projects.map((p) => h("button", { class: p.id === S.project?.id ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
           h("span", { class: "dot", style: `background:${p.color}` }), p.name)))),
+      h("button", { class: "cfg-btn", onclick: openSettings, title: "Configuración (,)" }, "⚙  Configuración"),
       h("div", { class: "me" }, h("span", { class: "live" + (S.online ? " on" : ""), title: S.online ? "en vivo" : "desconectado" }),
         S.user?.username, h("span", { class: "spacer" }),
         h("button", { class: "ghost bell" + (S.unread ? " has" : ""), title: "Bandeja de novedades (Ctrl+T n)", onclick: () => loadInbox(false) }, S.unread ? `🔔 ${S.unread}` : "🔔"),
         h("button", { class: "ghost", onclick: helpModal, title: "Atajos y ayuda (?)" }, "?"),
-        h("button", { class: "ghost", onclick: openSettings, title: "Configuración (,)" }, "⚙"),
         h("button", { class: "ghost", onclick: logout }, "Salir"),
         h("button", { class: "ghost", onclick: logoutAll, title: "Cierra la sesión en todos los dispositivos" }, "⏻"))),
     h("main", {},

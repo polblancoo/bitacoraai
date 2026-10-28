@@ -143,4 +143,7 @@ impl Api {
     pub async fn send_message(&self, team: Id, text: &str) -> Result<MessageSent> {
         self.post(&format!("/api/teams/{team}/messages"), &TeamMessage { text: text.into(), to: vec![] }).await
     }
+    pub async fn telegram_unlink(&self) -> Result<()> {
+        self.send_empty(self.http.delete(format!("{}/api/me/telegram", self.base))).await
+    }
 }

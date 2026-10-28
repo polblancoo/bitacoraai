@@ -70,12 +70,13 @@ pub fn draw(f: &mut Frame, app: &App) {
         Mode::Prompt(kind) => draw_prompt(f, app, kind),
         Mode::Help => draw_help(f, app),
         Mode::Inbox => draw_inbox(f, app),
+        Mode::Config => draw_config(f, app),
         Mode::Prefix => {
             let area = Rect::new(0, f.area().height.saturating_sub(1), f.area().width, 1);
             f.render_widget(Clear, area);
             f.render_widget(
                 Paragraph::new(Span::styled(
-                    " Ctrl+T ▸ m miembro · r rol · i invitar · j unirse · t nuevo equipo · e email · v verificar · s mensaje · g Telegram · n bandeja · Esc cancela",
+                    " Ctrl+T ▸ m miembro · r rol · i invitar · j unirse · t nuevo equipo · e email · v verificar · s mensaje · g Telegram · n bandeja · c config · Esc cancela",
                     Style::default().fg(BG).bg(YELLOW),
                 )),
                 area,
@@ -184,7 +185,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     let text = if app.status.is_empty() {
         {
             let bell = if app.unread > 0 { format!("🔔{} (N) · ", app.unread) } else { String::new() };
-            format!("{bell}n tarea · Enter detalle · H/L mover · +/- prioridad · a tomar/soltar · A asignar · Ctrl+T equipo · ? ayuda · q salir")
+            format!("{bell}n tarea · Enter detalle · H/L mover · +/- prioridad · a tomar/soltar · A asignar · C configuración · Ctrl+T equipo · ? ayuda · q salir")
         }
     } else {
         app.status.clone()
@@ -296,6 +297,7 @@ fn draw_help(f: &mut Frame, app: &App) {
         ("Ctrl+T i", "código de invitación"), ("Ctrl+T j", "unirse con código"), ("Ctrl+T t", "nuevo equipo"),
         ("Ctrl+T e", "cargar mi email para recibir avisos"), ("Ctrl+T v", "verificar el código del email"),
         ("Ctrl+T n / N", "bandeja: novedades y mis tareas"),
+        ("C / Ctrl+T c", "menú de configuración (email, Telegram, equipo, sesión)"),
         ("Ctrl+T s", "enviar un mensaje a todo el equipo"), ("Ctrl+T g", "vincular Telegram (te da el código para el bot)"),
         ("l (detalle)", "poner/quitar etiqueta (la crea si no existe)"), ("s (detalle)", "nueva subtarea"),
         ("Espacio", "marcar subtarea (detalle)"), ("c (detalle)", "comentar"),
@@ -347,4 +349,50 @@ fn draw_inbox(f: &mut Frame, app: &App) {
     let area = centered(f.area(), 90, (lines.len() as u16 + 2).min(f.area().height));
     f.render_widget(Clear, area);
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block("Bandeja", true)), area);
+}
+
+fn draw_config(f: &mut Frame, app: &App) {
+    let me = app.email_info.as_ref();
+    let email = match me {
+        Some(m) if m.email.is_some() && m.email_verified => format!("✓ {}", m.email.clone().unwrap_or_default()),
+        Some(m) if m.email.is_some() => format!("{} (sin verificar)", m.email.clone().unwrap_or_default()),
+        _ => "sin cargar".into(),
+    };
+    let tg = match me {
+        Some(m) if !m.telegram_available => "el servidor no tiene el bot".to_string(),
+        Some(m) if m.telegram_linked => "✓ vinculado · Enter desvincula".to_string(),
+        _ => "sin vincular · Enter vincula".to_string(),
+    };
+    let team = app.teams.get(app.team).map(|t| t.name.as_str()).unwrap_or("—");
+    let rows: [(String, String); crate::CONFIG_ITEMS] = [
+        ("Email para avisos".into(), email),
+        ("Verificar el email".into(), "código de 6 dígitos".into()),
+        ("Telegram".into(), tg),
+        ("Bandeja de novedades".into(), format!("{} sin leer", app.unread)),
+        ("Enviar un mensaje al equipo".into(), team.into()),
+        ("Agregar un miembro".into(), "con búsqueda".into()),
+        ("Cambiar el rol de un miembro".into(), String::new()),
+        ("Generar código de invitación".into(), String::new()),
+        ("Unirme a un equipo con código".into(), String::new()),
+        ("Crear un equipo nuevo".into(), String::new()),
+        ("Cerrar sesión en todos los dispositivos".into(), "cierra el TUI".into()),
+        ("Atajos y ayuda".into(), "?".into()),
+    ];
+    let mut lines = vec![
+        Line::from(Span::styled(format!("Usuario: {}   ·   Equipo: {team}", app.me.as_ref().map(|u| u.username.as_str()).unwrap_or("")), Style::default().fg(DIM))),
+        Line::raw(""),
+    ];
+    for (i, (name, state)) in rows.iter().enumerate() {
+        let sel = i == app.cfg_sel;
+        let st = if sel { Style::default().fg(BG).bg(BLUE).add_modifier(Modifier::BOLD) } else { Style::default().fg(FG) };
+        lines.push(Line::from(vec![
+            Span::styled(format!(" {name:<42}"), st),
+            Span::styled(format!(" {state}"), if sel { st } else { Style::default().fg(DIM) }),
+        ]));
+    }
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled("j/k elegir · Enter abrir · Esc cerrar", Style::default().fg(DIM))));
+    let area = centered(f.area(), 92, (lines.len() as u16 + 2).min(f.area().height));
+    f.render_widget(Clear, area);
+    f.render_widget(Paragraph::new(lines).block(block("Configuración", true)), area);
 }

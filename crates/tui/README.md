@@ -43,6 +43,7 @@ En la pantalla de acceso, `F2` alterna entre iniciar sesión y crear cuenta. La 
 | `I` | Generar un código de invitación (rol miembro, 7 días, 10 usos) |
 | `J` | Unirse a un equipo con un código |
 | `X` | Cerrar sesión en todos los dispositivos |
+| `C` | Menú de configuración: email, Telegram, bandeja, mensajes y equipo, sesión |
 | `?` | Ayuda con buscador de atajos |
 | `q` | Salir |
 

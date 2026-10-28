@@ -57,7 +57,7 @@ Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un �
 - **Menciones**: escribí `@usuario` en un comentario y esa persona recibe el aviso (bandeja, email y Telegram).
 - **Recordatorios de vencimiento**: el responsable recibe un aviso cuando falta menos de 24 horas y otro, una sola vez, cuando la tarea vence sin cerrarse.
 - **Tareas recurrentes** (diaria, semanal o mensual): al completarlas se crea la siguiente, con la fecha corrida, las etiquetas y las subtareas pendientes.
-- **Adjuntos** (hasta 10 por tarea, 2 MB cada uno): siempre se descargan, nunca se ejecutan ni se muestran en la página.
+- **Adjuntos** (hasta 10 por tarea, 2 MB cada uno): el servidor los entrega siempre como descarga. La web muestra miniaturas y vista previa de imágenes (PNG, JPEG, GIF, WebP) y texto plano, verificando el contenido real del archivo; nunca HTML, SVG ni PDF.
 - **Plantillas**: duplicá un proyecto con sus tareas, etiquetas y dependencias (queda todo pendiente y sin responsable).
 - **Exportar** las tareas de un proyecto a CSV o JSON (el CSV neutraliza fórmulas de planilla).
 - **Actividad** por proyecto: quién creó, movió, asignó, comentó o adjuntó, y cuándo.

@@ -15,6 +15,8 @@ use std::time::Duration;
 use tm_core::*;
 use tokio::sync::mpsc;
 
+pub const CONFIG_ITEMS: usize = 12;
+
 pub enum Msg {
     Key(KeyEvent),
     Server(tm_core::Event),
@@ -48,6 +50,7 @@ pub enum Mode {
     /// Tras Ctrl+T: esperando la letra del atajo de equipo.
     Prefix,
     Inbox,
+    Config,
 }
 
 pub struct App {
@@ -89,6 +92,7 @@ pub struct App {
     pub inbox_sel: usize,
     pub unread: i64,
     pub email_info: Option<Me>,
+    pub cfg_sel: usize,
 }
 
 impl App {
@@ -481,6 +485,20 @@ impl App {
                 }
                 Ok(())
             }
+            Mode::Config => {
+                match k.code {
+                    KeyCode::Esc | KeyCode::Char('q') => self.mode = Mode::Board,
+                    KeyCode::Down | KeyCode::Char('j') => self.cfg_sel = (self.cfg_sel + 1) % CONFIG_ITEMS,
+                    KeyCode::Up | KeyCode::Char('k') => self.cfg_sel = (self.cfg_sel + CONFIG_ITEMS - 1) % CONFIG_ITEMS,
+                    KeyCode::Enter => {
+                        let i = self.cfg_sel;
+                        self.mode = Mode::Board;
+                        self.config_action(i).await?;
+                    }
+                    _ => {}
+                }
+                Ok(())
+            }
             Mode::Prefix => {
                 self.mode = Mode::Board;
                 if let KeyCode::Char(c) = k.code { self.key_prefix(c).await?; }
@@ -539,6 +557,39 @@ impl App {
         }
     }
 
+    /// Acción de cada fila del menú de configuración (el orden coincide con `ui::config_rows`).
+    async fn config_action(&mut self, i: usize) -> Result<()> {
+        let has_team = !self.teams.is_empty();
+        match i {
+            0 => self.prompt(PromptKind::SetEmail),
+            1 => self.prompt(PromptKind::VerifyEmail),
+            2 => {
+                if self.email_info.as_ref().is_some_and(|m| m.telegram_linked) {
+                    self.api.telegram_unlink().await?;
+                    self.load_me().await;
+                    self.status = "ℹ Telegram desvinculado".into();
+                } else {
+                    self.key_prefix('g').await?;
+                }
+            }
+            3 => self.open_inbox(true).await,
+            4 if has_team => self.prompt(PromptKind::TeamMessage),
+            5 if has_team => self.open_prompt_suggest(PromptKind::AddMember),
+            6 if has_team => self.prompt(PromptKind::SetRole),
+            7 if has_team => self.key_prefix('i').await?,
+            8 => self.prompt(PromptKind::JoinCode),
+            9 => self.prompt(PromptKind::NewTeam),
+            10 => {
+                self.api.logout_all().await?;
+                config::save(&config::Config { server: Some(self.api.base.clone()), token: None, username: self.me.as_ref().map(|u| u.username.clone()) });
+                self.quit = true;
+            }
+            11 => { self.help_q.clear(); self.mode = Mode::Help; }
+            _ => self.status = "✗ primero creá o elegí un equipo".into(),
+        }
+        Ok(())
+    }
+
     async fn key_prefix(&mut self, c: char) -> Result<()> {
         let has_team = !self.teams.is_empty();
         match c {
@@ -558,6 +609,7 @@ impl App {
                 self.status = format!("ℹ Telegram: escribile a @{} → /start {}  (un solo uso, vence en {} min)", l.bot, l.code, l.expires_minutes);
             }
             'n' => self.open_inbox(true).await,
+            'c' => { self.load_me().await; self.mode = Mode::Config; }
             _ => self.status = "✗ atajo de equipo desconocido (m r i j t e v n)".into(),
         }
         Ok(())
@@ -590,6 +642,7 @@ impl App {
             KeyCode::Char('?') => { self.help_q.clear(); self.mode = Mode::Help; }
             KeyCode::Char('t') if k.modifiers.contains(KeyModifiers::CONTROL) => self.mode = Mode::Prefix,
             KeyCode::Char('N') => self.open_inbox(true).await,
+            KeyCode::Char('C') => { self.load_me().await; self.mode = Mode::Config; }
             KeyCode::Char('A') if self.selected().is_some() => {
                 if self.my_role().is_some_and(|r| r >= Role::Admin) {
                     self.open_prompt_suggest(PromptKind::AssignTo);
@@ -759,6 +812,7 @@ async fn main() -> Result<()> {
         inbox_sel: 0,
         unread: 0,
         email_info: None,
+        cfg_sel: 0,
     };
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
