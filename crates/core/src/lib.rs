@@ -156,6 +156,12 @@ pub struct Task {
     pub assignee_id: Option<Id>,
     pub assignee: Option<String>,
     pub due: Option<DateTime<Utc>>,
+    /// Inicio previsto (para el diagrama de Gantt); si falta se usa `created_at`.
+    #[serde(default)]
+    pub start: Option<DateTime<Utc>>,
+    /// Tareas de las que depende (deben terminar antes).
+    #[serde(default)]
+    pub depends_on: Vec<Id>,
     /// Tarea padre si es una subtarea (un solo nivel de anidación).
     #[serde(default)]
     pub parent_id: Option<Id>,
@@ -227,6 +233,8 @@ pub struct NewTask {
     pub due: Option<DateTime<Utc>>,
     #[serde(default)]
     pub parent_id: Option<Id>,
+    #[serde(default)]
+    pub start: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -252,6 +260,8 @@ pub struct TaskPatch {
     pub assignee_id: Option<Option<Id>>,
     #[serde(default, deserialize_with = "double_option")]
     pub due: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub start: Option<Option<DateTime<Utc>>>,
 }
 
 fn double_option<'de, T, D>(d: D) -> Result<Option<Option<T>>, D::Error>
@@ -265,6 +275,158 @@ where
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NewComment {
     pub body: String,
+}
+
+// ---- Perfil, novedades y email ----
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Me {
+    pub id: Id,
+    pub username: String,
+    pub email: Option<String>,
+    pub email_verified: bool,
+    /// El servidor tiene SMTP configurado (si no, los emails no se pueden enviar).
+    pub email_available: bool,
+    /// Telegram vinculado a esta cuenta.
+    #[serde(default)]
+    pub telegram_linked: bool,
+    /// El servidor tiene un bot de Telegram configurado.
+    #[serde(default)]
+    pub telegram_available: bool,
+    /// Usuario del bot (sin @), para mostrar a quién escribirle.
+    #[serde(default)]
+    pub telegram_bot: Option<String>,
+}
+
+/// Código de un solo uso para vincular Telegram: se envía al bot como `/start <código>`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TelegramLink {
+    pub code: String,
+    pub bot: String,
+    pub expires_minutes: i64,
+}
+
+/// Mensaje a miembros del equipo (vacío `to` = todos). Llega a la bandeja y, según cada uno,
+/// por email y Telegram.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct TeamMessage {
+    pub text: String,
+    #[serde(default)]
+    pub to: Vec<Id>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MessageSent {
+    pub sent: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SetEmail {
+    pub email: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VerifyEmail {
+    pub code: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Notification {
+    pub id: Id,
+    pub user_id: Id,
+    /// "assigned" | "comment" | "member_added" | "role_changed"
+    pub kind: String,
+    pub team_id: Option<Id>,
+    pub task_id: Option<Id>,
+    pub text: String,
+    pub read: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InboxTask {
+    pub task: Task,
+    pub project: String,
+    pub team: String,
+}
+
+/// Lo que se muestra al iniciar sesión: novedades sin leer y mis tareas abiertas.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Inbox {
+    pub unread: i64,
+    pub notifications: Vec<Notification>,
+    pub tasks: Vec<InboxTask>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct MarkRead {
+    /// Vacío = marcar todas como leídas.
+    #[serde(default)]
+    pub ids: Vec<Id>,
+}
+
+// ---- Pizarra (canvas) ----
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasItem {
+    pub id: Id,
+    pub project_id: Id,
+    /// "note" (nota libre) o "task" (tarjeta que referencia una tarea)
+    pub kind: String,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub text: String,
+    pub color: String,
+    pub task_id: Option<Id>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NewCanvasItem {
+    pub kind: String,
+    pub x: f64,
+    pub y: f64,
+    #[serde(default)]
+    pub w: Option<f64>,
+    #[serde(default)]
+    pub h: Option<f64>,
+    #[serde(default)]
+    pub text: String,
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub task_id: Option<Id>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct CanvasPatch {
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub w: Option<f64>,
+    pub h: Option<f64>,
+    pub text: Option<String>,
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasLink {
+    pub id: Id,
+    pub project_id: Id,
+    pub from_id: Id,
+    pub to_id: Id,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NewCanvasLink {
+    pub from_id: Id,
+    pub to_id: Id,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Canvas {
+    pub items: Vec<CanvasItem>,
+    pub links: Vec<CanvasLink>,
 }
 
 /// Evento en tiempo real emitido por el servidor vía WebSocket.
@@ -281,4 +443,10 @@ pub enum Event {
     MemberAdded { team_id: Id, user: User },
     MemberRemoved { team_id: Id, user_id: Id },
     MemberRoleChanged { team_id: Id, user_id: Id, role: Role },
+    /// Solo llega al usuario destinatario.
+    Notification(Notification),
+    CanvasItem(CanvasItem),
+    CanvasItemDeleted { id: Id, project_id: Id },
+    CanvasLink(CanvasLink),
+    CanvasLinkDeleted { id: Id, project_id: Id },
 }

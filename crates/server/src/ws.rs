@@ -65,6 +65,12 @@ async fn run(mut sock: WebSocket, st: AppState) {
         tokio::select! {
             msg = rx.recv() => {
                 let Ok(env) = msg else { continue };
+                if let Some(target) = env.to_user {
+                    if target != user { continue; }
+                    let Ok(json) = serde_json::to_string(&env.event) else { continue };
+                    if sock.send(Message::Text(json.into())).await.is_err() { break; }
+                    continue;
+                }
                 // alta propia: suscribirse antes de filtrar; baja propia: avisar y recién después desuscribirse
                 let joined = matches!(&env.event, Event::MemberAdded { user: u, .. } if u.id == user);
                 let removed = matches!(&env.event, Event::MemberRemoved { user_id, .. } if *user_id == user);

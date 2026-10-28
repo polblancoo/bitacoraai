@@ -30,7 +30,12 @@ Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un �
 - **Proyectos y tablero kanban** (por hacer / en curso / hecho), prioridades, fechas límite y asignación.
 - **Etiquetas** por equipo y **subtareas** con barra de progreso.
 - **Comentarios** por tarea.
-- **Calendario** mensual por fecha límite (cliente gráfico).
+- **Calendario** mensual por fecha límite, **Gantt** con dependencias entre tareas (arrastrá las barras para mover fechas), **pizarra** colaborativa por proyecto (notas, tarjetas de tarea y conexiones) y **mapa mental** de cada tarea (cliente gráfico).
+- **Responsable**: el líder (admin o dueño) asigna a cualquier miembro; un miembro solo toma tareas libres o suelta la suya.
+- **Bandeja de novedades**: al iniciar sesión ves lo que pasó mientras no estabas (te asignaron, comentaron, te sumaron) y tus tareas abiertas; llega en vivo y, si cargás y verificás tu email, también por correo.
+- **Cliente web**: `tm-server` sirve la misma interfaz gráfica en `/` (abrí `http://tu-servidor:7878` en el navegador, sin instalar nada; `TM_WEB=0` lo desactiva).
+- **Telegram** (opcional): cada usuario vincula su cuenta con el bot y recibe por ahí las novedades; cualquier miembro puede mandar **mensajes al equipo** (bandeja, email y Telegram).
+- **Agregar miembros con búsqueda** por prefijo de usuario, atajos con prefijo `Ctrl+T` y **ayuda con buscador** (`?`) en ambos clientes.
 - **Tiempo real**: un cambio de cualquier usuario aparece al instante en todos los clientes del equipo.
 
 ## Instalación rápida
@@ -60,6 +65,24 @@ El cliente gráfico necesita las dependencias de Tauri (en Linux: `webkit2gtk-4.
 | `TM_CORS_ORIGINS` | Tauri y localhost | Orígenes extra permitidos, separados por coma |
 | `TM_TLS_CERT` / `TM_TLS_KEY` | — | Certificado y clave PEM para servir HTTPS directamente |
 | `TM_TRUSTED_PROXY` | — | `1` si corre detrás de un proxy inverso propio (usa `X-Forwarded-For` para el rate limit) |
+
+Para los avisos por correo (opcionales; sin esto solo funciona la bandeja):
+
+| Variable | Descripción |
+|---|---|
+| `TM_SMTP_URL` | Servidor SMTP, p. ej. `smtps://smtp.ejemplo.com:465` o `smtp://127.0.0.1:2525` |
+| `TM_SMTP_FROM` | Remitente, p. ej. `Tareas <avisos@ejemplo.com>` |
+| `TM_SMTP_USER` / `TM_SMTP_PASSWORD` | Credenciales, si el servidor las pide |
+
+Para Telegram, creá un bot con [@BotFather](https://t.me/BotFather) y pasale el token al servidor:
+
+| Variable | Descripción |
+|---|---|
+| `TM_TELEGRAM_TOKEN` | Token del bot. El servidor lo atiende por *long polling*: no necesita URL pública ni HTTPS propio |
+
+Cada usuario lo vincula en **Configuración → Telegram** (web/escritorio) o con `Ctrl+T g` (TUI): genera un código de un solo uso (15 min) y se lo manda al bot como `/start CÓDIGO`; `/stop` desvincula. Solo se escribe a chats vinculados así, nunca a ids arbitrarios.
+
+Cada usuario carga su email y lo confirma con un código de 6 dígitos; solo a las direcciones verificadas se les envían avisos (tope por hora).
 
 Sin TLS propio, ponelo detrás de un proxy TLS antes de exponerlo a internet.
 

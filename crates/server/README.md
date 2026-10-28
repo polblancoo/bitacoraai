@@ -25,6 +25,12 @@ La base SQLite se crea sola (con permisos `0600`) y el esquema se migra al arran
 | `TM_CORS_ORIGINS` | Tauri y localhost | Orígenes extra permitidos, separados por coma |
 | `TM_TLS_CERT` / `TM_TLS_KEY` | — | Certificado y clave PEM para HTTPS directo |
 | `TM_TRUSTED_PROXY` | — | `1` detrás de un proxy inverso propio (usa `X-Forwarded-For`) |
+| `TM_WEB` | `1` | `0` desactiva el cliente web que el servidor sirve en `/` |
+| `TM_SMTP_URL` / `TM_SMTP_FROM` | — | Habilitan los avisos por email (opcional): `smtps://host:465`, `Tareas <avisos@ejemplo.com>` |
+| `TM_TELEGRAM_TOKEN` | — | Token del bot de Telegram (de @BotFather); activa vincular cuentas y avisos por Telegram |
+| `TM_SMTP_USER` / `TM_SMTP_PASSWORD` | — | Credenciales SMTP, si hacen falta |
+
+Nuevos endpoints: `GET /api/me`, `PUT/DELETE /api/me/email`, `POST /api/me/email/verify`, `GET /api/users/search?q=&team_id=` (solo admin del equipo), `POST /api/me/telegram/link`, `DELETE /api/me/telegram`, `POST /api/teams/{id}/messages` (miembro o más), `GET /api/inbox`, `POST /api/notifications/read`, `PUT/DELETE /api/tasks/{id}/deps/{dep}`, y la pizarra: `GET /api/projects/{id}/canvas`, `POST .../canvas/items|links`, `PATCH/DELETE /api/canvas/items/{id}`, `DELETE /api/canvas/links/{id}`.
 | `RUST_LOG` | `info` | Nivel de log |
 
 Sin TLS propio, ponelo detrás de un proxy TLS antes de exponerlo a internet; el servidor avisa en el log si escucha en una interfaz no local sin TLS ni proxy.

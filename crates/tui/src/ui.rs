@@ -68,7 +68,19 @@ pub fn draw(f: &mut Frame, app: &App) {
     match app.mode {
         Mode::Detail => draw_detail(f, app),
         Mode::Prompt(kind) => draw_prompt(f, app, kind),
-        Mode::Help => draw_help(f),
+        Mode::Help => draw_help(f, app),
+        Mode::Inbox => draw_inbox(f, app),
+        Mode::Prefix => {
+            let area = Rect::new(0, f.area().height.saturating_sub(1), f.area().width, 1);
+            f.render_widget(Clear, area);
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    " Ctrl+T ▸ m miembro · r rol · i invitar · j unirse · t nuevo equipo · e email · v verificar · s mensaje · g Telegram · n bandeja · Esc cancela",
+                    Style::default().fg(BG).bg(YELLOW),
+                )),
+                area,
+            );
+        }
         _ => {}
     }
 }
@@ -170,7 +182,10 @@ fn draw_board(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     let text = if app.status.is_empty() {
-        "n tarea · Enter detalle · H/L mover · +/- prioridad · a asignarme · e editar · d borrar · Tab proyecto · [ ] equipo · ? ayuda · q salir".to_string()
+        {
+            let bell = if app.unread > 0 { format!("🔔{} (N) · ", app.unread) } else { String::new() };
+            format!("{bell}n tarea · Enter detalle · H/L mover · +/- prioridad · a tomar/soltar · A asignar · Ctrl+T equipo · ? ayuda · q salir")
+        }
     } else {
         app.status.clone()
     };
@@ -186,7 +201,7 @@ fn draw_detail(f: &mut Frame, app: &App) {
     let mut lines = vec![
         Line::from(Span::styled(t.title.clone(), Style::default().fg(BLUE).add_modifier(Modifier::BOLD))),
         Line::from(vec![
-            Span::styled(format!("{sym} prioridad {}", t.priority), Style::default().fg(col)),
+            Span::styled(format!("{sym} prioridad {} ({})", t.priority, ["baja", "normal", "alta", "urgente"][t.priority.clamp(0, 3) as usize]), Style::default().fg(col)),
             Span::raw("  ·  "),
             Span::raw(t.status.label()),
             Span::raw("  ·  "),
@@ -235,36 +250,101 @@ fn draw_prompt(f: &mut Frame, app: &App, kind: PromptKind) {
         PromptKind::NewTask => "Nueva tarea",
         PromptKind::NewProject => "Nuevo proyecto",
         PromptKind::NewTeam => "Nuevo equipo",
-        PromptKind::AddMember => "Agregar miembro: usuario [rol]",
+        PromptKind::AddMember => "Agregar miembro (escribí para buscar)",
         PromptKind::Comment => "Comentario",
         PromptKind::EditTitle => "Editar título",
         PromptKind::Subtask => "Nueva subtarea",
         PromptKind::JoinCode => "Código de invitación",
         PromptKind::SetRole => "Cambiar rol: usuario rol (viewer | member | admin)",
+        PromptKind::AssignTo => "Asignar a (Tab completa · - quita la asignación)",
+        PromptKind::SetEmail => "Tu email (para recibir avisos)",
+        PromptKind::VerifyEmail => "Código de 6 dígitos que llegó a tu email",
+        PromptKind::TeamMessage => "Mensaje para todo el equipo (bandeja, email y Telegram)",
         PromptKind::Label => "Etiqueta (existente: alterna · nueva: se crea)",
     };
-    let area = centered(f.area(), 60, 3);
+    let sug = matches!(kind, PromptKind::AddMember | PromptKind::AssignTo);
+    let extra = if sug { (app.suggest.len() as u16).min(8) + 1 } else { 0 };
+    let area = centered(f.area(), 64, 3 + extra);
     f.render_widget(Clear, area);
-    f.render_widget(Paragraph::new(format!("{}▏", app.input)).block(block(title, true)), area);
+    let mut lines = vec![Line::raw(format!("{}▏", app.input))];
+    if sug {
+        for (i, s) in app.suggest.iter().enumerate() {
+            let st = if i == app.sug_sel { Style::default().fg(BG).bg(BLUE) } else { Style::default().fg(FG) };
+            lines.push(Line::from(Span::styled(format!(" {s} "), st)));
+        }
+        let hint = if kind == PromptKind::AddMember {
+            format!("↑/↓ elegir · Tab completa · Ctrl+R rol: {} · Enter agrega", app.sug_role.label())
+        } else {
+            "↑/↓ elegir · Tab completa · Enter asigna".into()
+        };
+        lines.push(Line::from(Span::styled(hint, Style::default().fg(DIM))));
+    }
+    f.render_widget(Paragraph::new(lines).block(block(title, true)), area);
 }
 
-fn draw_help(f: &mut Frame) {
+fn draw_help(f: &mut Frame, app: &App) {
     let rows = [
         ("h/l ←/→", "cambiar columna"), ("j/k ↑/↓", "mover selección"), ("Enter", "detalle y comentarios"),
         ("n", "nueva tarea"), ("e", "editar título"), ("d", "borrar tarea"),
-        ("H / L", "mover tarea de estado"), ("+ / -", "prioridad"), ("a", "asignarme / quitar"),
+        ("H / L", "mover tarea de estado"), ("+ / -", "subir / bajar prioridad"),
+        ("a", "tomar la tarea / soltar la mía"), ("A", "asignar a un miembro (admin o dueño)"),
         ("Tab / S-Tab", "proyecto siguiente / anterior"), ("[ / ]", "equipo anterior / siguiente"),
-        ("P", "nuevo proyecto"), ("T", "nuevo equipo"), ("m", "agregar miembro: usuario [rol] (admin+)"), ("R", "cambiar rol de un miembro (admin+)"),
+        ("P", "nuevo proyecto"), ("T", "nuevo equipo"),
+        ("m", "agregar miembro con búsqueda (admin+)"), ("R", "cambiar rol de un miembro (admin+)"),
         ("I", "generar código de invitación (admin+)"), ("J", "unirse con un código"),
+        ("Ctrl+T m", "agregar miembro (↑/↓ Tab Ctrl+R rol)"), ("Ctrl+T r", "cambiar rol"),
+        ("Ctrl+T i", "código de invitación"), ("Ctrl+T j", "unirse con código"), ("Ctrl+T t", "nuevo equipo"),
+        ("Ctrl+T e", "cargar mi email para recibir avisos"), ("Ctrl+T v", "verificar el código del email"),
+        ("Ctrl+T n / N", "bandeja: novedades y mis tareas"),
+        ("Ctrl+T s", "enviar un mensaje a todo el equipo"), ("Ctrl+T g", "vincular Telegram (te da el código para el bot)"),
         ("l (detalle)", "poner/quitar etiqueta (la crea si no existe)"), ("s (detalle)", "nueva subtarea"),
-        ("Espacio", "marcar subtarea (detalle)"), ("X", "cerrar sesión en todos los dispositivos"),
-        ("q", "salir"),
+        ("Espacio", "marcar subtarea (detalle)"), ("c (detalle)", "comentar"),
+        ("X", "cerrar sesión en todos los dispositivos"), ("?", "esta ayuda (escribí para buscar)"), ("q", "salir"),
     ];
-    let lines: Vec<Line> = rows
-        .iter()
-        .map(|(k, d)| Line::from(vec![Span::styled(format!("{k:>12}  "), Style::default().fg(BLUE)), Span::raw(*d)]))
-        .collect();
-    let area = centered(f.area(), 56, rows.len() as u16 + 2);
+    let q = app.help_q.to_lowercase();
+    let shown: Vec<&(&str, &str)> = rows.iter().filter(|(k, d)| q.is_empty() || k.to_lowercase().contains(&q) || d.to_lowercase().contains(&q)).collect();
+    let mut lines = vec![Line::from(vec![Span::styled("buscar: ", Style::default().fg(DIM)), Span::raw(format!("{}▏", app.help_q))]), Line::raw("")];
+    if shown.is_empty() {
+        lines.push(Line::from(Span::styled("sin coincidencias", Style::default().fg(DIM))));
+    }
+    lines.extend(shown.iter().map(|(k, d)| Line::from(vec![Span::styled(format!("{k:>14}  "), Style::default().fg(BLUE)), Span::raw(*d)])));
+    let h = (lines.len() as u16 + 2).max(8);
+    let area = centered(f.area(), 68, h);
     f.render_widget(Clear, area);
-    f.render_widget(Paragraph::new(lines).block(block("Atajos", true)), area);
+    f.render_widget(Paragraph::new(lines).block(block("Atajos · Esc cierra", true)), area);
+}
+
+fn draw_inbox(f: &mut Frame, app: &App) {
+    let Some(inb) = &app.inbox else { return };
+    let mut lines = vec![Line::from(Span::styled(
+        format!("Novedades ({} sin leer)", inb.unread.max(app.unread)),
+        Style::default().fg(YELLOW).add_modifier(Modifier::BOLD),
+    ))];
+    if inb.notifications.is_empty() {
+        lines.push(Line::from(Span::styled("  nada nuevo", Style::default().fg(DIM))));
+    }
+    for n in inb.notifications.iter().take(8) {
+        let (mark, st) = if n.read { ("  ", Style::default().fg(DIM)) } else { ("● ", Style::default().fg(FG)) };
+        lines.push(Line::from(vec![
+            Span::styled(mark, Style::default().fg(GREEN)),
+            Span::styled(format!("{} ", n.created_at.format("%d/%m %H:%M")), Style::default().fg(DIM)),
+            Span::styled(n.text.clone(), st),
+        ]));
+    }
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(format!("Mis tareas abiertas ({})", inb.tasks.len()), Style::default().fg(YELLOW).add_modifier(Modifier::BOLD))));
+    for (i, it) in inb.tasks.iter().enumerate() {
+        let (sym, col) = prio(it.task.priority);
+        let sel = if i == app.inbox_sel { Style::default().bg(Color::Rgb(41, 46, 66)).add_modifier(Modifier::BOLD) } else { Style::default() };
+        lines.push(Line::from(vec![
+            Span::styled(format!(" {sym} "), Style::default().fg(col)),
+            Span::styled(it.task.title.clone(), sel),
+            Span::styled(format!("  {} / {} · {}", it.team, it.project, it.task.status.label()), Style::default().fg(DIM)),
+        ]));
+    }
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled("j/k elegir · Enter ir a la tarea · Esc cerrar (marca como leído)", Style::default().fg(DIM))));
+    let area = centered(f.area(), 90, (lines.len() as u16 + 2).min(f.area().height));
+    f.render_widget(Clear, area);
+    f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block("Bandeja", true)), area);
 }

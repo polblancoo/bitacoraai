@@ -31,16 +31,19 @@ En la pantalla de acceso, `F2` alterna entre iniciar sesión y crear cuenta. La 
 | `d` | Borrar la tarea |
 | `H` / `L` | Mover la tarea de estado |
 | `+` / `-` | Subir o bajar la prioridad |
-| `a` | Asignármela o quitar la asignación |
+| `a` | Tomar la tarea o soltar la mía |
+| `A` | Asignar a un miembro, con sugerencias (admin o dueño; `-` quita) |
+| `N` | Bandeja: novedades y mis tareas (se abre sola al iniciar sesión) |
 | `Tab` / `Shift+Tab` | Proyecto siguiente o anterior |
 | `[` / `]` | Equipo anterior o siguiente |
 | `P` / `T` | Nuevo proyecto / nuevo equipo |
-| `m` | Agregar miembro: `usuario [viewer\|member\|admin]` |
+| `m` | Agregar miembro con búsqueda: `↑↓` elegir, `Tab` completa, `Ctrl+R` cambia el rol |
+| `Ctrl+T` + letra | Prefijo de equipo: `m` miembro · `r` rol · `i` invitar · `j` unirse · `t` equipo · `e` mi email · `v` verificar email · `s` mensaje al equipo · `g` vincular Telegram · `n` bandeja |
 | `R` | Cambiar el rol de un miembro: `usuario rol` |
 | `I` | Generar un código de invitación (rol miembro, 7 días, 10 usos) |
 | `J` | Unirse a un equipo con un código |
 | `X` | Cerrar sesión en todos los dispositivos |
-| `?` | Ayuda |
+| `?` | Ayuda con buscador de atajos |
 | `q` | Salir |
 
 **Detalle de una tarea**

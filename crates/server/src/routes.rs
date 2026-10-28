@@ -23,6 +23,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/teams/{id}/labels", get(list_labels).post(create_label))
         .route("/api/labels/{id}", axum::routing::delete(delete_label))
         .route("/api/tasks/{id}/labels", put(set_labels))
+        .route("/api/tasks/{id}/deps/{dep}", put(add_dep).delete(remove_dep))
         .route("/api/teams", get(list_teams).post(create_team))
         .route("/api/teams/{id}/members", get(list_members).post(add_member))
         .route("/api/teams/{id}/members/{uid}", axum::routing::put(set_role).delete(remove_member))
@@ -37,7 +38,7 @@ pub fn router() -> Router<AppState> {
 
 // ---------- helpers ----------
 
-async fn role_of(st: &AppState, team: Id, user: Id) -> Result<Role> {
+pub(crate) async fn role_of(st: &AppState, team: Id, user: Id) -> Result<Role> {
     let r: Option<String> = sqlx::query_scalar("SELECT role FROM team_members WHERE team_id = ? AND user_id = ?")
         .bind(team)
         .bind(user)
@@ -47,18 +48,18 @@ async fn role_of(st: &AppState, team: Id, user: Id) -> Result<Role> {
 }
 
 /// Exige al menos el rol `min` y devuelve el rol real.
-async fn require(st: &AppState, team: Id, user: Id, min: Role) -> Result<Role> {
+pub(crate) async fn require(st: &AppState, team: Id, user: Id, min: Role) -> Result<Role> {
     let r = role_of(st, team, user).await?;
     if r < min { Err(AppError::forbidden()) } else { Ok(r) }
 }
 
 /// Cualquier miembro (incluido lector): lecturas.
-async fn ensure_member(st: &AppState, team: Id, user: Id) -> Result<()> {
+pub(crate) async fn ensure_member(st: &AppState, team: Id, user: Id) -> Result<()> {
     require(st, team, user, Role::Viewer).await.map(|_| ())
 }
 
 /// Miembro o superior: escrituras (tareas, comentarios, etiquetas, proyectos).
-async fn ensure_writer(st: &AppState, team: Id, user: Id) -> Result<()> {
+pub(crate) async fn ensure_writer(st: &AppState, team: Id, user: Id) -> Result<()> {
     require(st, team, user, Role::Member).await.map(|_| ())
 }
 
@@ -67,11 +68,11 @@ fn can_grant(caller: Role, role: Role) -> bool {
     role != Role::Owner && role < caller
 }
 
-async fn team_of_project(st: &AppState, project: Id) -> Result<Id> {
+pub(crate) async fn team_of_project(st: &AppState, project: Id) -> Result<Id> {
     Ok(sqlx::query_scalar("SELECT team_id FROM projects WHERE id = ?").bind(project).fetch_one(&st.db).await?)
 }
 
-async fn team_of_task(st: &AppState, task: Id) -> Result<Id> {
+pub(crate) async fn team_of_task(st: &AppState, task: Id) -> Result<Id> {
     Ok(sqlx::query_scalar(
         "SELECT p.team_id FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = ?",
     )
@@ -80,13 +81,13 @@ async fn team_of_task(st: &AppState, task: Id) -> Result<Id> {
     .await?)
 }
 
-const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.title, t.description, t.status, t.priority, \
-    t.assignee_id, u.username AS assignee, t.due, t.parent_id, t.created_at, t.updated_at, \
+pub(crate) const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.title, t.description, t.status, t.priority, \
+    t.assignee_id, u.username AS assignee, t.due, t.start, t.parent_id, t.created_at, t.updated_at, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id) AS sub_total, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id AND s.status = 'done') AS sub_done \
     FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id";
 
-fn task_from_row(r: &SqliteRow) -> Task {
+pub(crate) fn task_from_row(r: &SqliteRow) -> Task {
     Task {
         id: r.get("id"),
         project_id: r.get("project_id"),
@@ -97,6 +98,8 @@ fn task_from_row(r: &SqliteRow) -> Task {
         assignee_id: r.get("assignee_id"),
         assignee: r.get("assignee"),
         due: r.get("due"),
+        start: r.get("start"),
+        depends_on: vec![],
         parent_id: r.get("parent_id"),
         labels: vec![],
         subtasks_total: r.get("sub_total"),
@@ -111,7 +114,7 @@ fn label_from_row(r: &SqliteRow) -> Label {
 }
 
 /// Completa `labels` de las tareas con una sola consulta (`scope` filtra `task_id`).
-async fn hydrate_labels(st: &AppState, tasks: &mut [Task], scope: &'static str, id: Id) -> Result<()> {
+pub(crate) async fn hydrate_labels(st: &AppState, tasks: &mut [Task], scope: &'static str, id: Id) -> Result<()> {
     let rows = sqlx::query(scope).bind(id).fetch_all(&st.db).await?;
     let mut by_task: std::collections::HashMap<Id, Vec<Label>> = Default::default();
     for r in &rows {
@@ -123,7 +126,58 @@ async fn hydrate_labels(st: &AppState, tasks: &mut [Task], scope: &'static str, 
     Ok(())
 }
 
-async fn fetch_task(st: &AppState, id: Id) -> Result<Task> {
+/// Completa `depends_on` con una sola consulta (`scope` filtra `task_id`).
+pub(crate) async fn hydrate_deps(st: &AppState, tasks: &mut [Task], scope: &'static str, id: Id) -> Result<()> {
+    let rows = sqlx::query(scope).bind(id).fetch_all(&st.db).await?;
+    let mut by_task: std::collections::HashMap<Id, Vec<Id>> = Default::default();
+    for r in &rows {
+        by_task.entry(r.get("task_id")).or_default().push(r.get("depends_on"));
+    }
+    for t in tasks {
+        t.depends_on = by_task.remove(&t.id).unwrap_or_default();
+    }
+    Ok(())
+}
+
+/// Reglas de asignación: un líder (admin o dueño) asigna a cualquiera; un miembro solo puede
+/// tomar una tarea libre o soltar la suya.
+async fn check_assign(st: &AppState, team: Id, actor: Id, role: Role, current: Option<Id>, new: Option<Id>) -> Result<()> {
+    if new == current {
+        return Ok(());
+    }
+    if let Some(a) = new {
+        let r = role_of(st, team, a).await.map_err(|_| AppError::bad("el asignado no es miembro del equipo"))?;
+        if r < Role::Member {
+            return Err(AppError::bad("un lector no puede ser responsable de una tarea"));
+        }
+    }
+    if role >= Role::Admin {
+        return Ok(());
+    }
+    let takes = new == Some(actor) && current.is_none();
+    let releases = new.is_none() && current == Some(actor);
+    if takes || releases {
+        Ok(())
+    } else {
+        Err(AppError(
+            StatusCode::FORBIDDEN,
+            "solo un líder (admin o dueño) asigna tareas a otros; podés tomar las libres o soltar la tuya".into(),
+        ))
+    }
+}
+
+async fn notify_assigned(st: &AppState, team: Id, actor: Id, t: &Task) {
+    let Some(to) = t.assignee_id else { return };
+    if to == actor {
+        return;
+    }
+    let who = crate::notify::username_of(st, actor).await;
+    let prio = ["baja", "media", "alta", "urgente"][t.priority.clamp(0, 3) as usize];
+    let due = t.due.map(|d| format!(", vence el {}", d.format("%d/%m/%Y"))).unwrap_or_default();
+    crate::notify::notify(st, to, "assigned", Some(team), Some(t.id), format!("{who} te asignó «{}» (prioridad {prio}{due})", t.title)).await;
+}
+
+pub(crate) async fn fetch_task(st: &AppState, id: Id) -> Result<Task> {
     let row = sqlx::query(sqlx::AssertSqlSafe(format!("{TASK_SELECT} WHERE t.id = ?"))).bind(id).fetch_one(&st.db).await?;
     let mut t = [task_from_row(&row)];
     hydrate_labels(
@@ -134,6 +188,7 @@ async fn fetch_task(st: &AppState, id: Id) -> Result<Task> {
         id,
     )
     .await?;
+    hydrate_deps(st, &mut t, "SELECT task_id, depends_on FROM task_deps WHERE task_id = ?", id).await?;
     let [t] = t;
     Ok(t)
 }
@@ -148,7 +203,7 @@ fn project_from_row(r: &SqliteRow) -> Project {
     }
 }
 
-async fn count(st: &AppState, sql: &'static str, id: Id) -> Result<i64> {
+pub(crate) async fn count(st: &AppState, sql: &'static str, id: Id) -> Result<i64> {
     Ok(sqlx::query_scalar(sql).bind(id).fetch_one(&st.db).await?)
 }
 
@@ -316,6 +371,9 @@ async fn add_member(
     let row = sqlx::query("SELECT id, username FROM users WHERE username = ?").bind(a.username.trim()).fetch_one(&st.db).await?;
     let new = User { id: row.get("id"), username: row.get("username") };
     insert_member(&st, team, &new, role).await?;
+    let team_name: String = sqlx::query_scalar("SELECT name FROM teams WHERE id = ?").bind(team).fetch_one(&st.db).await?;
+    let who = crate::notify::username_of(&st, user.id).await;
+    crate::notify::notify(&st, new.id, "member_added", Some(team), None, format!("{who} te sumó al equipo «{team_name}» como {}", role.label())).await;
     Ok(Json(new))
 }
 
@@ -338,6 +396,8 @@ async fn set_role(
         .execute(&st.db)
         .await?;
     st.emit(team, Event::MemberRoleChanged { team_id: team, user_id: target, role: b.role });
+    let team_name: String = sqlx::query_scalar("SELECT name FROM teams WHERE id = ?").bind(team).fetch_one(&st.db).await?;
+    crate::notify::notify(&st, target, "role_changed", Some(team), None, format!("Tu rol en «{team_name}» ahora es {}", b.role.label())).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -537,6 +597,13 @@ async fn list_tasks(State(st): State<AppState>, user: AuthUser, Path(project): P
         project,
     )
     .await?;
+    hydrate_deps(
+        &st,
+        &mut tasks,
+        "SELECT d.task_id, d.depends_on FROM task_deps d JOIN tasks t ON t.id = d.task_id WHERE t.project_id = ?",
+        project,
+    )
+    .await?;
     Ok(Json(tasks))
 }
 
@@ -547,7 +614,7 @@ async fn create_task(
     Json(n): Json<NewTask>,
 ) -> Result<Json<Task>> {
     let team = team_of_project(&st, project).await?;
-    ensure_writer(&st, team, user.id).await?;
+    let caller = require(&st, team, user.id, Role::Member).await?;
     if n.title.trim().is_empty() {
         return Err(AppError::bad("título requerido"));
     }
@@ -556,9 +623,7 @@ async fn create_task(
     if count(&st, "SELECT COUNT(*) FROM tasks WHERE project_id = ?", project).await? >= MAX_TASKS_PER_PROJECT {
         return Err(too_many("tareas", MAX_TASKS_PER_PROJECT));
     }
-    if let Some(a) = n.assignee_id {
-        ensure_member(&st, team, a).await.map_err(|_| AppError::bad("el asignado no es miembro del equipo"))?;
-    }
+    check_assign(&st, team, user.id, caller, None, n.assignee_id).await?;
     if let Some(parent) = n.parent_id {
         let row = sqlx::query("SELECT project_id, parent_id FROM tasks WHERE id = ?")
             .bind(parent)
@@ -577,8 +642,8 @@ async fn create_task(
     }
     let now = Utc::now();
     let id = sqlx::query(
-        "INSERT INTO tasks (project_id, title, description, priority, assignee_id, due, parent_id, created_at, updated_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (project_id, title, description, priority, assignee_id, due, parent_id, start, created_at, updated_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(project)
     .bind(n.title.trim())
@@ -587,6 +652,7 @@ async fn create_task(
     .bind(n.assignee_id)
     .bind(n.due)
     .bind(n.parent_id)
+    .bind(n.start)
     .bind(now)
     .bind(now)
     .execute(&st.db)
@@ -595,6 +661,7 @@ async fn create_task(
     let t = fetch_task(&st, id).await?;
     st.emit(team, Event::TaskCreated(t.clone()));
     emit_parent(&st, team, t.parent_id).await;
+    notify_assigned(&st, team, user.id, &t).await;
     Ok(Json(t))
 }
 
@@ -605,17 +672,18 @@ async fn update_task(
     Json(p): Json<TaskPatch>,
 ) -> Result<Json<Task>> {
     let team = team_of_task(&st, id).await?;
-    ensure_writer(&st, team, user.id).await?;
+    let caller = require(&st, team, user.id, Role::Member).await?;
     if let Some(t) = &p.title { max_len("título", t, TITLE_MAX)?; }
     if let Some(d) = &p.description { max_len("descripción", d, DESCRIPTION_MAX)?; }
     let cur = fetch_task(&st, id).await?;
-    if let Some(Some(a)) = p.assignee_id {
-        ensure_member(&st, team, a).await.map_err(|_| AppError::bad("el asignado no es miembro del equipo"))?;
+    if let Some(new) = p.assignee_id {
+        check_assign(&st, team, user.id, caller, cur.assignee_id, new).await?;
     }
     let assignee = p.assignee_id.unwrap_or(cur.assignee_id);
     let due = p.due.unwrap_or(cur.due);
+    let start = p.start.unwrap_or(cur.start);
     sqlx::query(
-        "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, assignee_id = ?, due = ?, updated_at = ? \
+        "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, assignee_id = ?, due = ?, start = ?, updated_at = ? \
          WHERE id = ?",
     )
     .bind(p.title.as_deref().map(str::trim).filter(|s| !s.is_empty()).unwrap_or(&cur.title))
@@ -624,6 +692,7 @@ async fn update_task(
     .bind(p.priority.map(|v| v.clamp(0, 3)).unwrap_or(cur.priority))
     .bind(assignee)
     .bind(due)
+    .bind(start)
     .bind(Utc::now())
     .bind(id)
     .execute(&st.db)
@@ -631,6 +700,9 @@ async fn update_task(
     let t = fetch_task(&st, id).await?;
     st.emit(team, Event::TaskUpdated(t.clone()));
     emit_parent(&st, team, t.parent_id).await;
+    if t.assignee_id != cur.assignee_id {
+        notify_assigned(&st, team, user.id, &t).await;
+    }
     Ok(Json(t))
 }
 
@@ -696,6 +768,20 @@ async fn add_comment(
     let row = sqlx::query(sqlx::AssertSqlSafe(format!("{COMMENT_SELECT} WHERE c.id = ?"))).bind(id).fetch_one(&st.db).await?;
     let c = comment_from_row(&row);
     st.emit(team, Event::CommentAdded(c.clone()));
+    // avisa al responsable y a quienes ya comentaron en la tarea (menos a quien escribe)
+    let people: Vec<Id> = sqlx::query_scalar(
+        "SELECT assignee_id FROM tasks WHERE id = ?1 AND assignee_id IS NOT NULL \
+         UNION SELECT user_id FROM comments WHERE task_id = ?1 LIMIT 20",
+    )
+    .bind(task)
+    .fetch_all(&st.db)
+    .await
+    .unwrap_or_default();
+    let title: String = sqlx::query_scalar("SELECT title FROM tasks WHERE id = ?").bind(task).fetch_one(&st.db).await.unwrap_or_default();
+    let preview: String = c.body.chars().take(200).collect();
+    for to in people.into_iter().filter(|u| *u != user.id) {
+        crate::notify::notify(&st, to, "comment", Some(team), Some(task), format!("{} comentó en «{title}»: {preview}", c.username)).await;
+    }
     Ok(Json(c))
 }
 
@@ -785,6 +871,56 @@ async fn set_labels(
     }
     tx.commit().await?;
     let t = fetch_task(&st, task).await?;
+    st.emit(team, Event::TaskUpdated(t.clone()));
+    Ok(Json(t))
+}
+
+// ---------- dependencias (Gantt) ----------
+
+/// ¿Se llega a `target` siguiendo las dependencias desde `from`? (para evitar ciclos)
+async fn reaches(st: &AppState, from: Id, target: Id) -> Result<bool> {
+    let mut seen = std::collections::HashSet::new();
+    let mut stack = vec![from];
+    while let Some(n) = stack.pop() {
+        if n == target {
+            return Ok(true);
+        }
+        if !seen.insert(n) || seen.len() > 5_000 {
+            continue;
+        }
+        let next: Vec<Id> = sqlx::query_scalar("SELECT depends_on FROM task_deps WHERE task_id = ?").bind(n).fetch_all(&st.db).await?;
+        stack.extend(next);
+    }
+    Ok(false)
+}
+
+async fn add_dep(State(st): State<AppState>, user: AuthUser, Path((id, dep)): Path<(Id, Id)>) -> Result<Json<Task>> {
+    let team = team_of_task(&st, id).await?;
+    ensure_writer(&st, team, user.id).await?;
+    if id == dep {
+        return Err(AppError::bad("una tarea no puede depender de sí misma"));
+    }
+    let projects: Vec<Id> = sqlx::query_scalar("SELECT DISTINCT project_id FROM tasks WHERE id IN (?, ?)").bind(id).bind(dep).fetch_all(&st.db).await?;
+    if projects.len() != 1 {
+        return Err(AppError::bad("las dos tareas deben ser del mismo proyecto"));
+    }
+    if count(&st, "SELECT COUNT(*) FROM task_deps WHERE task_id = ?", id).await? >= MAX_DEPS_PER_TASK {
+        return Err(too_many("dependencias", MAX_DEPS_PER_TASK));
+    }
+    if reaches(&st, dep, id).await? {
+        return Err(AppError::bad("la dependencia crearía un ciclo"));
+    }
+    sqlx::query("INSERT OR IGNORE INTO task_deps (task_id, depends_on) VALUES (?, ?)").bind(id).bind(dep).execute(&st.db).await?;
+    let t = fetch_task(&st, id).await?;
+    st.emit(team, Event::TaskUpdated(t.clone()));
+    Ok(Json(t))
+}
+
+async fn remove_dep(State(st): State<AppState>, user: AuthUser, Path((id, dep)): Path<(Id, Id)>) -> Result<Json<Task>> {
+    let team = team_of_task(&st, id).await?;
+    ensure_writer(&st, team, user.id).await?;
+    sqlx::query("DELETE FROM task_deps WHERE task_id = ? AND depends_on = ?").bind(id).bind(dep).execute(&st.db).await?;
+    let t = fetch_task(&st, id).await?;
     st.emit(team, Event::TaskUpdated(t.clone()));
     Ok(Json(t))
 }

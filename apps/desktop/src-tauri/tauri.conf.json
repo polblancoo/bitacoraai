@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "identifier": "com.polblancoo.rust-tui-manager",
   "build": {
-    "frontendDist": "../ui"
+    "frontendDist": "../../../crates/server/web"
   },
   "app": {
     "windows": [

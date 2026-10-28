@@ -32,6 +32,15 @@ pub const MAX_LABELS_PER_TEAM: i64 = 100;
 pub const MAX_LABELS_PER_TASK: usize = 10;
 pub const LABEL_MAX: usize = 30;
 pub const MAX_INVITES_PER_TEAM: i64 = 20;
+pub const MAX_DEPS_PER_TASK: i64 = 20;
+pub const MAX_CANVAS_ITEMS: i64 = 500;
+pub const MAX_CANVAS_LINKS: i64 = 1000;
+pub const CANVAS_TEXT_MAX: usize = 2_000;
+pub const CANVAS_COORD_MAX: f64 = 100_000.0;
+pub const EMAIL_MAX: usize = 254;
+/// Emails salientes por usuario y hora (evita usar el servidor para spam).
+pub const MAX_MEMBERS_PER_MESSAGE: usize = 200;
+pub const EMAILS_PER_HOUR: u32 = 20;
 
 pub const MAX_WS_PER_USER: usize = 8;
 

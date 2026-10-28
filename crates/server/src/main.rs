@@ -1,6 +1,11 @@
 mod auth;
 mod error;
+mod canvas;
 mod limits;
+mod notify;
+mod telegram;
+mod web;
+mod profile;
 mod routes;
 mod ws;
 
@@ -19,6 +24,8 @@ use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer, trace::Tra
 #[derive(Clone)]
 pub struct Envelope {
     pub team_id: Id,
+    /// Si está presente, el evento es solo para ese usuario (y `team_id` se ignora).
+    pub to_user: Option<Id>,
     pub event: Event,
 }
 
@@ -32,11 +39,18 @@ pub struct AppState {
     pub user_limiter: Arc<limits::RateLimiter<String>>,
     pub ws_conns: Arc<limits::WsCounter>,
     pub trust_proxy: bool,
+    pub mailer: Option<Arc<notify::Mailer>>,
+    pub email_limiter: Arc<limits::RateLimiter<Id>>,
+    pub telegram: Option<Arc<telegram::Telegram>>,
 }
 
 impl AppState {
     pub fn emit(&self, team_id: Id, event: Event) {
-        let _ = self.tx.send(Envelope { team_id, event });
+        let _ = self.tx.send(Envelope { team_id, to_user: None, event });
+    }
+
+    pub fn emit_to(&self, user: Id, event: Event) {
+        let _ = self.tx.send(Envelope { team_id: 0, to_user: Some(user), event });
     }
 }
 
@@ -65,6 +79,14 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE tasks ADD COLUMN parent_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE",
         "ALTER TABLE team_members ADD COLUMN role TEXT NOT NULL DEFAULT 'member'",
+        "ALTER TABLE users ADD COLUMN email TEXT",
+        "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN email_code_hash TEXT",
+        "ALTER TABLE users ADD COLUMN email_code_expires TEXT",
+        "ALTER TABLE tasks ADD COLUMN start TEXT",
+        "ALTER TABLE users ADD COLUMN telegram_chat_id INTEGER",
+        "ALTER TABLE users ADD COLUMN tg_code_hash TEXT",
+        "ALTER TABLE users ADD COLUMN tg_code_expires TEXT",
     ] {
         let _ = sqlx::query(alter).execute(db).await;
     }
@@ -110,6 +132,8 @@ fn hardening<T: Clone + Send + Sync + 'static>(router: Router<T>) -> Router<T> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
+    // lettre (aws-lc-rs) y reqwest (ring) conviven: se fija un proveedor único para todo el proceso
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let db_url = std::env::var("TM_DATABASE").unwrap_or_else(|_| "sqlite://tm-server.db".into());
     let addr: SocketAddr = std::env::var("TM_ADDR").unwrap_or_else(|_| "0.0.0.0:7878".into()).parse()?;
     let trust_proxy = std::env::var("TM_TRUSTED_PROXY").is_ok_and(|v| v == "1");
@@ -137,9 +161,15 @@ async fn main() -> anyhow::Result<()> {
         user_limiter: Default::default(),
         ws_conns: Default::default(),
         trust_proxy,
+        mailer: notify::Mailer::from_env().map(Arc::new),
+        email_limiter: Default::default(),
+        telegram: telegram::Telegram::from_env().await.map(Arc::new),
     };
+    telegram::spawn_poller(state.clone());
 
-    let app: Router = hardening(routes::router().merge(ws::router()))
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(ws::router()));
+    let api = if web::enabled() { api.merge(web::router()) } else { api };
+    let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))
         .layer(cors())
         .layer(TraceLayer::new_for_http())

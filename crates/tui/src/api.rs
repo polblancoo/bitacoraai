@@ -120,4 +120,27 @@ impl Api {
     pub async fn new_comment(&self, task: Id, body: &str) -> Result<Comment> {
         self.post(&format!("/api/tasks/{task}/comments"), &NewComment { body: body.into() }).await
     }
+
+    pub async fn me(&self) -> Result<Me> { self.get("/api/me").await }
+    pub async fn inbox(&self) -> Result<Inbox> { self.get("/api/inbox").await }
+    pub async fn search_users(&self, team: Id, q: &str) -> Result<Vec<User>> {
+        let rb = self.http.get(format!("{}/api/users/search", self.base)).query(&[("q", q), ("team_id", &team.to_string())]);
+        self.send(rb).await
+    }
+    pub async fn mark_read(&self, ids: Vec<Id>) -> Result<()> {
+        let rb = self.http.post(format!("{}/api/notifications/read", self.base)).json(&MarkRead { ids });
+        self.send_empty(rb).await
+    }
+    pub async fn set_email(&self, email: &str) -> Result<()> {
+        let rb = self.http.put(format!("{}/api/me/email", self.base)).json(&SetEmail { email: email.into() });
+        self.send_empty(rb).await
+    }
+    pub async fn verify_email(&self, code: &str) -> Result<()> {
+        let rb = self.http.post(format!("{}/api/me/email/verify", self.base)).json(&VerifyEmail { code: code.into() });
+        self.send_empty(rb).await
+    }
+    pub async fn telegram_link(&self) -> Result<TelegramLink> { self.post("/api/me/telegram/link", &serde_json::json!({})).await }
+    pub async fn send_message(&self, team: Id, text: &str) -> Result<MessageSent> {
+        self.post(&format!("/api/teams/{team}/messages"), &TeamMessage { text: text.into(), to: vec![] }).await
+    }
 }

@@ -33,6 +33,10 @@ pub enum PromptKind {
     Label,
     JoinCode,
     SetRole,
+    AssignTo,
+    SetEmail,
+    VerifyEmail,
+    TeamMessage,
 }
 
 pub enum Mode {
@@ -41,6 +45,9 @@ pub enum Mode {
     Detail,
     Prompt(PromptKind),
     Help,
+    /// Tras Ctrl+T: esperando la letra del atajo de equipo.
+    Prefix,
+    Inbox,
 }
 
 pub struct App {
@@ -69,6 +76,19 @@ pub struct App {
     pub status: String,
     pub online: bool,
     pub quit: bool,
+    // sugerencias del prompt (agregar miembro / asignar)
+    pub suggest: Vec<String>,
+    pub sug_sel: usize,
+    pub sug_role: Role,
+    sug_q: String,
+    sug_full: bool,
+    // ayuda con buscador
+    pub help_q: String,
+    // bandeja
+    pub inbox: Option<Inbox>,
+    pub inbox_sel: usize,
+    pub unread: i64,
+    pub email_info: Option<Me>,
 }
 
 impl App {
@@ -152,7 +172,94 @@ impl App {
         self.me = Some(auth.user);
         self.mode = Mode::Board;
         spawn_ws(self.api.ws_url(), self.api.token.clone().unwrap_or_default(), tx.clone());
-        self.load_teams().await
+        self.load_teams().await?;
+        self.load_me().await;
+        self.open_inbox(false).await;
+        Ok(())
+    }
+
+    async fn load_me(&mut self) {
+        if let Ok(m) = self.api.me().await {
+            self.me = Some(User { id: m.id, username: m.username.clone() });
+            self.email_info = Some(m);
+        }
+    }
+
+    /// Rol propio en el equipo actual.
+    pub fn my_role(&self) -> Option<Role> {
+        let id = self.me.as_ref()?.id;
+        self.members.iter().find(|m| m.id == id).map(|m| m.role)
+    }
+
+    /// Carga la bandeja; `force` la abre aunque no haya nada nuevo.
+    async fn open_inbox(&mut self, force: bool) {
+        match self.api.inbox().await {
+            Ok(inb) => {
+                self.unread = inb.unread;
+                let show = force || inb.unread > 0 || !inb.tasks.is_empty();
+                self.inbox = Some(inb);
+                self.inbox_sel = 0;
+                if show { self.mode = Mode::Inbox; }
+            }
+            Err(e) => self.status = format!("✗ {e}"),
+        }
+    }
+
+    async fn close_inbox(&mut self) {
+        if self.unread > 0 {
+            if self.api.mark_read(vec![]).await.is_ok() {
+                self.unread = 0;
+                if let Some(i) = self.inbox.as_mut() { for n in &mut i.notifications { n.read = true; } }
+            }
+        }
+        self.mode = Mode::Board;
+    }
+
+    /// Salta a la tarea elegida en la bandeja (cambia de equipo/proyecto si hace falta).
+    async fn jump_to(&mut self, team: &str, task: &Task) -> Result<()> {
+        if let Some(i) = self.teams.iter().position(|t| t.name == team) {
+            if i != self.team { self.team = i; self.project = 0; self.load_team().await?; }
+        }
+        if let Some(i) = self.projects.iter().position(|p| p.id == task.project_id) {
+            if i != self.project { self.project = i; self.load_project().await?; }
+        }
+        if let Some(c) = Status::ALL.iter().position(|s| *s == task.status) {
+            self.col = c;
+            if let Some(r) = self.column(c).iter().position(|x| x.id == task.id) { self.row[c] = r; }
+        }
+        Ok(())
+    }
+
+    fn open_prompt_suggest(&mut self, kind: PromptKind) {
+        self.suggest.clear();
+        self.sug_sel = 0;
+        self.sug_q = "\u{0}".into();
+        self.sug_full = false;
+        self.prompt(kind);
+    }
+
+    /// Recalcula las sugerencias según lo escrito.
+    async fn refresh_suggest(&mut self, kind: PromptKind) {
+        let q = self.input.trim().to_lowercase();
+        match kind {
+            PromptKind::AssignTo => {
+                self.suggest = self.members.iter().filter(|m| m.role >= Role::Member && m.username.to_lowercase().starts_with(&q)).map(|m| m.username.clone()).collect();
+            }
+            PromptKind::AddMember => {
+                if q.is_empty() {
+                    self.suggest.clear();
+                } else if self.sug_full && q.starts_with(&self.sug_q) {
+                    // la búsqueda previa trajo todo lo que empieza con el prefijo: filtra local
+                    self.suggest.retain(|n| n.to_lowercase().starts_with(&q));
+                } else if let Ok(us) = self.api.search_users(self.cur_team(), &q).await {
+                    self.sug_full = us.len() < 8;
+                    self.sug_q = q.clone();
+                    self.suggest = us.into_iter().map(|u| u.username).collect();
+                }
+            }
+            _ => {}
+        }
+        self.sug_sel = self.sug_sel.min(self.suggest.len().saturating_sub(1));
     }
 
     async fn on_server(&mut self, ev: tm_core::Event) {
@@ -196,6 +303,12 @@ impl App {
                     if let Ok(m) = self.api.members(team_id).await { self.members = m; }
                 }
             }
+            tm_core::Event::Notification(n) => {
+                self.status = format!("ℹ 🔔 {}", n.text);
+                self.unread += 1;
+                if let Some(i) = self.inbox.as_mut() { i.notifications.insert(0, n); i.unread += 1; }
+            }
+            tm_core::Event::CanvasItem(_) | tm_core::Event::CanvasItemDeleted { .. } | tm_core::Event::CanvasLink(_) | tm_core::Event::CanvasLinkDeleted { .. } => {}
             tm_core::Event::MemberAdded { team_id, .. } => {
                 if team_id == self.cur_team() {
                     if let Ok(m) = self.api.members(team_id).await { self.members = m; }
@@ -228,12 +341,35 @@ impl App {
                 self.load_team().await?;
             }
             PromptKind::AddMember => {
-                // "usuario" o "usuario rol" (viewer | member | admin)
-                let mut it = text.split_whitespace();
-                let name = it.next().unwrap_or_default();
-                let role = it.next().map(parse_role).transpose()?;
-                let u = self.api.add_member(self.cur_team(), name, role).await?;
-                self.status = format!("ℹ {} agregado al equipo", u.username);
+                let role = self.sug_role;
+                let u = self.api.add_member(self.cur_team(), &text, Some(role)).await?;
+                self.status = format!("ℹ {} agregado al equipo como {}", u.username, role.label());
+            }
+            PromptKind::AssignTo => {
+                let id = if text == "-" {
+                    None
+                } else {
+                    Some(self.members.iter().find(|m| m.username.eq_ignore_ascii_case(&text)).map(|m| m.id)
+                        .ok_or_else(|| anyhow::anyhow!("no hay un miembro llamado {text}"))?)
+                };
+                if let Some(tid) = self.selected().map(|t| t.id) {
+                    let t = self.api.patch_task(tid, &TaskPatch { assignee_id: Some(id), ..Default::default() }).await?;
+                    self.upsert(t);
+                }
+            }
+            PromptKind::SetEmail => {
+                self.api.set_email(&text).await?;
+                self.load_me().await;
+                self.status = "ℹ te enviamos un código de 6 dígitos: Ctrl+T v para confirmarlo".into();
+            }
+            PromptKind::TeamMessage => {
+                let r = self.api.send_message(self.cur_team(), &text).await?;
+                self.status = format!("ℹ mensaje enviado a {} personas", r.sent);
+            }
+            PromptKind::VerifyEmail => {
+                self.api.verify_email(&text).await?;
+                self.load_me().await;
+                self.status = "ℹ email verificado: vas a recibir avisos por correo".into();
             }
             PromptKind::SetRole => {
                 let mut it = text.split_whitespace();
@@ -307,19 +443,64 @@ impl App {
         match self.mode {
             Mode::Login => self.key_login(k, tx).await,
             Mode::Prompt(kind) => {
+                let suggesting = matches!(kind, PromptKind::AddMember | PromptKind::AssignTo);
                 match k.code {
                     KeyCode::Esc => { self.input.clear(); self.mode = if self.return_mode_detail { Mode::Detail } else { Mode::Board }; }
                     KeyCode::Enter => {
+                        if suggesting && !self.input.trim().is_empty() && self.input.trim() != "-" {
+                            let typed = self.input.trim().to_string();
+                            if !self.suggest.iter().any(|s| s.eq_ignore_ascii_case(&typed)) {
+                                if let Some(s) = self.suggest.get(self.sug_sel) { self.input = s.clone(); }
+                            }
+                        }
                         self.mode = if self.return_mode_detail { Mode::Detail } else { Mode::Board };
+                        self.suggest.clear();
                         self.submit(kind).await?;
                     }
-                    KeyCode::Backspace => { self.input.pop(); }
-                    KeyCode::Char(c) => self.input.push(c),
+                    KeyCode::Backspace => { self.input.pop(); self.refresh_suggest(kind).await; }
+                    KeyCode::Down if suggesting => { if !self.suggest.is_empty() { self.sug_sel = (self.sug_sel + 1) % self.suggest.len(); } }
+                    KeyCode::Up if suggesting => { if !self.suggest.is_empty() { self.sug_sel = (self.sug_sel + self.suggest.len() - 1) % self.suggest.len(); } }
+                    KeyCode::Tab if suggesting => {
+                        if let Some(s) = self.suggest.get(self.sug_sel).cloned() { self.input = s; self.refresh_suggest(kind).await; }
+                    }
+                    KeyCode::Char('r') if kind == PromptKind::AddMember && k.modifiers.contains(KeyModifiers::CONTROL) => {
+                        self.sug_role = match self.sug_role { Role::Viewer => Role::Member, Role::Member => Role::Admin, _ => Role::Viewer };
+                    }
+                    KeyCode::Char(c) if !k.modifiers.contains(KeyModifiers::CONTROL) => { self.input.push(c); self.refresh_suggest(kind).await; }
                     _ => {}
                 }
                 Ok(())
             }
-            Mode::Help => { self.mode = Mode::Board; Ok(()) }
+            Mode::Help => {
+                match k.code {
+                    KeyCode::Esc => { if self.help_q.is_empty() { self.mode = Mode::Board; } else { self.help_q.clear(); } }
+                    KeyCode::Enter => self.mode = Mode::Board,
+                    KeyCode::Backspace => { self.help_q.pop(); }
+                    KeyCode::Char(c) if !k.modifiers.contains(KeyModifiers::CONTROL) => self.help_q.push(c),
+                    _ => {}
+                }
+                Ok(())
+            }
+            Mode::Prefix => {
+                self.mode = Mode::Board;
+                if let KeyCode::Char(c) = k.code { self.key_prefix(c).await?; }
+                Ok(())
+            }
+            Mode::Inbox => {
+                let n = self.inbox.as_ref().map(|i| i.tasks.len()).unwrap_or(0);
+                match k.code {
+                    KeyCode::Esc | KeyCode::Char('q') => self.close_inbox().await,
+                    KeyCode::Down | KeyCode::Char('j') => { if n > 0 { self.inbox_sel = (self.inbox_sel + 1).min(n - 1); } }
+                    KeyCode::Up | KeyCode::Char('k') => self.inbox_sel = self.inbox_sel.saturating_sub(1),
+                    KeyCode::Enter => {
+                        let it = self.inbox.as_ref().and_then(|i| i.tasks.get(self.inbox_sel)).map(|t| (t.team.clone(), t.task.clone()));
+                        self.close_inbox().await;
+                        if let Some((team, task)) = it { self.jump_to(&team, &task).await?; }
+                    }
+                    _ => {}
+                }
+                Ok(())
+            }
             Mode::Detail => {
                 match k.code {
                     KeyCode::Esc | KeyCode::Char('q') => self.mode = Mode::Board,
@@ -358,6 +539,30 @@ impl App {
         }
     }
 
+    async fn key_prefix(&mut self, c: char) -> Result<()> {
+        let has_team = !self.teams.is_empty();
+        match c {
+            'm' if has_team => self.open_prompt_suggest(PromptKind::AddMember),
+            'r' if has_team => self.prompt(PromptKind::SetRole),
+            'i' if has_team => {
+                let inv = self.api.create_invite(self.cur_team(), Role::Member).await?;
+                self.status = format!("ℹ código de invitación (rol miembro, 7 días, 10 usos): {}", inv.code);
+            }
+            'j' => self.prompt(PromptKind::JoinCode),
+            't' => self.prompt(PromptKind::NewTeam),
+            'e' => self.prompt(PromptKind::SetEmail),
+            'v' => self.prompt(PromptKind::VerifyEmail),
+            's' if has_team => self.prompt(PromptKind::TeamMessage),
+            'g' => {
+                let l = self.api.telegram_link().await?;
+                self.status = format!("ℹ Telegram: escribile a @{} → /start {}  (un solo uso, vence en {} min)", l.bot, l.code, l.expires_minutes);
+            }
+            'n' => self.open_inbox(true).await,
+            _ => self.status = "✗ atajo de equipo desconocido (m r i j t e v n)".into(),
+        }
+        Ok(())
+    }
+
     async fn key_login(&mut self, k: KeyEvent, tx: &mpsc::UnboundedSender<Msg>) -> Result<()> {
         match k.code {
             KeyCode::Esc => self.quit = true,
@@ -382,7 +587,17 @@ impl App {
         let n = self.column(self.col).len();
         match k.code {
             KeyCode::Char('q') => self.quit = true,
-            KeyCode::Char('?') => self.mode = Mode::Help,
+            KeyCode::Char('?') => { self.help_q.clear(); self.mode = Mode::Help; }
+            KeyCode::Char('t') if k.modifiers.contains(KeyModifiers::CONTROL) => self.mode = Mode::Prefix,
+            KeyCode::Char('N') => self.open_inbox(true).await,
+            KeyCode::Char('A') if self.selected().is_some() => {
+                if self.my_role().is_some_and(|r| r >= Role::Admin) {
+                    self.open_prompt_suggest(PromptKind::AssignTo);
+                    self.refresh_suggest(PromptKind::AssignTo).await;
+                } else {
+                    self.status = "✗ solo admin o dueño asigna a otros (con a tomás o soltás la tuya)".into();
+                }
+            }
             KeyCode::Char('X') => {
                 self.api.logout_all().await?;
                 config::save(&config::Config { server: Some(self.api.base.clone()), token: None, username: self.me.as_ref().map(|u| u.username.clone()) });
@@ -395,7 +610,7 @@ impl App {
             KeyCode::Char('n') if !self.projects.is_empty() => self.prompt(PromptKind::NewTask),
             KeyCode::Char('P') if !self.teams.is_empty() => self.prompt(PromptKind::NewProject),
             KeyCode::Char('T') => self.prompt(PromptKind::NewTeam),
-            KeyCode::Char('m') if !self.teams.is_empty() => self.prompt(PromptKind::AddMember),
+            KeyCode::Char('m') if !self.teams.is_empty() => self.open_prompt_suggest(PromptKind::AddMember),
             KeyCode::Char('R') if !self.teams.is_empty() => self.prompt(PromptKind::SetRole),
             KeyCode::Char('J') => self.prompt(PromptKind::JoinCode),
             KeyCode::Char('I') if !self.teams.is_empty() => {
@@ -534,6 +749,16 @@ async fn main() -> Result<()> {
         status: String::new(),
         online: false,
         quit: false,
+        suggest: vec![],
+        sug_sel: 0,
+        sug_role: Role::Member,
+        sug_q: String::new(),
+        sug_full: false,
+        help_q: String::new(),
+        inbox: None,
+        inbox_sel: 0,
+        unread: 0,
+        email_info: None,
     };
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
@@ -559,6 +784,8 @@ async fn main() -> Result<()> {
                 app.mode = Mode::Board;
                 spawn_ws(app.api.ws_url(), token.clone(), tx.clone());
                 let _ = app.load_teams().await;
+                app.load_me().await;
+                app.open_inbox(false).await;
             }
             Err(_) => app.api.token = None,
         }
