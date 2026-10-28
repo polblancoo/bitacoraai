@@ -1,12 +1,13 @@
 # Rust TUI Manager
 
-Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un único servidor y dos clientes: una **TUI** (ratatui) y una **app gráfica** (Tauri 2), con actualizaciones en tiempo real entre todos los conectados.
+Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un único servidor y tres clientes: una **TUI** (ratatui), una **app gráfica** (Tauri 2) y una **web** que el propio servidor sirve, con actualizaciones en tiempo real entre todos los conectados.
 
 | Pieza | Crate / ruta | Qué es |
 |---|---|---|
 | Servidor | [`rust-tui-manager-server`](crates/server) (binario `tm-server`) | API REST + WebSocket sobre axum y SQLite |
 | Cliente de terminal | [`rust-tui-manager`](crates/tui) | Tablero kanban con ratatui |
-| Cliente gráfico | [`apps/desktop`](apps/desktop) | App Tauri 2 (tablero, calendario, gestión de equipo) |
+| Cliente gráfico | [`apps/desktop`](apps/desktop) | App Tauri 2 (la misma interfaz que la web, en ventana propia) |
+| Cliente web | [`crates/server/web`](crates/server/web) | Interfaz gráfica servida por `tm-server` en `/`: tablero, calendario, Gantt, pizarra, bandeja |
 | Modelos compartidos | [`rust-tui-manager-core`](crates/core) | Tipos y eventos usados por todos |
 
 > La versión 0.1.x de `rust-tui-manager` era un gestor local de notas y snippets. Ese código sigue en [`legacy/`](legacy/) y en las versiones 0.1.x del crate.
@@ -21,6 +22,25 @@ Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un �
   <tr>
     <td><img src="docs/screenshots/desktop-team.png" alt="Gestión del equipo: roles e invitaciones por código"></td>
     <td><img src="docs/screenshots/tui-board.png" alt="Cliente de terminal (ratatui)"></td>
+  </tr>
+</table>
+
+### Cliente web (también en la app de escritorio)
+
+`tm-server` sirve la interfaz en `/`: abrí `http://tu-servidor:7878` y listo.
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/web-gantt.png" alt="Gantt con dependencias entre tareas"></td>
+    <td><img src="docs/screenshots/web-canvas.png" alt="Pizarra colaborativa con notas, tarjetas de tarea y conexiones"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/web-inbox.png" alt="Bandeja de novedades al iniciar sesión"></td>
+    <td><img src="docs/screenshots/web-mindmap.png" alt="Mapa mental de una tarea"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/web-settings.png" alt="Menú de configuración: cuenta, Telegram, equipo y preferencias"></td>
+    <td><img src="docs/screenshots/web-message.png" alt="Mensaje al equipo (bandeja, email y Telegram)"></td>
   </tr>
 </table>
 

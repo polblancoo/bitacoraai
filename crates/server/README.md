@@ -2,9 +2,20 @@
 
 Servidor multiusuario (axum + SQLite + WebSocket) del gestor de tareas colaborativo [Rust TUI Manager](https://github.com/polblancoo/tui_comandNote). Los clientes son [`rust-tui-manager`](https://crates.io/crates/rust-tui-manager) (terminal) y la app Tauri del repositorio.
 
-Clientes: la TUI y la app gráfica de escritorio.
+Clientes: la TUI, la app gráfica de escritorio y la **web que este mismo servidor sirve en `/`** (desactivable con `TM_WEB=0`).
 
 ![Cliente gráfico conectado al servidor](https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/desktop-board.png)
+
+<table>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-gantt.png" alt="Gantt con dependencias"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-canvas.png" alt="Pizarra colaborativa"></td>
+  </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-inbox.png" alt="Bandeja de novedades"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-settings.png" alt="Menú de configuración"></td>
+  </tr>
+</table>
 
 ## Uso
 
