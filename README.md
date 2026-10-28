@@ -1,40 +1,97 @@
 # Rust TUI Manager
 
-Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un servidor único con tres clientes posibles:
+Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un único servidor y dos clientes: una **TUI** (ratatui) y una **app gráfica** (Tauri 2), con actualizaciones en tiempo real entre todos los conectados.
 
-- **`tm-server`**: API REST + WebSocket (axum + SQLite).
-- **`rust-tui-manager`**: cliente de terminal con ratatui (tablero kanban).
-- **`apps/desktop`**: cliente gráfico con Tauri 2.
+| Pieza | Crate / ruta | Qué es |
+|---|---|---|
+| Servidor | [`rust-tui-manager-server`](crates/server) (binario `tm-server`) | API REST + WebSocket sobre axum y SQLite |
+| Cliente de terminal | [`rust-tui-manager`](crates/tui) | Tablero kanban con ratatui |
+| Cliente gráfico | [`apps/desktop`](apps/desktop) | App Tauri 2 (tablero, calendario, gestión de equipo) |
+| Modelos compartidos | [`rust-tui-manager-core`](crates/core) | Tipos y eventos usados por todos |
 
-> La versión anterior (gestor local de notas y snippets) está en [`legacy/`](legacy/) y en las versiones 0.1.x del crate.
+> La versión 0.1.x de `rust-tui-manager` era un gestor local de notas y snippets. Ese código sigue en [`legacy/`](legacy/) y en las versiones 0.1.x del crate.
+
+![Tablero kanban en el cliente gráfico](docs/screenshots/desktop-board.png)
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/desktop-task.png" alt="Detalle de tarea con etiquetas, subtareas y comentarios"></td>
+    <td><img src="docs/screenshots/desktop-calendar.png" alt="Vista de calendario por fecha límite"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/desktop-team.png" alt="Gestión del equipo: roles e invitaciones por código"></td>
+    <td><img src="docs/screenshots/tui-board.png" alt="Cliente de terminal (ratatui)"></td>
+  </tr>
+</table>
 
 ## Funciones
 
-- Equipos con roles (lector, miembro, admin, dueño) e invitaciones por código.
-- Proyectos, tablero kanban, prioridades, fechas límite, asignación, comentarios.
-- Etiquetas por equipo y subtareas con progreso.
-- Vista de calendario (escritorio) y actualizaciones en tiempo real en todos los clientes.
+- **Equipos** con roles (lector, miembro, admin, dueño) e **invitaciones por código** con vencimiento y cupo de usos.
+- **Proyectos y tablero kanban** (por hacer / en curso / hecho), prioridades, fechas límite y asignación.
+- **Etiquetas** por equipo y **subtareas** con barra de progreso.
+- **Comentarios** por tarea.
+- **Calendario** mensual por fecha límite (cliente gráfico).
+- **Tiempo real**: un cambio de cualquier usuario aparece al instante en todos los clientes del equipo.
+
+## Instalación rápida
+
+```sh
+cargo install rust-tui-manager-server   # instala el binario `tm-server`
+cargo install rust-tui-manager          # cliente de terminal
+```
+
+O desde este repositorio:
+
+```sh
+cargo run -p rust-tui-manager-server                          # servidor en 0.0.0.0:7878
+cargo run -p rust-tui-manager -- http://127.0.0.1:7878        # cliente TUI (F2 = crear cuenta)
+cargo run -p tm-desktop                                       # cliente gráfico
+```
+
+El cliente gráfico necesita las dependencias de Tauri (en Linux: `webkit2gtk-4.1`, `libsoup-3.0`).
+
+## Configuración del servidor
+
+| Variable | Por defecto | Descripción |
+|---|---|---|
+| `TM_ADDR` | `0.0.0.0:7878` | Dirección donde escucha |
+| `TM_DATABASE` | `sqlite://tm-server.db` | Base de datos (se crea con permisos `0600`) |
+| `TM_JWT_SECRET` | generado y guardado en la base | Secreto de los tokens; mínimo 32 caracteres |
+| `TM_CORS_ORIGINS` | Tauri y localhost | Orígenes extra permitidos, separados por coma |
+| `TM_TLS_CERT` / `TM_TLS_KEY` | — | Certificado y clave PEM para servir HTTPS directamente |
+| `TM_TRUSTED_PROXY` | — | `1` si corre detrás de un proxy inverso propio (usa `X-Forwarded-For` para el rate limit) |
+
+Sin TLS propio, ponelo detrás de un proxy TLS antes de exponerlo a internet.
 
 ## Seguridad
 
-Contraseñas con argon2, JWT de 7 días revocables ("cerrar sesión en todos los dispositivos"), bloqueo por cuenta y por IP, límites de tamaño y de cantidad en cada endpoint, CORS restringido, cabeceras de seguridad, token de WebSocket fuera de la URL y TLS opcional.
+- Contraseñas con argon2; tokens JWT de 7 días revocables con "cerrar sesión en todos los dispositivos".
+- Bloqueo por cuenta (5 fallos = 15 minutos) y limitación por IP en login, registro y WebSocket.
+- Límites de tamaño de cuerpo, de largo de cada campo y de cantidad por recurso en todos los endpoints.
+- CORS restringido, cabeceras de seguridad y CSP estricta en la app Tauri.
+- El token del WebSocket no viaja en la URL: se envía como primer mensaje.
+- Los códigos de invitación se guardan hasheados y solo se muestran al crearlos.
 
-## Uso
+## Roles
 
-```sh
-# servidor
-cargo run -p rust-tui-manager-server            # 0.0.0.0:7878, base SQLite en ./tm-server.db
+| Rol | Puede |
+|---|---|
+| Lector | Ver todo |
+| Miembro | Crear y editar tareas, subtareas, comentarios, etiquetas y proyectos |
+| Admin | Además, agregar o quitar miembros de rango menor, cambiar roles e invitar |
+| Dueño | Todo; no puede abandonar el equipo |
 
-# cliente de terminal (? = ayuda de atajos)
-cargo run -p rust-tui-manager -- http://127.0.0.1:7878
+Nadie puede otorgar un rol igual o superior al propio.
 
-# cliente gráfico
-cargo run -p tm-desktop
+## Estructura
+
 ```
-
-Variables del servidor: `TM_ADDR`, `TM_DATABASE`, `TM_JWT_SECRET` (≥ 32 caracteres), `TM_CORS_ORIGINS`, `TM_TLS_CERT` / `TM_TLS_KEY`, `TM_TRUSTED_PROXY=1` (si corre detrás de un proxy inverso propio).
-
-Sin TLS propio, ponelo detrás de un proxy TLS antes de exponerlo a internet.
+crates/core      modelos y eventos compartidos
+crates/server    servidor axum + SQLite + WebSocket
+crates/tui       cliente de terminal
+apps/desktop     cliente Tauri (frontend estático en ui/)
+legacy/          gestor local anterior (0.1.x)
+```
 
 ## Licencia
 

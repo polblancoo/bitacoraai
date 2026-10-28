@@ -1,3 +1,6 @@
+> **Nota:** este es el README de la versión 0.1.x (gestor local de notas y snippets), conservado como referencia.
+> El proyecto pasó a ser un gestor de tareas colaborativo con servidor, TUI y app Tauri: ver el [README principal](../README.md).
+
 # Rust TUI Manager 📝
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

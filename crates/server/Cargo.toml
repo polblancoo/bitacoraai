@@ -6,7 +6,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Servidor multiusuario (axum + SQLite + WebSocket) de rust-tui-manager: equipos, tareas, roles e invitaciones"
-readme = "../../README.md"
+readme = "README.md"
 keywords = ["tasks", "kanban", "collaboration", "tui", "self-hosted"]
 categories = ["command-line-utilities"]
 

@@ -6,7 +6,7 @@
   --radius: 12px;
 }
 * { box-sizing: border-box; margin: 0; }
-html, body { height: 100%; }
+html, body, #app { height: 100%; }
 body { background: var(--bg); color: var(--fg); font: 14px/1.45 "Inter", system-ui, sans-serif; overflow: hidden; }
 button, input, textarea, select { font: inherit; color: inherit; }
 input, textarea, select { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; outline: none; }
