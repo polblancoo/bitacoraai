@@ -65,6 +65,20 @@ async function api(method, path, body) {
   return res.status === 204 ? null : res.json();
 }
 
+// cuerpo binario (adjuntos); devuelve la respuesta cruda
+async function apiRaw(method, path, body, type = "application/octet-stream") {
+  const res = await fetch(S.server + path, { method, headers: { "Content-Type": type, ...(S.token ? { Authorization: "Bearer " + S.token } : {}) }, body });
+  if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || res.statusText); }
+  return res;
+}
+async function saveFile(path, filename) {
+  const blob = await (await apiRaw("GET", path)).blob();
+  const a = h("a", { href: URL.createObjectURL(blob), download: filename });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+const RECUR = [["", "No se repite"], ["daily", "Cada día"], ["weekly", "Cada semana"], ["monthly", "Cada mes"]];
+
 const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, true); } };
 const color = (name) => AVATAR[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR.length];
 const avatar = (name) => h("span", { class: "avatar", title: name, style: `background:${color(name)}` }, name.slice(0, 2).toUpperCase());
@@ -126,7 +140,7 @@ const jumpToTask = guard(async (it) => {
 function openInbox() {
   document.getElementById("inbox-modal")?.remove();
   const inb = S.inbox; if (!inb) return;
-  const KIND = { assigned: "📌", comment: "💬", member_added: "👥", role_changed: "🎖", message: "✉" };
+  const KIND = { assigned: "📌", comment: "💬", member_added: "👥", role_changed: "🎖", message: "✉", mention: "@", reminder: "⏰" };
   document.body.append(h("div", { class: "overlay", id: "inbox-modal", onmousedown: (e) => e.target.id === "inbox-modal" && closeInbox() },
     h("div", { class: "modal" },
       h("h3", {}, `Novedades${S.unread ? ` (${S.unread} sin leer)` : ""}`),
@@ -362,9 +376,10 @@ const createTask = guard(async (status) => {
     { name: "priority", label: "Prioridad", type: "select", options: PRIO.map((p, i) => [i, p]), value: 1 },
     { name: "start", label: "Empieza (opcional)", type: "date" },
     { name: "due", label: "Vence (opcional)", type: "date" },
+    { name: "recurrence", label: "Repetición", type: "select", options: RECUR },
   ], "Crear tarea"); if (!f) return;
   const day = (d) => (d ? new Date(d + "T12:00:00Z").toISOString() : undefined);
-  let t = await api("POST", `/api/projects/${S.project.id}/tasks`, { title: f.title, description: f.description, priority: +f.priority, start: day(f.start), due: day(f.due) });
+  let t = await api("POST", `/api/projects/${S.project.id}/tasks`, { title: f.title, description: f.description, priority: +f.priority, start: day(f.start), due: day(f.due), recurrence: f.recurrence || undefined });
   if (f.status !== "todo") t = await api("PATCH", `/api/tasks/${t.id}`, { status: f.status });
   upsert(t); render();
 });
@@ -378,10 +393,17 @@ function upsert(t) {
 // ---------- modal de tarea ----------
 function closeModal() { S.open = null; S.redrawSubs = null; document.getElementById("modal")?.remove(); }
 
+// resalta @usuario cuando coincide con un miembro del equipo (todo como texto, nunca como HTML)
+function withMentions(body) {
+  const names = new Set(S.members.map((m) => m.username.toLowerCase()));
+  return body.split(/(@[\p{L}\p{N}_.-]+)/u).map((part) =>
+    part.startsWith("@") && names.has(part.slice(1).replace(/[.-]+$/, "").toLowerCase()) ? h("b", { class: "mention" }, part) : part);
+}
+
 function renderComments() {
   const box = document.getElementById("comments"); if (!box) return;
   box.replaceChildren(...S.comments.map((c) => h("div", { class: "comment" },
-    h("b", {}, c.username), h("small", {}, new Date(c.created_at).toLocaleString()), h("div", {}, c.body))));
+    h("b", {}, c.username), h("small", {}, new Date(c.created_at).toLocaleString()), h("div", {}, withMentions(c.body)))));
   box.scrollTop = box.scrollHeight;
 }
 
@@ -402,6 +424,7 @@ const openTask = guard(async (task) => {
     (leader ? pickable : [...pickable, ...S.members.filter((m) => m.id === ass && m.id !== meId)]).map((m) => h("option", { value: m.id, selected: ass === m.id }, m.id === meId && !leader ? `Yo (${m.username})` : m.username)));
   const whoHint = leader ? "Como líder podés asignarla a cualquier miembro" : can("member") ? "Podés tomar una tarea libre o soltar la tuya" : "";
   const start = h("input", { type: "date", value: cur().start ? cur().start.slice(0, 10) : "" });
+  const rec = h("select", { disabled: !can("member") }, RECUR.map(([v, l]) => h("option", { value: v, selected: (cur().recurrence || "") === v }, l)));
   const due = h("input", { type: "date", value: cur().due ? cur().due.slice(0, 10) : "" });
   const comment = h("input", { placeholder: "Escribí un comentario…", maxLength: 4000 });
 
@@ -463,6 +486,23 @@ const openTask = guard(async (task) => {
     e.target.value = "";
   }), disabled: !can("member") }, h("option", { value: "" }, "+ Agregar dependencia…"),
     S.tasks.filter((t) => !t.parent_id && t.id !== task.id).map((t) => h("option", { value: t.id }, clip(t.title, 50))));
+  // adjuntos: hasta 10 por tarea y 2 MB cada uno; siempre se descargan, nunca se abren en la página
+  const attBox = h("div", { class: "subs" });
+  const drawAtts = async () => {
+    const list = await api("GET", `/api/tasks/${task.id}/attachments`).catch(() => []);
+    attBox.replaceChildren(...list.map((a) => h("div", { class: "sub" },
+      h("span", {}, "📎 " + a.name), h("small", {}, `${fmtSize(a.size)} · ${a.username}`),
+      h("button", { class: "ghost", title: "Descargar", onclick: guard(() => saveFile(`/api/attachments/${a.id}`, a.name)) }, "⬇"),
+      (can("admin") || a.user_id === S.user?.id) && can("member") && h("button", { class: "ghost danger", title: "Borrar", onclick: guard(async () => {
+        await api("DELETE", `/api/attachments/${a.id}`); drawAtts();
+      }) }, "✕"))));
+  };
+  const attAdd = h("input", { type: "file", disabled: !can("member"), onchange: guard(async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { e.target.value = ""; throw new Error("el archivo supera los 2 MB"); }
+    await apiRaw("POST", `/api/tasks/${task.id}/attachments?name=${encodeURIComponent(f.name)}`, f);
+    e.target.value = ""; drawAtts(); toast("Archivo adjuntado");
+  }) });
   const send = guard(async () => {
     if (!comment.value.trim()) return;
     const c = await api("POST", `/api/tasks/${task.id}/comments`, { body: comment.value });
@@ -478,6 +518,7 @@ const openTask = guard(async (task) => {
       ...(+(who.value || 0) !== (cur().assignee_id || 0) ? { assignee_id: who.value ? +who.value : null } : {}),
       due: due.value ? new Date(due.value + "T12:00:00Z").toISOString() : null,
       start: start.value ? new Date(start.value + "T12:00:00Z").toISOString() : null,
+      recurrence: rec.value || null,
     });
     closeModal();
   });
@@ -497,8 +538,9 @@ const openTask = guard(async (task) => {
       h("div", { class: "grid2" },
         h("label", {}, "Estado", status), h("label", {}, "Prioridad", prio),
         h("label", {}, "Responsable", who), h("label", {}, "Empieza", start),
-        h("label", {}, "Vence", due), h("small", { class: "hint" }, whoHint)),
+        h("label", {}, "Vence", due), h("label", {}, "Repetición", rec), h("small", { class: "hint" }, whoHint)),
       h("h3", {}, "Depende de"), depBox, depAdd,
+      h("h3", {}, "Adjuntos"), attBox, attAdd,
       h("h3", {}, "Comentarios"),
       h("div", { class: "comments", id: "comments" }),
       comment,
@@ -507,7 +549,7 @@ const openTask = guard(async (task) => {
         h("button", { onclick: () => { closeModal(); openMindmap(cur()); } }, "Mapa mental"), h("span", { class: "spacer" }),
         h("button", { onclick: closeModal }, "Cancelar"), h("button", { class: "primary", onclick: save }, "Guardar"))));
   document.body.append(modal);
-  drawLabels(); drawSubs(); drawDeps();
+  drawLabels(); drawSubs(); drawDeps(); drawAtts();
   renderComments();
   title.focus();
 });
@@ -626,10 +668,10 @@ function appView() {
         S.team && h("button", { onclick: openTeam }, can("admin") ? "Equipo · Invitar" : "Equipo"),
         S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
         h("div", { class: "seg" },
-          [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"]].map(([v, l]) =>
+          [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"], ["activity", "Actividad"]].map(([v, l]) =>
             h("button", { class: S.view === v ? "on" : "", onclick: () => { S.view = v; render(); } }, l))),
         search),
-      S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : h("div", { class: "board" }, STATUS.map(column)))
+      S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
         : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos")));
 }
 
@@ -667,9 +709,32 @@ const linkTelegram = guard(async () => {
       h("div", { class: "row" }, h("button", { class: "primary", onclick: close }, "Listo")))));
 });
 
+const duplicateProject = guard(async () => {
+  const f = await form("Duplicar proyecto", [{ name: "name", label: "Nombre de la copia", value: `Copia de ${S.project.name}`, max: 100 }], "Duplicar"); if (!f) return;
+  const p = await api("POST", `/api/projects/${S.project.id}/duplicate`, { name: f.name });
+  if (!S.projects.some((x) => x.id === p.id)) S.projects.push(p);
+  await selectProject(p); toast("Proyecto duplicado: las tareas quedaron pendientes y sin responsable");
+});
+
+// ---------- actividad ----------
+function activityView() {
+  if (!S.activity || S.activity.project_id !== S.project.id) {
+    S.activity = { project_id: S.project.id, items: [] };
+    const id = S.project.id;
+    api("GET", `/api/projects/${id}/activity`).then((items) => { if (S.project?.id === id) { S.activity = { project_id: id, items }; render(); } }).catch((e) => toast(e.message, true));
+  }
+  const items = S.activity.items;
+  return h("div", { class: "activity" },
+    h("div", { class: "cal-head" }, h("strong", {}, "Actividad del proyecto"), h("span", { class: "spacer" }),
+      h("button", { onclick: () => { S.activity = null; render(); } }, "Actualizar")),
+    items.length === 0 ? h("div", { class: "empty" }, "Todavía no hay actividad.")
+      : h("div", { class: "act-list" }, items.map((a) => h("div", { class: "act-row" }, avatar(a.username || "?"),
+        h("span", { class: "grow" }, h("b", {}, a.username || "alguien"), " " + a.text), h("small", {}, new Date(a.created_at).toLocaleString())))));
+}
+
 // ---------- configuración ----------
 const IS_WEB = /^https?:$/.test(location.protocol) && location.hostname !== "tauri.localhost";
-const VIEWS = [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"]];
+const VIEWS = [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"], ["activity", "Actividad"]];
 
 const openSettings = guard(async () => {
   document.getElementById("settings-modal")?.remove();
@@ -704,7 +769,10 @@ const openSettings = guard(async () => {
         line("Unirme a otro equipo con un código", h("button", { onclick: go(joinWithCode) }, "Unirme")),
         line("Crear un equipo nuevo", h("button", { onclick: go(createTeam) }, "Crear"))),
       S.team && sec("Proyecto",
-        line(S.project ? `Proyecto actual: ${S.project.name}` : "Sin proyectos", h("button", { onclick: go(createProject) }, "Nuevo proyecto"))),
+        line(S.project ? `Proyecto actual: ${S.project.name}` : "Sin proyectos", h("button", { onclick: go(createProject) }, "Nuevo proyecto")),
+        S.project && can("member") && line("Usar como plantilla (copia tareas, etiquetas y dependencias)", h("button", { onclick: go(duplicateProject) }, "Duplicar")),
+        S.project && line("Exportar las tareas", h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
+          h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
       sec("Preferencias",
         line("Vista inicial", view),
         line("Servidor", server),
@@ -720,7 +788,7 @@ const openSettings = guard(async () => {
 // ---------- ayuda con buscador y atajos de teclado ----------
 const SHORTCUTS = [
   ["?", "Abrir esta ayuda"], ["/", "Ir al buscador"], ["n", "Nueva tarea (en Por hacer)"],
-  ["1", "Vista Tablero"], ["2", "Vista Calendario"], ["3", "Vista Gantt"], ["4", "Vista Pizarra"],
+  ["1", "Vista Tablero"], ["2", "Vista Calendario"], ["3", "Vista Gantt"], ["4", "Vista Pizarra"], ["5", "Vista Actividad"], ["@usuario", "En un comentario: menciona y avisa a esa persona"],
   ["Esc", "Cerrar ventana"], [",", "Configuración"], ["Ctrl+T c", "Configuración"], ["Ctrl+T s", "Enviar un mensaje al equipo"], ["Ctrl+T g", "Vincular Telegram"],
   ["Ctrl+T m", "Equipo: miembros y agregar con búsqueda"], ["Ctrl+T i", "Equipo: generar código de invitación"],
   ["Ctrl+T j", "Unirse a un equipo con código"], ["Ctrl+T t", "Crear equipo"], ["Ctrl+T p", "Crear proyecto"],
@@ -763,8 +831,9 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === ",") { e.preventDefault(); openSettings(); }
   else if (e.key === "/") { e.preventDefault(); document.querySelector(".top input")?.focus(); }
   else if (e.key === "n" && S.project && can("member")) { e.preventDefault(); createTask("todo"); }
-  else if (["1", "2", "3", "4"].includes(e.key)) { S.view = ["board", "calendar", "gantt", "canvas"][+e.key - 1]; render(); }
+  else if (["1", "2", "3", "4", "5"].includes(e.key)) { S.view = ["board", "calendar", "gantt", "canvas", "activity"][+e.key - 1]; render(); }
 });
 
+if (IS_WEB && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 render();
 if (S.token) boot(true).catch(() => { S.token = null; render(); });

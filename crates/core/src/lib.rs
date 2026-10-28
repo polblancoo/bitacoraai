@@ -171,6 +171,9 @@ pub struct Task {
     pub subtasks_total: i64,
     #[serde(default)]
     pub subtasks_done: i64,
+    /// Repetición: "daily", "weekly" o "monthly". Al completarla se crea la siguiente.
+    #[serde(default)]
+    pub recurrence: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -235,6 +238,8 @@ pub struct NewTask {
     pub parent_id: Option<Id>,
     #[serde(default)]
     pub start: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub recurrence: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -262,6 +267,8 @@ pub struct TaskPatch {
     pub due: Option<Option<DateTime<Utc>>>,
     #[serde(default, deserialize_with = "double_option")]
     pub start: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub recurrence: Option<Option<String>>,
 }
 
 fn double_option<'de, T, D>(d: D) -> Result<Option<Option<T>>, D::Error>
@@ -449,4 +456,32 @@ pub enum Event {
     CanvasItemDeleted { id: Id, project_id: Id },
     CanvasLink(CanvasLink),
     CanvasLinkDeleted { id: Id, project_id: Id },
+}
+
+// ---- Adjuntos, actividad ----
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Attachment {
+    pub id: Id,
+    pub task_id: Id,
+    pub user_id: Id,
+    pub username: String,
+    pub name: String,
+    pub size: i64,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Activity {
+    pub id: Id,
+    pub project_id: Id,
+    pub user_id: Id,
+    pub username: String,
+    pub text: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DuplicateProject {
+    pub name: String,
 }

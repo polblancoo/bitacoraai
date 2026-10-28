@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     priority INTEGER NOT NULL DEFAULT 1,
     assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     due TEXT,
+    recurrence TEXT,
+    remind_state INTEGER NOT NULL DEFAULT 0,
     parent_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
     start TEXT,
     created_at TEXT NOT NULL,
@@ -113,3 +115,22 @@ CREATE TABLE IF NOT EXISTS canvas_links (
     UNIQUE (from_id, to_id)
 );
 CREATE INDEX IF NOT EXISTS idx_canvas_items_project ON canvas_items(project_id);
+
+CREATE TABLE IF NOT EXISTS attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    name TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_task ON attachments(task_id);
+CREATE TABLE IF NOT EXISTS activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_activity_project ON activity(project_id, id);

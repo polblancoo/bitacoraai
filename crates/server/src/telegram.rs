@@ -133,7 +133,10 @@ async fn handle(st: &AppState, tg: &Telegram, chat: i64, text: String) {
             let _ = sqlx::query("UPDATE users SET telegram_chat_id = NULL WHERE telegram_chat_id = ?").bind(chat).execute(&st.db).await;
             "Listo: ya no vas a recibir avisos por acá.".to_string()
         }
-        _ => "Hola. Para vincular tu cuenta, generá un código en la app (Configuración → Telegram) y mandámelo así: /start CÓDIGO\n/stop desvincula.".to_string(),
+        ("/tareas", _) => my_tasks(st, chat).await,
+        ("/hecho", Some(n)) => done(st, chat, n).await,
+        ("/hecho", None) => "Decime cuál: /hecho NÚMERO (el número sale de /tareas).".to_string(),
+        _ => "Hola. Para vincular tu cuenta, generá un código en la app (Configuración → Telegram) y mandámelo así: /start CÓDIGO\n\nDespués podés usar:\n/tareas — tus tareas abiertas\n/hecho N — marcar la tarea N como hecha\n/stop — desvincular".to_string(),
     };
     if let Err(e) = tg.send(chat, &reply).await {
         tracing::warn!("telegram sendMessage: {e}");
@@ -161,4 +164,42 @@ async fn link(st: &AppState, chat: i64, code: &str) -> String {
         .execute(&st.db)
         .await;
     format!("✅ Vinculado a {name}. Vas a recibir por acá las novedades y los mensajes de tu equipo.")
+}
+
+const NOT_LINKED: &str = "Esta conversación no está vinculada a ninguna cuenta. Generá un código en la app y mandámelo con /start CÓDIGO.";
+
+async fn linked_user(st: &AppState, chat: i64) -> Option<i64> {
+    sqlx::query_scalar::<_, i64>("SELECT id FROM users WHERE telegram_chat_id = ?").bind(chat).fetch_optional(&st.db).await.ok().flatten()
+}
+
+async fn my_tasks(st: &AppState, chat: i64) -> String {
+    let Some(user) = linked_user(st, chat).await else { return NOT_LINKED.into() };
+    let rows = sqlx::query(
+        "SELECT t.id, t.title, t.status, t.due, p.name AS project FROM tasks t JOIN projects p ON p.id = t.project_id \
+         WHERE t.assignee_id = ? AND t.status != 'done' ORDER BY t.due IS NULL, t.due, t.id LIMIT 15",
+    )
+    .bind(user)
+    .fetch_all(&st.db)
+    .await
+    .unwrap_or_default();
+    if rows.is_empty() {
+        return "No tenés tareas abiertas. 🎉".into();
+    }
+    let mut out = String::from("Tus tareas abiertas:\n");
+    for r in rows {
+        let due: Option<chrono::DateTime<Utc>> = r.get("due");
+        let due = due.map(|d| format!(" · vence {}", d.format("%d/%m"))).unwrap_or_default();
+        out.push_str(&format!("#{} {} ({}{due})\n", r.get::<i64, _>("id"), r.get::<String, _>("title"), r.get::<String, _>("project")));
+    }
+    out.push_str("\nPara cerrar una: /hecho NÚMERO");
+    out
+}
+
+async fn done(st: &AppState, chat: i64, n: &str) -> String {
+    let Some(user) = linked_user(st, chat).await else { return NOT_LINKED.into() };
+    let Ok(id) = n.trim_start_matches('#').parse::<i64>() else { return "El número no es válido. Mirá /tareas.".into() };
+    match crate::extras::set_done(st, user, id).await {
+        Ok(t) => format!("✅ «{}» marcada como hecha.", t.title),
+        Err(e) => format!("No pude: {e}"),
+    }
 }

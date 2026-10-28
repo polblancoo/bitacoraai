@@ -54,6 +54,14 @@ Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un �
 - **Responsable**: el líder (admin o dueño) asigna a cualquier miembro; un miembro solo toma tareas libres o suelta la suya.
 - **Bandeja de novedades**: al iniciar sesión ves lo que pasó mientras no estabas (te asignaron, comentaron, te sumaron) y tus tareas abiertas; llega en vivo y, si cargás y verificás tu email, también por correo.
 - **Cliente web**: `tm-server` sirve la misma interfaz gráfica en `/` (abrí `http://tu-servidor:7878` en el navegador, sin instalar nada; `TM_WEB=0` lo desactiva).
+- **Menciones**: escribí `@usuario` en un comentario y esa persona recibe el aviso (bandeja, email y Telegram).
+- **Recordatorios de vencimiento**: el responsable recibe un aviso cuando falta menos de 24 horas y otro, una sola vez, cuando la tarea vence sin cerrarse.
+- **Tareas recurrentes** (diaria, semanal o mensual): al completarlas se crea la siguiente, con la fecha corrida, las etiquetas y las subtareas pendientes.
+- **Adjuntos** (hasta 10 por tarea, 2 MB cada uno): siempre se descargan, nunca se ejecutan ni se muestran en la página.
+- **Plantillas**: duplicá un proyecto con sus tareas, etiquetas y dependencias (queda todo pendiente y sin responsable).
+- **Exportar** las tareas de un proyecto a CSV o JSON (el CSV neutraliza fórmulas de planilla).
+- **Actividad** por proyecto: quién creó, movió, asignó, comentó o adjuntó, y cuándo.
+- **Web instalable (PWA)**: desde el navegador del celular o la compu podés "instalarla" como una app.
 - **Telegram** (opcional): cada usuario vincula su cuenta con el bot y recibe por ahí las novedades; cualquier miembro puede mandar **mensajes al equipo** (bandeja, email y Telegram).
 - **Agregar miembros con búsqueda** por prefijo de usuario, atajos con prefijo `Ctrl+T` y **ayuda con buscador** (`?`) en ambos clientes.
 - **Tiempo real**: un cambio de cualquier usuario aparece al instante en todos los clientes del equipo.
@@ -98,9 +106,10 @@ Para Telegram, creá un bot con [@BotFather](https://t.me/BotFather) y pasale el
 
 | Variable | Descripción |
 |---|---|
+| `TM_REMINDER_SECS` | Cada cuántos segundos se revisan los vencimientos (por defecto 300) |
 | `TM_TELEGRAM_TOKEN` | Token del bot. El servidor lo atiende por *long polling*: no necesita URL pública ni HTTPS propio |
 
-Cada usuario lo vincula en **Configuración → Telegram** (web/escritorio) o con `Ctrl+T g` (TUI): genera un código de un solo uso (15 min) y se lo manda al bot como `/start CÓDIGO`; `/stop` desvincula. Solo se escribe a chats vinculados así, nunca a ids arbitrarios.
+Cada usuario lo vincula en **Configuración → Telegram** (web/escritorio) o con `Ctrl+T g` (TUI): genera un código de un solo uso (15 min) y se lo manda al bot como `/start CÓDIGO`; `/stop` desvincula. Una vez vinculado, el bot también responde: `/tareas` (tus tareas abiertas) y `/hecho N` (cierra la tarea N si es tuya, o cualquiera si sos admin). Solo se escribe a chats vinculados así, nunca a ids arbitrarios.
 
 Cada usuario carga su email y lo confirma con un código de 6 dígitos; solo a las direcciones verificadas se les envían avisos (tope por hora).
 

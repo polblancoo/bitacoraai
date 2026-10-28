@@ -3,6 +3,7 @@ mod error;
 mod canvas;
 mod limits;
 mod notify;
+mod extras;
 mod telegram;
 mod web;
 mod profile;
@@ -87,6 +88,8 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE users ADD COLUMN telegram_chat_id INTEGER",
         "ALTER TABLE users ADD COLUMN tg_code_hash TEXT",
         "ALTER TABLE users ADD COLUMN tg_code_expires TEXT",
+        "ALTER TABLE tasks ADD COLUMN recurrence TEXT",
+        "ALTER TABLE tasks ADD COLUMN remind_state INTEGER NOT NULL DEFAULT 0",
     ] {
         let _ = sqlx::query(alter).execute(db).await;
     }
@@ -166,8 +169,9 @@ async fn main() -> anyhow::Result<()> {
         telegram: telegram::Telegram::from_env().await.map(Arc::new),
     };
     telegram::spawn_poller(state.clone());
+    extras::spawn_reminders(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

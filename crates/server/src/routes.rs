@@ -82,7 +82,7 @@ pub(crate) async fn team_of_task(st: &AppState, task: Id) -> Result<Id> {
 }
 
 pub(crate) const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.title, t.description, t.status, t.priority, \
-    t.assignee_id, u.username AS assignee, t.due, t.start, t.parent_id, t.created_at, t.updated_at, \
+    t.assignee_id, u.username AS assignee, t.due, t.start, t.recurrence, t.parent_id, t.created_at, t.updated_at, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id) AS sub_total, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id AND s.status = 'done') AS sub_done \
     FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id";
@@ -104,6 +104,7 @@ pub(crate) fn task_from_row(r: &SqliteRow) -> Task {
         labels: vec![],
         subtasks_total: r.get("sub_total"),
         subtasks_done: r.get("sub_done"),
+        recurrence: r.get("recurrence"),
         created_at: r.get("created_at"),
         updated_at: r.get("updated_at"),
     }
@@ -581,7 +582,7 @@ async fn emit_parent(st: &AppState, team: Id, parent: Option<Id>) {
 
 // ---------- tasks ----------
 
-async fn list_tasks(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Vec<Task>>> {
+pub(crate) async fn list_tasks(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Vec<Task>>> {
     ensure_member(&st, team_of_project(&st, project).await?, user.id).await?;
     let rows = sqlx::query(sqlx::AssertSqlSafe(format!("{TASK_SELECT} WHERE t.project_id = ? ORDER BY t.priority DESC, t.id LIMIT 5000")))
         .bind(project)
@@ -624,6 +625,7 @@ async fn create_task(
         return Err(too_many("tareas", MAX_TASKS_PER_PROJECT));
     }
     check_assign(&st, team, user.id, caller, None, n.assignee_id).await?;
+    let recurrence = crate::extras::valid_recurrence(n.recurrence.as_deref())?;
     if let Some(parent) = n.parent_id {
         let row = sqlx::query("SELECT project_id, parent_id FROM tasks WHERE id = ?")
             .bind(parent)
@@ -642,8 +644,8 @@ async fn create_task(
     }
     let now = Utc::now();
     let id = sqlx::query(
-        "INSERT INTO tasks (project_id, title, description, priority, assignee_id, due, parent_id, start, created_at, updated_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (project_id, title, description, priority, assignee_id, due, parent_id, start, recurrence, created_at, updated_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(project)
     .bind(n.title.trim())
@@ -653,12 +655,16 @@ async fn create_task(
     .bind(n.due)
     .bind(n.parent_id)
     .bind(n.start)
+    .bind(recurrence)
     .bind(now)
     .bind(now)
     .execute(&st.db)
     .await?
     .last_insert_rowid();
     let t = fetch_task(&st, id).await?;
+    if t.parent_id.is_none() {
+        crate::extras::log(&st, project, user.id, format!("creó la tarea «{}»", t.title)).await;
+    }
     st.emit(team, Event::TaskCreated(t.clone()));
     emit_parent(&st, team, t.parent_id).await;
     notify_assigned(&st, team, user.id, &t).await;
@@ -682,9 +688,15 @@ async fn update_task(
     let assignee = p.assignee_id.unwrap_or(cur.assignee_id);
     let due = p.due.unwrap_or(cur.due);
     let start = p.start.unwrap_or(cur.start);
+    let recurrence = match &p.recurrence {
+        Some(v) => crate::extras::valid_recurrence(v.as_deref())?,
+        None => cur.recurrence.clone(),
+    };
+    // si cambia el vencimiento o el responsable, los recordatorios vuelven a empezar
+    let reminders_reset = due != cur.due || assignee != cur.assignee_id;
     sqlx::query(
-        "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, assignee_id = ?, due = ?, start = ?, updated_at = ? \
-         WHERE id = ?",
+        "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, assignee_id = ?, due = ?, start = ?, recurrence = ?, \
+         remind_state = CASE WHEN ? THEN 0 ELSE remind_state END, updated_at = ? WHERE id = ?",
     )
     .bind(p.title.as_deref().map(str::trim).filter(|s| !s.is_empty()).unwrap_or(&cur.title))
     .bind(p.description.as_deref().unwrap_or(&cur.description))
@@ -693,6 +705,8 @@ async fn update_task(
     .bind(assignee)
     .bind(due)
     .bind(start)
+    .bind(recurrence)
+    .bind(reminders_reset)
     .bind(Utc::now())
     .bind(id)
     .execute(&st.db)
@@ -703,6 +717,7 @@ async fn update_task(
     if t.assignee_id != cur.assignee_id {
         notify_assigned(&st, team, user.id, &t).await;
     }
+    crate::extras::after_update(&st, team, user.id, &cur, &t).await;
     Ok(Json(t))
 }
 
@@ -711,7 +726,11 @@ async fn delete_task(State(st): State<AppState>, user: AuthUser, Path(id): Path<
     ensure_writer(&st, team, user.id).await?;
     let row = sqlx::query("SELECT project_id, parent_id FROM tasks WHERE id = ?").bind(id).fetch_one(&st.db).await?;
     let (project, parent): (Id, Option<Id>) = (row.get("project_id"), row.get("parent_id"));
+    let title: String = sqlx::query_scalar("SELECT title FROM tasks WHERE id = ?").bind(id).fetch_one(&st.db).await.unwrap_or_default();
     sqlx::query("DELETE FROM tasks WHERE id = ?").bind(id).execute(&st.db).await?;
+    if parent.is_none() {
+        crate::extras::log(&st, project, user.id, format!("borró la tarea «{title}»")).await;
+    }
     st.emit(team, Event::TaskDeleted { id, project_id: project });
     emit_parent(&st, team, parent).await;
     Ok(StatusCode::NO_CONTENT)
@@ -779,7 +798,9 @@ async fn add_comment(
     .unwrap_or_default();
     let title: String = sqlx::query_scalar("SELECT title FROM tasks WHERE id = ?").bind(task).fetch_one(&st.db).await.unwrap_or_default();
     let preview: String = c.body.chars().take(200).collect();
-    for to in people.into_iter().filter(|u| *u != user.id) {
+    crate::extras::log_task(&st, task, user.id, format!("comentó en «{title}»")).await;
+    let mentioned = crate::extras::notify_mentions(&st, team, user.id, &c.username, task, &title, &c.body).await;
+    for to in people.into_iter().filter(|u| *u != user.id && !mentioned.contains(u)) {
         crate::notify::notify(&st, to, "comment", Some(team), Some(task), format!("{} comentó en «{title}»: {preview}", c.username)).await;
     }
     Ok(Json(c))

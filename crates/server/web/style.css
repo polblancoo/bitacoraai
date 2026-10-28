@@ -206,3 +206,12 @@ aside { overflow-x: hidden; }
 
 .top button { white-space: nowrap; }
 .top h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* actividad, menciones */
+.activity { flex: 1; padding: 14px 22px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.act-list { overflow: auto; display: grid; gap: 6px; align-content: start; }
+.act-row { display: flex; align-items: center; gap: 10px; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.act-row .avatar { margin: 0; border: 0; flex: none; }
+.act-row small { color: var(--dim); white-space: nowrap; }
+.mention { color: var(--cyan); background: #7dcfff22; border-radius: 4px; padding: 0 3px; }
+.modal input[type="file"] { padding: 6px; }

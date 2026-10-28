@@ -39,6 +39,9 @@ pub const CANVAS_TEXT_MAX: usize = 2_000;
 pub const CANVAS_COORD_MAX: f64 = 100_000.0;
 pub const EMAIL_MAX: usize = 254;
 /// Emails salientes por usuario y hora (evita usar el servidor para spam).
+pub const MAX_ATTACHMENT_BYTES: usize = 2 * 1024 * 1024;
+pub const MAX_ATTACHMENTS_PER_TASK: i64 = 10;
+pub const ATTACHMENT_NAME_MAX: usize = 100;
 pub const MAX_MEMBERS_PER_MESSAGE: usize = 200;
 pub const EMAILS_PER_HOUR: u32 = 20;
 
