@@ -3,12 +3,39 @@
   "productName": "Rust TUI Manager",
   "version": "0.2.0",
   "identifier": "com.polblancoo.rust-tui-manager",
-  "build": { "frontendDist": "../ui" },
+  "build": {
+    "frontendDist": "../ui"
+  },
   "app": {
     "windows": [
-      { "title": "Rust TUI Manager", "width": 1280, "height": 800, "minWidth": 900, "minHeight": 600 }
+      {
+        "title": "Rust TUI Manager",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600
+      }
     ],
-    "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src http: https: ws: wss:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" }
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src http: https: ws: wss:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    }
   },
-  "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.png"] }
+  "bundle": {
+    "active": true,
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png"
+    ],
+    "category": "Productivity",
+    "shortDescription": "Gestor de tareas colaborativo",
+    "longDescription": "Cliente gráfico del gestor de tareas colaborativo Rust TUI Manager: tablero kanban, calendario, equipos, roles e invitaciones.",
+    "publisher": "polblancoo"
+  }
 }
