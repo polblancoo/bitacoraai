@@ -364,16 +364,21 @@ const openTeam = guard(async () => {
       }) }, "✕"));
   });
 
-  const body = [h("h3", {}, `Equipo ${S.team.name}`), h("div", { class: "members-list" }, rows)];
+  // primero lo que se hace seguido (agregar e invitar); la lista de miembros va al final
+  const body = [h("h3", {}, `Equipo ${S.team.name}`)];
+  if (!admin) body.push(h("small", { class: "warn" }, "Solo un admin o el dueño del equipo puede agregar miembros y generar códigos de invitación."));
   if (admin) {
-    const user = h("input", { placeholder: "Buscar usuario…", maxLength: 32, list: "user-suggest", autocomplete: "off" });
+    const user = h("input", { placeholder: "Buscar usuario…", maxLength: 32, autocomplete: "off" });
+    user.setAttribute("list", "user-suggest");
     const sug = h("datalist", { id: "user-suggest" });
+    const hint = h("small", { class: "warn" });
     let lastQ = "";
     user.addEventListener("input", async () => {
       const q = user.value.trim(); if (!q || q === lastQ) return; lastQ = q;
       try {
         const us = await api("GET", `/api/users/search?q=${encodeURIComponent(q)}&team_id=${S.team.id}`);
         sug.replaceChildren(...us.map((u) => h("option", { value: u.username })));
+        hint.textContent = us.length ? "" : "No hay usuarios registrados con ese nombre: pedile que se registre o mandale un código de invitación.";
       } catch {}
     });
     const role = roleSel("member", null, false, RANK[myRole()]);
@@ -381,12 +386,13 @@ const openTeam = guard(async () => {
     const grant = ROLES.filter(([r]) => RANK[r] < RANK[myRole()] && r !== "owner");
     const invRole = h("select", {}, grant.map(([r, l]) => h("option", { value: r, selected: r === "member" }, l)));
     body.push(
-      h("h3", {}, "Agregar por usuario"),
+      h("h3", {}, "Agregar por usuario (ya registrado)"),
       h("div", { class: "row" }, user, sug, role, h("button", { class: "primary", onclick: guard(async () => {
         await api("POST", `/api/teams/${S.team.id}/members`, { username: user.value, role: role.value });
         user.value = ""; toast("Miembro agregado");
       }) }, "Agregar")),
-      h("h3", {}, "Invitación por código"),
+      hint,
+      h("h3", {}, "Invitar con un código (si todavía no tiene cuenta)"),
       h("div", { class: "row" }, invRole, h("button", { onclick: guard(async () => {
         const r = await api("POST", `/api/teams/${S.team.id}/invites`, { role: invRole.value });
         inv.replaceChildren(h("code", {}, r.code), h("button", { onclick: () => navigator.clipboard?.writeText(r.code).then(() => toast("Código copiado")) }, "Copiar"),
@@ -398,6 +404,7 @@ const openTeam = guard(async () => {
         `${ROLES.find(([r]) => r === i.role)[1]} · ${i.uses}/${i.max_uses} usos · vence ${new Date(i.expires_at).toLocaleDateString()}`),
         h("button", { class: "ghost danger", onclick: guard(async () => { await api("DELETE", `/api/invites/${i.id}`); openTeam(); }) }, "Revocar"))));
   }
+  body.push(h("h3", {}, `Miembros (${S.members.length})`), h("div", { class: "members-list" }, rows));
   body.push(h("div", { class: "row" }, h("button", { onclick: () => document.getElementById("team-modal")?.remove() }, "Cerrar")));
   document.body.append(h("div", { class: "overlay", id: "team-modal", onmousedown: (e) => e.target.id === "team-modal" && e.target.remove() },
     h("div", { class: "modal" }, body)));

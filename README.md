@@ -42,6 +42,10 @@ Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un �
     <td><img src="docs/screenshots/web-settings.png" alt="Menú de configuración: cuenta, Telegram, equipo y preferencias"></td>
     <td><img src="docs/screenshots/web-message.png" alt="Mensaje al equipo (bandeja, email y Telegram)"></td>
   </tr>
+  <tr>
+    <td><img src="docs/screenshots/web-team.png" alt="Equipo: agregar por usuario, generar código de invitación y miembros"></td>
+    <td><img src="docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
+  </tr>
 </table>
 
 ## Funciones

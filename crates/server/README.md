@@ -15,6 +15,10 @@ Clientes: la TUI, la app gráfica de escritorio y la **web que este mismo servid
     <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-inbox.png" alt="Bandeja de novedades"></td>
     <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-settings.png" alt="Menú de configuración"></td>
   </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-team.png" alt="Equipo e invitaciones"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
+  </tr>
 </table>
 
 ## Uso
