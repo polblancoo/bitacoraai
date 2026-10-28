@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Cliente gráfico (Tauri) de rust-tui-manager"
+publish = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

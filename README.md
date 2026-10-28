@@ -23,7 +23,7 @@ Contraseñas con argon2, JWT de 7 días revocables ("cerrar sesión en todos los
 
 ```sh
 # servidor
-cargo run -p tm-server            # 0.0.0.0:7878, base SQLite en ./tm-server.db
+cargo run -p rust-tui-manager-server            # 0.0.0.0:7878, base SQLite en ./tm-server.db
 
 # cliente de terminal (? = ayuda de atajos)
 cargo run -p rust-tui-manager -- http://127.0.0.1:7878

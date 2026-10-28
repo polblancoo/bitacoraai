@@ -3758,11 +3758,45 @@ dependencies = [
  "futures-util",
  "ratatui",
  "reqwest 0.12.28",
+ "rust-tui-manager-core",
  "serde",
  "serde_json",
- "tm-core",
  "tokio",
  "tokio-tungstenite 0.26.2",
+]
+
+[[package]]
+name = "rust-tui-manager-core"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "rust-tui-manager-server"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "axum",
+ "axum-server",
+ "chrono",
+ "futures-util",
+ "jsonwebtoken",
+ "rust-tui-manager-core",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sqlx",
+ "tokio",
+ "tower-http 0.7.1",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -5064,45 +5098,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
-name = "tm-core"
-version = "0.2.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "uuid",
-]
-
-[[package]]
 name = "tm-desktop"
 version = "0.2.0"
 dependencies = [
  "tauri",
  "tauri-build",
-]
-
-[[package]]
-name = "tm-server"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "argon2",
- "axum",
- "axum-server",
- "chrono",
- "futures-util",
- "jsonwebtoken",
- "rustls",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "sqlx",
- "tm-core",
- "tokio",
- "tower-http 0.7.1",
- "tracing",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]

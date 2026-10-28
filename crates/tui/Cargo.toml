@@ -5,9 +5,13 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Cliente de terminal (ratatui) para el gestor de tareas colaborativo rust-tui-manager"
+readme = "../../README.md"
+keywords = ["tasks", "kanban", "collaboration", "tui", "self-hosted"]
+categories = ["command-line-utilities"]
 
 [dependencies]
-tm-core = { path = "../core" }
+tm-core = { package = "rust-tui-manager-core", path = "../core", version = "0.2.0" }
 ratatui = "0.29"
 crossterm = "0.28"
 tokio = { version = "1", features = ["full"] }

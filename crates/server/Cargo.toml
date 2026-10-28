@@ -1,10 +1,18 @@
 [package]
-name = "tm-server"
+name = "rust-tui-manager-server"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Servidor multiusuario (axum + SQLite + WebSocket) de rust-tui-manager: equipos, tareas, roles e invitaciones"
+readme = "../../README.md"
+keywords = ["tasks", "kanban", "collaboration", "tui", "self-hosted"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "tm-server"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.104"
@@ -21,7 +29,7 @@ tower-http = { version = "0.7.1", features = ["cors", "set-header", "trace"] }
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 uuid = { version = "1.29.0", features = ["v4"] }
-tm-core = { path = "../core" }
+tm-core = { package = "rust-tui-manager-core", path = "../core", version = "0.2.0" }
 axum-server = { version = "0.8.0", features = ["tls-rustls"] }
 rustls = "0.23.46"
 sha2 = "0.11.1"
