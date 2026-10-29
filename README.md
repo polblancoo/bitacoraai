@@ -12,16 +12,16 @@ Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un �
 
 > La versión 0.1.x de `rust-tui-manager` era un gestor local de notas y snippets. Ese código sigue en [`legacy/`](legacy/) y en las versiones 0.1.x del crate.
 
-![Tablero kanban en el cliente gráfico](docs/screenshots/desktop-board.png)
+![Tablero kanban en el cliente gráfico](https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/desktop-board.png)
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/desktop-task.png" alt="Detalle de tarea con etiquetas, subtareas y comentarios"></td>
-    <td><img src="docs/screenshots/desktop-calendar.png" alt="Vista de calendario por fecha límite"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/desktop-task.png" alt="Detalle de tarea con etiquetas, subtareas y comentarios"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/desktop-calendar.png" alt="Vista de calendario por fecha límite"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/desktop-team.png" alt="Gestión del equipo: roles e invitaciones por código"></td>
-    <td><img src="docs/screenshots/tui-board.png" alt="Cliente de terminal (ratatui)"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/desktop-team.png" alt="Gestión del equipo: roles e invitaciones por código"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/tui-board.png" alt="Cliente de terminal (ratatui)"></td>
   </tr>
 </table>
 
@@ -31,20 +31,23 @@ Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un �
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/web-gantt.png" alt="Gantt con dependencias entre tareas"></td>
-    <td><img src="docs/screenshots/web-canvas.png" alt="Pizarra colaborativa con notas, tarjetas de tarea y conexiones"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-gantt.png" alt="Gantt con dependencias entre tareas"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-canvas.png" alt="Pizarra colaborativa con notas, tarjetas de tarea y conexiones"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/web-inbox.png" alt="Bandeja de novedades al iniciar sesión"></td>
-    <td><img src="docs/screenshots/web-mindmap.png" alt="Mapa mental de una tarea"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-inbox.png" alt="Bandeja de novedades al iniciar sesión"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-mindmap.png" alt="Mapa mental de una tarea"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/web-settings.png" alt="Menú de configuración: cuenta, Telegram, equipo y preferencias"></td>
-    <td><img src="docs/screenshots/web-message.png" alt="Mensaje al equipo (bandeja, email y Telegram)"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-settings.png" alt="Menú de configuración: cuenta, Telegram, equipo y preferencias"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-message.png" alt="Mensaje al equipo (bandeja, email y Telegram)"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/web-team.png" alt="Equipo: agregar por usuario, generar código de invitación y miembros"></td>
-    <td><img src="docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-team.png" alt="Equipo: buscar usuarios registrados, generar código de invitación y miembros"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
+  </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-invite.png" alt="Código de invitación generado"></td>
   </tr>
 </table>
 
