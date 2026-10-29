@@ -1,0 +1,149 @@
+name: Release
+
+# Al publicar un tag vX.Y.Z genera: .msi/.exe (Windows), .dmg (macOS Intel y ARM),
+# .deb, .rpm y AppImage (Linux) del escritorio, más los binarios tm-server,
+# rust-tui-manager (TUI) y tm-agent de cada sistema. Todo se adjunta a un release en borrador.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  desktop:
+    name: Escritorio (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux
+            os: ubuntu-22.04
+            target: ""
+          - label: windows
+            os: windows-latest
+            target: ""
+          - label: macos-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+          - label: macos-intel
+            os: macos-13
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias de Linux
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Instalar tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      # El repo solo versiona PNG: se generan .ico (Windows) e .icns (macOS) desde icon.png
+      - name: Generar iconos .ico/.icns
+        working-directory: apps/desktop/src-tauri
+        shell: bash
+        run: |
+          cargo tauri icon icons/icon.png --output icons-gen
+          cp icons-gen/icon.ico icons-gen/icon.icns icons/
+          rm -rf icons-gen
+          # tauri-build exige icon.ico en la lista en Windows e icon.icns la usa el .dmg
+          jq '.bundle.icon += ["icons/icon.icns", "icons/icon.ico"]' tauri.conf.json > tauri.conf.tmp
+          mv tauri.conf.tmp tauri.conf.json
+
+      - name: Compilar y empaquetar
+        working-directory: apps/desktop/src-tauri
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            cargo tauri build --target "${{ matrix.target }}"
+          else
+            cargo tauri build
+          fi
+
+      - name: Subir instaladores
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.label }}
+          if-no-files-found: error
+          path: |
+            target/**/release/bundle/deb/*.deb
+            target/**/release/bundle/rpm/*.rpm
+            target/**/release/bundle/appimage/*.AppImage
+            target/**/release/bundle/msi/*.msi
+            target/**/release/bundle/nsis/*.exe
+            target/**/release/bundle/dmg/*.dmg
+
+  binaries:
+    name: CLI (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux-x86_64
+            os: ubuntu-22.04
+            ext: ""
+          - label: windows-x86_64
+            os: windows-latest
+            ext: ".exe"
+          - label: macos-arm64
+            os: macos-latest
+            ext: ""
+          - label: macos-x86_64
+            os: macos-13
+            ext: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked
+      - run: cargo test --release --locked
+      - name: Empaquetar
+        shell: bash
+        run: |
+          mkdir dist
+          for b in tm-server rust-tui-manager tm-agent; do
+            cp "target/release/$b${{ matrix.ext }}" dist/
+          done
+          cd dist
+          if [ "${{ matrix.ext }}" = ".exe" ]; then
+            7z a "../tm-${{ matrix.label }}.zip" .
+          else
+            tar czf "../tm-${{ matrix.label }}.tar.gz" .
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.label }}
+          path: |
+            tm-${{ matrix.label }}.zip
+            tm-${{ matrix.label }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publicar release (borrador)
+    needs: [desktop, binaries]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: artifacts/**

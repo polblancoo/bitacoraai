@@ -615,17 +615,20 @@ const inviteMessage = (code) => [
 ].join("\n");
 
 const createTask = guard(async (status) => {
+  // mismas reglas que en el modal: un líder asigna a cualquiera; un miembro solo a sí mismo
+  const assignable = can("admin") ? S.members.filter((m) => RANK[m.role] >= 1) : S.members.filter((m) => m.id === S.user?.id && can("member"));
   const f = await form("Nueva tarea", [
     { name: "title", label: "Título", max: 200 },
     { name: "description", label: "Descripción (opcional)", type: "textarea" },
     { name: "status", label: "Estado", type: "select", options: STATUS.map((s) => [s.id, s.label]), value: status },
     { name: "priority", label: "Prioridad", type: "select", options: PRIO.map((p, i) => [i, p]), value: 1 },
+    ...(assignable.length ? [{ name: "assignee", label: "Responsable", type: "select", options: [["", "Sin asignar"], ...assignable.map((m) => [m.id, m.id === S.user?.id && !can("admin") ? `Yo (${m.username})` : label(m.username)])] }] : []),
     { name: "start", label: "Empieza (opcional)", type: "date" },
     { name: "due", label: "Vence (opcional)", type: "date" },
     { name: "recurrence", label: "Repetición", type: "select", options: RECUR },
   ], "Crear tarea"); if (!f) return;
   const day = (d) => (d ? new Date(d + "T12:00:00Z").toISOString() : undefined);
-  let t = await api("POST", `/api/projects/${S.project.id}/tasks`, { title: f.title, description: f.description, priority: +f.priority, start: day(f.start), due: day(f.due), recurrence: f.recurrence || undefined });
+  let t = await api("POST", `/api/projects/${S.project.id}/tasks`, { title: f.title, description: f.description, priority: +f.priority, assignee_id: f.assignee ? +f.assignee : undefined, start: day(f.start), due: day(f.due), recurrence: f.recurrence || undefined });
   if (f.status !== "todo") t = await api("PATCH", `/api/tasks/${t.id}`, { status: f.status });
   upsert(t); render();
 });
@@ -845,15 +848,34 @@ function taskCard(t) {
   card.draggable = can("member");
   card.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", String(t.id)); card.classList.add("dragging"); });
   card.addEventListener("dragend", () => card.classList.remove("dragging"));
+  card.addEventListener("dragover", (e) => { if (can("member")) { e.preventDefault(); e.stopPropagation(); card.classList.add("drop-before"); } });
+  card.addEventListener("dragleave", () => card.classList.remove("drop-before"));
+  card.addEventListener("drop", (e) => { e.preventDefault(); e.stopPropagation(); card.classList.remove("drop-before"); moveTask(+e.dataTransfer.getData("text/plain"), t.status, t.id); });
   return card;
 }
+
+// mueve una tarea a la columna `status`, justo antes de `beforeId` (o al final); el orden manual manda sobre la prioridad
+function moveTask(id, status, beforeId) {
+  const t = S.tasks.find((x) => x.id === id);
+  if (!t || !can("member") || id === beforeId) return;
+  const col = S.tasks.filter((x) => !x.parent_id && x.status === status && x.id !== id).sort(byOrder);
+  const i = beforeId == null ? col.length : col.findIndex((x) => x.id === beforeId);
+  if (i < 0) return;
+  const prev = col[i - 1]?.position, next = col[i]?.position;
+  const position = prev == null ? (next == null ? t.position : next - 1) : next == null ? prev + 1 : (prev + next) / 2;
+  if (position === t.position && status === t.status) return;
+  const patch = { position };
+  if (status !== t.status) patch.status = status;
+  Object.assign(t, patch); render(); patchTask(id, patch);
+}
+const byOrder = (a, b) => a.position - b.position || a.id - b.id;
 
 function column(s) {
   const q = S.query.toLowerCase();
   const tasks = S.tasks
     .filter((t) => !t.parent_id && t.status === s.id && (!q || t.title.toLowerCase().includes(q) || (t.assignee || "").toLowerCase().includes(q)
       || t.labels.some((l) => l.name.toLowerCase().includes(q))))
-    .sort((a, b) => b.priority - a.priority || a.id - b.id);
+    .sort(byOrder);
   const col = h("section", { class: "col" },
     h("header", {}, h("span", { class: "bar", style: `background:${s.color}` }), s.label, h("span", { class: "count" }, tasks.length)),
     h("div", { class: "cards" }, tasks.map(taskCard)),
@@ -862,9 +884,7 @@ function column(s) {
   col.addEventListener("dragleave", () => col.classList.remove("over"));
   col.addEventListener("drop", (e) => {
     e.preventDefault(); col.classList.remove("over");
-    const id = +e.dataTransfer.getData("text/plain");
-    const t = S.tasks.find((x) => x.id === id);
-    if (t && can("member") && t.status !== s.id) { t.status = s.id; render(); patchTask(id, { status: s.id }); }
+    moveTask(+e.dataTransfer.getData("text/plain"), s.id, null);
   });
   return col;
 }

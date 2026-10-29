@@ -95,7 +95,7 @@ pub(crate) async fn team_of_task(st: &AppState, task: Id) -> Result<Id> {
     .await?)
 }
 
-pub(crate) const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.title, t.description, t.status, t.priority, \
+pub(crate) const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.title, t.description, t.status, t.priority, t.position, \
     t.assignee_id, u.username AS assignee, t.due, t.start, t.recurrence, t.parent_id, t.created_at, t.updated_at, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id) AS sub_total, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id AND s.status = 'done') AS sub_done \
@@ -109,6 +109,7 @@ pub(crate) fn task_from_row(r: &SqliteRow) -> Task {
         description: r.get("description"),
         status: Status::parse(r.get("status")).unwrap_or(Status::Todo),
         priority: r.get("priority"),
+        position: r.get("position"),
         assignee_id: r.get("assignee_id"),
         assignee: r.get("assignee"),
         due: r.get("due"),
@@ -617,7 +618,7 @@ async fn emit_parent(st: &AppState, team: Id, parent: Option<Id>) {
 
 pub(crate) async fn list_tasks(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Vec<Task>>> {
     ensure_member(&st, team_of_project(&st, project).await?, user.id).await?;
-    let rows = sqlx::query(sqlx::AssertSqlSafe(format!("{TASK_SELECT} WHERE t.project_id = ? ORDER BY t.priority DESC, t.id LIMIT 5000")))
+    let rows = sqlx::query(sqlx::AssertSqlSafe(format!("{TASK_SELECT} WHERE t.project_id = ? ORDER BY t.position, t.id LIMIT 5000")))
         .bind(project)
         .fetch_all(&st.db)
         .await?;
@@ -677,8 +678,8 @@ async fn create_task(
     }
     let now = Utc::now();
     let id = sqlx::query(
-        "INSERT INTO tasks (project_id, title, description, priority, assignee_id, due, parent_id, start, recurrence, created_at, updated_at, created_by) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (project_id, title, description, priority, assignee_id, due, parent_id, start, recurrence, created_at, updated_at, created_by, position) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM tasks WHERE project_id = ?))",
     )
     .bind(project)
     .bind(n.title.trim())
@@ -692,6 +693,7 @@ async fn create_task(
     .bind(now)
     .bind(now)
     .bind(user.id)
+    .bind(project)
     .execute(&st.db)
     .await?
     .last_insert_rowid();
@@ -730,13 +732,14 @@ async fn update_task(
     // si cambia el vencimiento o el responsable, los recordatorios vuelven a empezar
     let reminders_reset = due != cur.due || assignee != cur.assignee_id;
     sqlx::query(
-        "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, assignee_id = ?, due = ?, start = ?, recurrence = ?, \
+        "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, position = ?, assignee_id = ?, due = ?, start = ?, recurrence = ?, \
          remind_state = CASE WHEN ? THEN 0 ELSE remind_state END, updated_at = ? WHERE id = ?",
     )
     .bind(p.title.as_deref().map(str::trim).filter(|s| !s.is_empty()).unwrap_or(&cur.title))
     .bind(p.description.as_deref().unwrap_or(&cur.description))
     .bind(p.status.unwrap_or(cur.status).as_str())
     .bind(p.priority.map(|v| v.clamp(0, 3)).unwrap_or(cur.priority))
+    .bind(p.position.filter(|v| v.is_finite()).unwrap_or(cur.position))
     .bind(assignee)
     .bind(due)
     .bind(start)

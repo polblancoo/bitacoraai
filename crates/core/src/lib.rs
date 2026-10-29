@@ -159,6 +159,9 @@ pub struct Task {
     pub status: Status,
     /// 0 = baja, 1 = media, 2 = alta, 3 = urgente
     pub priority: i64,
+    /// Orden manual dentro del proyecto (menor = antes); lo cambia el arrastrar y soltar.
+    #[serde(default)]
+    pub position: f64,
     pub assignee_id: Option<Id>,
     pub assignee: Option<String>,
     pub due: Option<DateTime<Utc>>,
@@ -271,6 +274,7 @@ pub struct TaskPatch {
     pub description: Option<String>,
     pub status: Option<Status>,
     pub priority: Option<i64>,
+    pub position: Option<f64>,
     #[serde(default, deserialize_with = "double_option")]
     pub assignee_id: Option<Option<Id>>,
     #[serde(default, deserialize_with = "double_option")]

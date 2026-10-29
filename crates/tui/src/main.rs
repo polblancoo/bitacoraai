@@ -109,7 +109,7 @@ impl App {
     }
 
     fn sort_tasks(&mut self) {
-        self.tasks.sort_by(|a, b| b.priority.cmp(&a.priority).then(a.id.cmp(&b.id)));
+        self.tasks.sort_by(|a, b| a.position.total_cmp(&b.position).then(a.id.cmp(&b.id)));
         for c in 0..3 {
             let n = self.column(c).len();
             self.row[c] = self.row[c].min(n.saturating_sub(1));

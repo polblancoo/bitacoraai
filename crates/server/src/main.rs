@@ -100,9 +100,12 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE users ADD COLUMN model TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE users ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN deny TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE tasks ADD COLUMN position REAL NOT NULL DEFAULT 0",
     ] {
         let _ = sqlx::query(alter).execute(db).await;
     }
+    // las tareas existentes conservan su orden de creación
+    sqlx::query("UPDATE tasks SET position = id WHERE position = 0").execute(db).await?;
     // el dueño de cada equipo siempre tiene rol owner (idempotente)
     sqlx::query("UPDATE team_members SET role = 'owner' WHERE role != 'owner' AND user_id = (SELECT owner_id FROM teams WHERE id = team_id)")
         .execute(db)

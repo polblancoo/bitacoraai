@@ -58,6 +58,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overf
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: grab; display: grid; gap: 8px; }
 .card:hover { border-color: var(--blue); transform: translateY(-1px); }
 .card.dragging { opacity: .4; }
+.card.drop-before { box-shadow: 0 -3px 0 var(--accent, #7aa2f7); }
 .card .title { font-weight: 500; word-break: break-word; }
 .card .meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); }
 .pill { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }

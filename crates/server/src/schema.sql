@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     description TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'todo',
     priority INTEGER NOT NULL DEFAULT 1,
+    position REAL NOT NULL DEFAULT 0,
     assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     due TEXT,
     recurrence TEXT,
