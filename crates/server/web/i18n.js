@@ -8,6 +8,12 @@
   if (!LANGS[lang]) { const n = (navigator.language || "en").slice(0, 2).toLowerCase(); lang = LANGS[n] ? n : "en"; }
   const D = {
     en: {
+ "Tarea ": "Task ",
+ "Copiar el comando": "Copy the command",
+ "📋 Copiar": "📋 Copy",
+ "Comando copiado": "Command copied",
+ " Ejecutor": " Executor",
+ "Autorizado a ejecutar lo que piden las IAs (comandos, permisos). Los pedidos le llegan como tarea.": "Allowed to run what the AIs ask for (commands, permissions). Requests reach them as a task.",
  "Por hacer": "To do",
  "En curso": "Doing",
  "Hecho": "Done",
@@ -388,6 +394,12 @@
  " personas": " people"
 },
     pt: {
+ "Tarea ": "Tarefa ",
+ "Copiar el comando": "Copiar o comando",
+ "📋 Copiar": "📋 Copiar",
+ "Comando copiado": "Comando copiado",
+ " Ejecutor": " Executor",
+ "Autorizado a ejecutar lo que piden las IAs (comandos, permisos). Los pedidos le llegan como tarea.": "Autorizado a executar o que as IAs pedem (comandos, permissões). Os pedidos chegam como tarefa.",
  "Por hacer": "A fazer",
  "En curso": "Em andamento",
  "Hecho": "Concluído",

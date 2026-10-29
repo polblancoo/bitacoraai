@@ -457,6 +457,10 @@ const openTeam = guard(async () => {
   const rows = S.members.map((m) => {
     const manageable = admin && m.role !== "owner" && RANK[m.role] < RANK[myRole()];
     return h("div", { class: "member" }, avatar(m.username), h("span", { class: "grow" }, label(m.username)),
+      admin && !/^claude|bot$/i.test(m.username) && h("label", { class: "exec", title: "Autorizado a ejecutar lo que piden las IAs (comandos, permisos). Los pedidos le llegan como tarea." },
+        h("input", { type: "checkbox", checked: !!m.executor, onchange: guard(async (e) => {
+          await api("PUT", `/api/teams/${S.team.id}/members/${m.id}/executor`, { executor: e.target.checked }); refreshMembers();
+        }) }), " Ejecutor"),
       roleSel(m.role, guard(async (e) => {
         await api("PUT", `/api/teams/${S.team.id}/members/${m.id}`, { role: e.target.value }); refreshMembers();
       }), !manageable, RANK[myRole()]),
@@ -651,10 +655,19 @@ function withMentions(body) {
     part.startsWith("@") && names.has(part.slice(1).replace(/[.-]+$/, "").toLowerCase()) ? h("b", { class: "mention" }, part) : part);
 }
 
+// comandos entre comillas o `backticks` de un pedido 🙋 de una IA, para copiar y pegar en una terminal
+function commandsOf(body) {
+  if (!body.startsWith("🙋")) return [];
+  const out = [...body.matchAll(/`([^`\n]{2,300})`|'([^'\n]{4,300})'/g)].map((m) => (m[1] || m[2]).trim());
+  return [...new Set(out)].slice(0, 4);
+}
+
 function renderComments() {
   const box = document.getElementById("comments"); if (!box) return;
   box.replaceChildren(...S.comments.map((c) => h("div", { class: "comment" },
-    h("b", {}, c.username), h("small", {}, new Date(c.created_at).toLocaleString()), h("div", {}, withMentions(c.body)))));
+    h("b", {}, c.username), h("small", {}, new Date(c.created_at).toLocaleString()), h("div", {}, withMentions(c.body)),
+    commandsOf(c.body).map((cmd) => h("div", { class: "cmdbox" }, h("code", {}, cmd),
+      h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar"))))));
   box.scrollTop = box.scrollHeight;
 }
 
@@ -789,7 +802,7 @@ const openTask = guard(async (task) => {
 
   const modal = h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
     h("div", { class: "modal" },
-      h("h3", {}, "Tarea"),
+      h("h3", {}, "Tarea ", h("span", { class: "tid" }, "#" + task.id)),
       h("label", {}, "Título", title),
       h("label", {}, "Descripción", desc),
       h("h3", {}, "Etiquetas"), labelBox, newLabel,
@@ -837,7 +850,7 @@ function loginView() {
 function taskCard(t) {
   const late = t.due && t.status !== "done" && new Date(t.due) < new Date();
   const card = h("div", { class: "card", draggable: true, onclick: () => openTask(t) },
-    h("div", { class: "title" }, t.title),
+    h("div", { class: "title" }, h("span", { class: "tid" }, "#" + t.id), " ", t.title),
     t.labels?.length > 0 && h("div", { class: "chips" }, t.labels.map((l) => h("span", { class: "chip on", style: `--c:${l.color}` }, l.name))),
     t.subtasks_total > 0 && h("div", { class: "progress", title: `${t.subtasks_done}/${t.subtasks_total} subtareas` },
       h("div", { class: "bar", style: `width:${Math.round(100 * t.subtasks_done / t.subtasks_total)}%` })),

@@ -27,6 +27,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/teams", get(list_teams).post(create_team))
         .route("/api/teams/{id}/members", get(list_members).post(add_member))
         .route("/api/teams/{id}/members/{uid}", axum::routing::put(set_role).delete(remove_member))
+        .route("/api/teams/{id}/members/{uid}/executor", axum::routing::put(set_executor))
+        .route("/api/tasks/{id}/help", axum::routing::post(request_help))
         .route("/api/teams/{id}/invites", get(list_invites).post(create_invite))
         .route("/api/invites/{id}", axum::routing::delete(revoke_invite))
         .route("/api/invites/{id}/accept", post(accept_invite))
@@ -96,7 +98,7 @@ pub(crate) async fn team_of_task(st: &AppState, task: Id) -> Result<Id> {
 }
 
 pub(crate) const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.title, t.description, t.status, t.priority, t.position, \
-    t.assignee_id, u.username AS assignee, t.due, t.start, t.recurrence, t.parent_id, t.created_at, t.updated_at, \
+    t.assignee_id, u.username AS assignee, t.due, t.start, t.recurrence, t.parent_id, t.created_by, t.created_at, t.updated_at, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id) AS sub_total, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id AND s.status = 'done') AS sub_done \
     FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id";
@@ -112,6 +114,7 @@ pub(crate) fn task_from_row(r: &SqliteRow) -> Task {
         position: r.get("position"),
         assignee_id: r.get("assignee_id"),
         assignee: r.get("assignee"),
+        created_by: r.get("created_by"),
         due: r.get("due"),
         start: r.get("start"),
         depends_on: vec![],
@@ -343,7 +346,7 @@ async fn create_team(State(st): State<AppState>, user: AuthUser, Json(n): Json<N
 async fn list_members(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Vec<Member>>> {
     ensure_member(&st, team, user.id).await?;
     let rows = sqlx::query(
-        "SELECT u.id, u.username, m.role FROM users u JOIN team_members m ON m.user_id = u.id \
+        "SELECT u.id, u.username, m.role, m.executor FROM users u JOIN team_members m ON m.user_id = u.id \
          WHERE m.team_id = ? ORDER BY u.username",
     )
     .bind(team)
@@ -355,6 +358,7 @@ async fn list_members(State(st): State<AppState>, user: AuthUser, Path(team): Pa
                 id: r.get("id"),
                 username: r.get("username"),
                 role: Role::parse(r.get("role")).unwrap_or(Role::Viewer),
+                executor: r.get::<i64, _>("executor") != 0,
             })
             .collect(),
     ))
@@ -401,6 +405,99 @@ async fn add_member(
     let who = crate::notify::username_of(&st, user.id).await;
     crate::notify::notify(&st, new.id, "member_added", Some(team), None, format!("{who} te sumó al equipo «{team_name}» como {}", role.label())).await;
     Ok(Json(new))
+}
+
+#[derive(serde::Deserialize)]
+struct SetExecutor {
+    executor: bool,
+}
+
+/// Autoriza (o no) a una persona a ejecutar lo que piden las IAs. Solo admins, y solo personas.
+async fn set_executor(
+    State(st): State<AppState>,
+    user: AuthUser,
+    Path((team, target)): Path<(Id, Id)>,
+    Json(b): Json<SetExecutor>,
+) -> Result<StatusCode> {
+    user.human_only()?;
+    require(&st, team, user.id, Role::Admin).await?;
+    let is_bot: Option<i64> = sqlx::query_scalar("SELECT u.is_bot FROM users u JOIN team_members m ON m.user_id = u.id WHERE m.team_id = ? AND u.id = ?")
+        .bind(team)
+        .bind(target)
+        .fetch_optional(&st.db)
+        .await?;
+    match is_bot {
+        None => return Err(AppError::not_found()),
+        Some(0) => {}
+        Some(_) => return Err(AppError::bad("una IA no puede ser ejecutora")),
+    }
+    sqlx::query("UPDATE team_members SET executor = ? WHERE team_id = ? AND user_id = ?")
+        .bind(b.executor)
+        .bind(team)
+        .bind(target)
+        .execute(&st.db)
+        .await?;
+    st.emit(team, Event::MemberRoleChanged { team_id: team, user_id: target, role: role_of(&st, team, target).await? });
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(serde::Serialize)]
+struct HelpOut {
+    comment_id: Id,
+    task_id: Id,
+    assignee_id: Option<Id>,
+}
+
+/// Una IA pide que una persona ejecute algo: comenta la tarea con 🙋 y abre una tarea de pedido para la persona indicada.
+/// Responsable: quien creó la tarea si es ejecutor; si no, el ejecutor con menos tareas abiertas; si no hay ejecutores, un admin.
+async fn request_help(
+    State(st): State<AppState>,
+    user: AuthUser,
+    Path(task): Path<Id>,
+    Json(n): Json<NewComment>,
+) -> Result<Json<HelpOut>> {
+    let team = team_of_task(&st, task).await?;
+    ensure_writer(&st, team, user.id).await?;
+    let q = n.body.trim();
+    if q.is_empty() {
+        return Err(AppError::bad("pedido vacío"));
+    }
+    max_len("pedido", q, COMMENT_MAX)?;
+    let t = fetch_task(&st, task).await?;
+    let pick = |extra: &str| format!(
+        "SELECT u.id FROM users u JOIN team_members m ON m.user_id = u.id \
+         LEFT JOIN tasks o ON o.assignee_id = u.id AND o.status != 'done' \
+         WHERE m.team_id = ?1 AND u.is_bot = 0 {extra} GROUP BY u.id ORDER BY COUNT(o.id), u.id LIMIT 1"
+    );
+    let creator_ok: Option<Id> = match t.created_by {
+        Some(c) => sqlx::query_scalar(sqlx::AssertSqlSafe(pick("AND m.executor = 1 AND u.id = ?2"))).bind(team).bind(c).fetch_optional(&st.db).await?,
+        None => None,
+    };
+    let assignee = match creator_ok {
+        Some(id) => Some(id),
+        None => match sqlx::query_scalar(sqlx::AssertSqlSafe(pick("AND m.executor = 1"))).bind(team).fetch_optional(&st.db).await? {
+            Some(id) => Some(id),
+            None => sqlx::query_scalar(sqlx::AssertSqlSafe(pick("AND m.role IN ('owner','admin')"))).bind(team).fetch_optional(&st.db).await?,
+        },
+    };
+    let who = match assignee {
+        Some(id) => format!(" → pedido para {}", member_name(&st, id).await),
+        None => String::new(),
+    };
+    let Json(c) = add_comment(State(st.clone()), AuthUser { id: user.id, bot: user.bot }, Path(task), Json(NewComment { body: format!("🙋 {q}{who}") })).await?;
+    let title: String = format!("🙋 Pedido de #{task}: {}", q.lines().next().unwrap_or("").chars().take(80).collect::<String>());
+    let Json(req) = create_task(
+        State(st.clone()),
+        AuthUser { id: user.id, bot: user.bot },
+        Path(t.project_id),
+        Json(NewTask { title, description: format!("{q}\n\nPedido por una IA desde la tarea #{task} «{}». Cuando lo resuelvas, pegá el resultado como comentario en la tarea #{task} y marcá esta como Hecha.", t.title), priority: 3, assignee_id: assignee, ..Default::default() }),
+    )
+    .await?;
+    Ok(Json(HelpOut { comment_id: c.id, task_id: req.id, assignee_id: assignee }))
+}
+
+async fn member_name(st: &AppState, id: Id) -> String {
+    sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(id).fetch_one(&st.db).await.unwrap_or_default()
 }
 
 async fn set_role(

@@ -249,7 +249,11 @@ async fn ask(question: String) -> Result<()> {
     let wait = env_num("TM_ASK_TIMEOUT", 900u64);
     let api = Api { http: reqwest::Client::new(), cfg };
     let me = api.get("/api/me").await?["id"].as_i64().context("respuesta inesperada de /api/me")?;
-    let sent = api.call(Method::POST, &format!("/api/tasks/{task}/comments"), Some(json!({ "body": format!("🙋 {}", question.trim()) }))).await?;
+    // comenta con 🙋 y abre una tarea de pedido para la persona autorizada (ejecutor) que corresponda
+    let sent = match api.call(Method::POST, &format!("/api/tasks/{task}/help"), Some(json!({ "body": question.trim() }))).await {
+        Ok(v) => json!({ "id": v["comment_id"] }),
+        Err(_) => api.call(Method::POST, &format!("/api/tasks/{task}/comments"), Some(json!({ "body": format!("🙋 {}", question.trim()) }))).await?,
+    };
     let after = sent["id"].as_i64().unwrap_or(0);
     let deadline = tokio::time::Instant::now() + Duration::from_secs(wait);
     while tokio::time::Instant::now() < deadline {

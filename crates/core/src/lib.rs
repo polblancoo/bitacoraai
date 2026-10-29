@@ -53,6 +53,9 @@ pub struct Member {
     pub id: Id,
     pub username: String,
     pub role: Role,
+    /// Persona autorizada a ejecutar lo que las IAs piden (comandos, permisos).
+    #[serde(default)]
+    pub executor: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -164,6 +167,9 @@ pub struct Task {
     pub position: f64,
     pub assignee_id: Option<Id>,
     pub assignee: Option<String>,
+    /// Quién creó la tarea (a esa persona se le pide ayuda cuando una IA necesita algo).
+    #[serde(default)]
+    pub created_by: Option<Id>,
     pub due: Option<DateTime<Utc>>,
     /// Inicio previsto (para el diagrama de Gantt); si falta se usa `created_at`.
     #[serde(default)]
