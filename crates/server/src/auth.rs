@@ -18,7 +18,19 @@ struct Claims {
 
 pub struct AuthUser {
     pub id: Id,
+    /// Cuenta de IA (token `tmk_…`): no puede administrar equipos, roles ni invitaciones.
+    pub bot: bool,
 }
+
+impl AuthUser {
+    /// Acciones de administración reservadas a personas.
+    pub fn human_only(&self) -> Result<(), AppError> {
+        if self.bot { Err(AppError::forbidden()) } else { Ok(()) }
+    }
+}
+
+/// Prefijo de los tokens de API de las cuentas bot.
+pub const API_TOKEN_PREFIX: &str = "tmk_";
 
 pub fn hash_password(pw: &str) -> Result<String, AppError> {
     Argon2::default()
@@ -53,13 +65,26 @@ fn decode_token(secret: &str, token: &str) -> Option<Claims> {
 
 /// Valida firma, vencimiento y que el usuario exista con la misma versión de sesión.
 pub async fn authenticate(st: &AppState, token: &str) -> Option<AuthUser> {
+    if token.starts_with(API_TOKEN_PREFIX) {
+        let id: Id = sqlx::query_scalar("SELECT user_id FROM api_tokens WHERE hash = ?")
+            .bind(sha256_hex(token))
+            .fetch_optional(&st.db)
+            .await
+            .ok()??;
+        let _ = sqlx::query("UPDATE api_tokens SET last_used = ? WHERE hash = ?")
+            .bind(chrono::Utc::now())
+            .bind(sha256_hex(token))
+            .execute(&st.db)
+            .await;
+        return Some(AuthUser { id, bot: true });
+    }
     let c = decode_token(&st.secret, token)?;
     let ver: Option<i64> = sqlx::query_scalar("SELECT token_version FROM users WHERE id = ?")
         .bind(c.sub)
         .fetch_optional(&st.db)
         .await
         .ok()?;
-    (ver? == c.ver).then_some(AuthUser { id: c.sub })
+    (ver? == c.ver).then_some(AuthUser { id: c.sub, bot: false })
 }
 
 impl FromRequestParts<AppState> for AuthUser {
@@ -78,9 +103,8 @@ impl FromRequestParts<AppState> for AuthUser {
 
 /// Cadena hexadecimal aleatoria de `bytes` bytes (CSPRNG del sistema).
 pub fn random_hex(bytes: usize) -> String {
-    use std::io::Read;
     let mut buf = vec![0u8; bytes];
-    std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut buf)).expect("urandom");
+    getrandom::fill(&mut buf).expect("CSPRNG del sistema");
     buf.iter().map(|b| format!("{b:02x}")).collect()
 }
 

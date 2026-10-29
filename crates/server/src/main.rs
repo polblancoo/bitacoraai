@@ -1,4 +1,5 @@
 mod auth;
+mod bots;
 mod error;
 mod canvas;
 mod limits;
@@ -66,12 +67,7 @@ async fn jwt_secret(db: &SqlitePool) -> anyhow::Result<String> {
     if let Some(row) = sqlx::query("SELECT value FROM meta WHERE key = 'jwt_secret'").fetch_optional(db).await? {
         return Ok(row.get(0));
     }
-    let mut buf = [0u8; 32];
-    {
-        use std::io::Read;
-        std::fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
-    }
-    let secret: String = buf.iter().map(|b| format!("{b:02x}")).collect();
+    let secret = auth::random_hex(32);
     sqlx::query("INSERT INTO meta (key, value) VALUES ('jwt_secret', ?)").bind(&secret).execute(db).await?;
     Ok(secret)
 }
@@ -98,6 +94,11 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE team_members ADD COLUMN via TEXT",
         "ALTER TABLE team_members ADD COLUMN invite_id INTEGER",
         "ALTER TABLE teams ADD COLUMN description TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE tasks ADD COLUMN created_by INTEGER",
+        "ALTER TABLE projects ADD COLUMN work_dir TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE projects ADD COLUMN repo TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN model TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0",
     ] {
         let _ = sqlx::query(alter).execute(db).await;
     }
@@ -181,7 +182,7 @@ async fn main() -> anyhow::Result<()> {
     extras::spawn_reminders(state.clone());
     google::spawn_sync(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(teampanel::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(teampanel::router()).merge(bots::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

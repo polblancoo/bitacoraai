@@ -147,3 +147,12 @@ CREATE TABLE IF NOT EXISTS google_events (
     fingerprint TEXT NOT NULL,
     PRIMARY KEY (user_id, task_id)
 );
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    hash TEXT NOT NULL UNIQUE,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL,
+    last_used TEXT
+);

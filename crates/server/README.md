@@ -1,45 +1,53 @@
 # rust-tui-manager-server
 
-Servidor multiusuario (axum + SQLite + WebSocket) del gestor de tareas colaborativo [Rust TUI Manager](https://github.com/polblancoo/tui_comandNote). Los clientes son [`rust-tui-manager`](https://crates.io/crates/rust-tui-manager) (terminal) y la app Tauri del repositorio.
+> 🎛️ **Tablero de comando para tus proyectos**: dirigí varios proyectos a la vez —una fábrica de apps, una planilla, un onboarding, lo que sea— con **personas e IAs en el mismo tablero**. Cada proyecto sabe dónde vive su trabajo (carpeta y repo). Self-hosted.
+
+Servidor multiusuario (axum + SQLite + WebSocket) del gestor de tareas colaborativo [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). Los clientes son [`rust-tui-manager`](https://crates.io/crates/rust-tui-manager) (terminal) y la app Tauri del repositorio.
 
 Clientes: la TUI, la app gráfica de escritorio y la **web que este mismo servidor sirve en `/`** (desactivable con `TM_WEB=0`).
 
-![Cliente gráfico conectado al servidor](https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/desktop-board.png)
+![Cliente gráfico conectado al servidor](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/desktop-board.png)
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-gantt.png" alt="Gantt con dependencias"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-canvas.png" alt="Pizarra colaborativa"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-gantt.png" alt="Gantt con dependencias"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-canvas.png" alt="Pizarra colaborativa"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-inbox.png" alt="Bandeja de novedades"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-settings.png" alt="Menú de configuración"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-inbox.png" alt="Bandeja de novedades"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-settings.png" alt="Menú de configuración"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-team.png" alt="Equipo: buscar usuarios registrados"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-team.png" alt="Equipo: buscar usuarios registrados"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-invite.png" alt="Código de invitación generado"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-invite.png" alt="Código de invitación generado"></td>
   </tr>
 </table>
+
+> 👉 **[Guía paso a paso: tu primer proyecto](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIA.md)**, con capturas.
+
+## 🤖 Agentes de IA como integrantes del equipo
+
+Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier cliente MCP) pueden **conectarse a un equipo humano**: cada IA tiene su usuario, token y rol, crea y completa tareas, **se las asigna a personas** y recibe las que le asignes. Se suman desde la barra lateral (**🤖 IAs → «+»**), el token se muestra una vez y se rota o revoca con un clic. Una IA no puede administrar equipos, invitar ni tocar tareas ajenas. Detalles en el [README principal](https://github.com/polblancoo/Rust_tuiManager#readme); el binario `tm-mcp` está en desarrollo.
 
 ## Novedades de la 0.5
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-google.png" alt="Configuración con Google Calendar conectado y un «?» de ayuda en cada fila"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-google-help.png" alt="Ayuda de Google Calendar: qué hace y qué configura quien administra el servidor"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-google.png" alt="Configuración con Google Calendar conectado y un «?» de ayuda en cada fila"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-google-help.png" alt="Ayuda de Google Calendar: qué hace y qué configura quien administra el servidor"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-config-help.png" alt="Ayuda de una fila: «Si sos usuario» y «Si administrás el servidor»"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-invite.png" alt="Código de invitación con «Copiar invitación» y «Enviar por email»"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-config-help.png" alt="Ayuda de una fila: «Si sos usuario» y «Si administrás el servidor»"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-invite.png" alt="Código de invitación con «Copiar invitación» y «Enviar por email»"></td>
   </tr>
 </table>
 
 - **Panel del equipo** (botón «👥 Equipo», columna derecha): miembros con su rol (editable ahí mismo), desde cuándo están, quién los sumó y si entraron con un código, y cuántas tareas abiertas tiene cada uno; las invitaciones con sus usos, vencimiento y **quiénes entraron con cada código**; y los ajustes del equipo (editar nombre y descripción, transferir la propiedad, salir o eliminar el equipo con confirmación por nombre).
 
-<img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-team-panel.png" alt="Panel del equipo: miembros, invitaciones y ajustes">
+<img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-team-panel.png" alt="Panel del equipo: miembros, invitaciones y ajustes">
 
 - **Google Calendar** (opcional, un solo sentido): cada usuario conecta su cuenta desde *Configuración → Google Calendar* y sus tareas con fecha (asignadas a él o sin responsable, de sus equipos) aparecen como eventos de día completo en su calendario principal. Si cambian, se terminan o se borran, el evento se actualiza o se quita solo (cada minuto); «Desconectar» limpia lo que creó la app. Lo habilita **una sola vez quien administra el servidor** con `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET` y `TM_GOOGLE_REDIRECT` (cliente OAuth «Aplicación web» de Google Cloud); mientras la app de Google esté en modo *Pruebas* solo entran los Gmail agregados como usuarios de prueba.
 - **Ayuda en cada parámetro de Configuración**: un botón «?» por fila explica qué hace para el usuario común y qué hay que tener configurado si administrás el servidor (SMTP, Telegram, Google, HTTPS…).

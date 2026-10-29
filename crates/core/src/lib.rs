@@ -102,6 +102,12 @@ pub struct Project {
     pub name: String,
     pub description: String,
     pub color: String,
+    /// Carpeta de trabajo (la define el CTO o el líder); las IAs la reciben para saber dónde operar.
+    #[serde(default)]
+    pub work_dir: String,
+    /// Repositorio del proyecto (URL o `usuario/repo`).
+    #[serde(default)]
+    pub repo: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -221,6 +227,10 @@ pub struct NewProject {
     pub description: String,
     #[serde(default)]
     pub color: Option<String>,
+    #[serde(default)]
+    pub work_dir: String,
+    #[serde(default)]
+    pub repo: String,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -441,6 +451,7 @@ pub struct Canvas {
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Event {
     ProjectCreated(Project),
+    ProjectDeleted { id: Id, team_id: Id },
     TaskCreated(Task),
     TaskUpdated(Task),
     TaskDeleted { id: Id, project_id: Id },

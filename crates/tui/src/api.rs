@@ -82,7 +82,7 @@ impl Api {
         Ok(())
     }
     pub async fn new_project(&self, team: Id, name: &str) -> Result<Project> {
-        self.post(&format!("/api/teams/{team}/projects"), &NewProject { name: name.into(), description: String::new(), color: None }).await
+        self.post(&format!("/api/teams/{team}/projects"), &NewProject { name: name.into(), description: String::new(), color: None, work_dir: String::new(), repo: String::new() }).await
     }
     pub async fn new_task(&self, project: Id, title: &str) -> Result<Task> {
         self.post(&format!("/api/projects/{project}/tasks"), &NewTask { title: title.into(), priority: 1, ..Default::default() }).await

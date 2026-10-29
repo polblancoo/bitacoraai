@@ -1,12 +1,20 @@
 # rust-tui-manager
 
-Cliente de terminal (ratatui) del gestor de tareas colaborativo [Rust TUI Manager](https://github.com/polblancoo/tui_comandNote). Necesita un servidor [`rust-tui-manager-server`](https://crates.io/crates/rust-tui-manager-server) en marcha.
+> 🎛️ **Tablero de comando para tus proyectos**: dirigí varios proyectos a la vez —una fábrica de apps, una planilla, un onboarding, lo que sea— con **personas e IAs en el mismo tablero**. Cada proyecto sabe dónde vive su trabajo (carpeta y repo). Self-hosted.
+
+Cliente de terminal (ratatui) del gestor de tareas colaborativo [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). Necesita un servidor [`rust-tui-manager-server`](https://crates.io/crates/rust-tui-manager-server) en marcha.
 
 > **Versiones 0.2 en adelante**: este crate pasó de ser un gestor local de notas y snippets a ser un cliente de red. El código anterior está en la carpeta `legacy/` del repositorio y en las versiones 0.1.x.
 
-![Tablero en la terminal](https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/tui-board.png)
+![Tablero en la terminal](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/tui-board.png)
 
-![Detalle de una tarea: subtareas, etiquetas y comentarios](https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/tui-detail.png)
+![Detalle de una tarea: subtareas, etiquetas y comentarios](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/tui-detail.png)
+
+> 👉 **[Guía paso a paso: tu primer proyecto](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIA.md)**, con capturas.
+
+## 🤖 Agentes de IA como integrantes del equipo
+
+Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier cliente MCP) pueden **conectarse a un equipo humano**: cada IA tiene su usuario, token y rol, crea y completa tareas, **se las asigna a personas** y recibe las que le asignes. Se suman desde la barra lateral (**🤖 IAs → «+»**), el token se muestra una vez y se rota o revoca con un clic. Una IA no puede administrar equipos, invitar ni tocar tareas ajenas. Detalles en el [README principal](https://github.com/polblancoo/Rust_tuiManager#readme); el binario `tm-mcp` está en desarrollo.
 
 ## Uso
 
@@ -61,7 +69,7 @@ En la pantalla de acceso, `F2` alterna entre iniciar sesión y crear cuenta. La 
 
 La cabecera marca los roles: `★` dueño, `⚙` admin, `👁` lector. El punto verde de la esquina indica conexión en vivo.
 
-Más información, seguridad y configuración del servidor en el [README del proyecto](https://github.com/polblancoo/tui_comandNote).
+Más información, seguridad y configuración del servidor en el [README del proyecto](https://github.com/polblancoo/Rust_tuiManager).
 
 ## Licencia
 

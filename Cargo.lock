@@ -3866,6 +3866,7 @@ dependencies = [
  "axum-server",
  "chrono",
  "futures-util",
+ "getrandom 0.3.4",
  "jsonwebtoken",
  "lettre",
  "reqwest 0.12.28",

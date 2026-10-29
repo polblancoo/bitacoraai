@@ -5,9 +5,9 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Servidor multiusuario (axum + SQLite + WebSocket) de rust-tui-manager: equipos, tareas, roles e invitaciones"
+description = "Tablero de comando self-hosted para proyectos con personas e IAs (axum + SQLite + WebSocket): equipos, tareas, roles, invitaciones y cuentas de IA"
 readme = "README.md"
-keywords = ["tasks", "kanban", "collaboration", "tui", "self-hosted"]
+keywords = ["project-management", "tasks", "ai-agents", "collaboration", "self-hosted"]
 categories = ["command-line-utilities"]
 
 [[bin]]
@@ -33,5 +33,6 @@ tm-core = { package = "rust-tui-manager-core", path = "../core", version = "0.5.
 axum-server = { version = "0.8.0", features = ["tls-rustls"] }
 rustls = "0.23.46"
 sha2 = "0.11.1"
+getrandom = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "aws-lc-rs", "hostname", "webpki-roots"] }

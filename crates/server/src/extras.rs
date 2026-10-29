@@ -443,7 +443,7 @@ async fn duplicate_project(State(st): State<AppState>, user: AuthUser, Path(proj
         }
     }
     log_project(&st, new_id, user.id, format!("creó el proyecto copiando otro ({} tareas)", rows.len())).await;
-    let p = Project { id: new_id, team_id: team, name: name.into(), description, color };
+    let p = Project { id: new_id, team_id: team, name: name.into(), description, color, work_dir: String::new(), repo: String::new() };
     st.emit(team, Event::ProjectCreated(p.clone()));
     Ok(Json(p))
 }

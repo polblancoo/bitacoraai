@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 description = "Modelos y contratos de API compartidos por rust-tui-manager (servidor, TUI y cliente Tauri)"
 readme = "../../README.md"
-keywords = ["tasks", "kanban", "collaboration", "tui", "self-hosted"]
+keywords = ["project-management", "tasks", "ai-agents", "collaboration", "self-hosted"]
 categories = ["command-line-utilities"]
 
 [dependencies]

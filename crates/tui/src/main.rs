@@ -273,6 +273,7 @@ impl App {
                 self.tasks.retain(|t| t.id != id && t.parent_id != Some(id));
                 self.sort_tasks();
             }
+            tm_core::Event::ProjectDeleted { .. } => {}
             tm_core::Event::ProjectCreated(p) => {
                 if p.team_id == self.cur_team() && !self.projects.iter().any(|x| x.id == p.id) {
                     self.projects.push(p);

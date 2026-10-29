@@ -5,9 +5,9 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Cliente de terminal (ratatui) para el gestor de tareas colaborativo rust-tui-manager"
+description = "Cliente de terminal (ratatui) del tablero de comando rust-tui-manager: proyectos y tareas con personas e IAs"
 readme = "README.md"
-keywords = ["tasks", "kanban", "collaboration", "tui", "self-hosted"]
+keywords = ["project-management", "tasks", "ai-agents", "collaboration", "self-hosted"]
 categories = ["command-line-utilities"]
 
 [dependencies]

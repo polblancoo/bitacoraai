@@ -58,6 +58,20 @@ pub(crate) async fn ensure_member(st: &AppState, team: Id, user: Id) -> Result<(
     require(st, team, user, Role::Viewer).await.map(|_| ())
 }
 
+/// Una IA solo modifica o borra tareas que creó ella o que le asignaron; las personas siguen las reglas de rol.
+async fn bot_owns(st: &AppState, user: &AuthUser, task: Id) -> Result<()> {
+    if !user.bot {
+        return Ok(());
+    }
+    let ok: Option<i64> = sqlx::query_scalar("SELECT 1 FROM tasks WHERE id = ? AND (created_by = ? OR assignee_id = ?)")
+        .bind(task)
+        .bind(user.id)
+        .bind(user.id)
+        .fetch_optional(&st.db)
+        .await?;
+    ok.map(|_| ()).ok_or_else(AppError::forbidden)
+}
+
 /// Miembro o superior: escrituras (tareas, comentarios, etiquetas, proyectos).
 pub(crate) async fn ensure_writer(st: &AppState, team: Id, user: Id) -> Result<()> {
     require(st, team, user, Role::Member).await.map(|_| ())
@@ -142,7 +156,8 @@ pub(crate) async fn hydrate_deps(st: &AppState, tasks: &mut [Task], scope: &'sta
 
 /// Reglas de asignación: un líder (admin o dueño) asigna a cualquiera; un miembro solo puede
 /// tomar una tarea libre o soltar la suya.
-async fn check_assign(st: &AppState, team: Id, actor: Id, role: Role, current: Option<Id>, new: Option<Id>) -> Result<()> {
+/// `bot_create`: una IA que crea la tarea puede dejarla asignada a otra persona del equipo.
+async fn check_assign(st: &AppState, team: Id, actor: Id, role: Role, current: Option<Id>, new: Option<Id>, bot_create: bool) -> Result<()> {
     if new == current {
         return Ok(());
     }
@@ -152,7 +167,7 @@ async fn check_assign(st: &AppState, team: Id, actor: Id, role: Role, current: O
             return Err(AppError::bad("un lector no puede ser responsable de una tarea"));
         }
     }
-    if role >= Role::Admin {
+    if role >= Role::Admin || bot_create {
         return Ok(());
     }
     let takes = new == Some(actor) && current.is_none();
@@ -201,6 +216,8 @@ fn project_from_row(r: &SqliteRow) -> Project {
         name: r.get("name"),
         description: r.get("description"),
         color: r.get("color"),
+        work_dir: r.get("work_dir"),
+        repo: r.get("repo"),
     }
 }
 
@@ -281,6 +298,7 @@ async fn login(
 
 /// Invalida todos los tokens emitidos para el usuario (todas sus sesiones).
 async fn logout_all(State(st): State<AppState>, user: AuthUser) -> Result<StatusCode> {
+    user.human_only()?;
     sqlx::query("UPDATE users SET token_version = token_version + 1 WHERE id = ?").bind(user.id).execute(&st.db).await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -342,7 +360,7 @@ async fn list_members(State(st): State<AppState>, user: AuthUser, Path(team): Pa
 }
 
 /// `by`: quién lo sumó; `via`: "direct" (lo agregó un admin) o "invite" (entró con el código `invite_id`).
-async fn insert_member(st: &AppState, team: Id, user: &User, role: Role, by: Option<Id>, via: &str, invite_id: Option<Id>) -> Result<bool> {
+pub(crate) async fn insert_member(st: &AppState, team: Id, user: &User, role: Role, by: Option<Id>, via: &str, invite_id: Option<Id>) -> Result<bool> {
     if count(st, "SELECT COUNT(*) FROM team_members WHERE team_id = ?", team).await? >= MAX_MEMBERS_PER_TEAM {
         return Err(too_many("miembros", MAX_MEMBERS_PER_TEAM));
     }
@@ -368,6 +386,7 @@ async fn add_member(
     Path(team): Path<Id>,
     Json(a): Json<AddMember>,
 ) -> Result<Json<User>> {
+    user.human_only()?;
     let caller = require(&st, team, user.id, Role::Admin).await?;
     let role = a.role.unwrap_or(Role::Member);
     if !can_grant(caller, role) {
@@ -389,6 +408,7 @@ async fn set_role(
     Path((team, target)): Path<(Id, Id)>,
     Json(b): Json<SetRole>,
 ) -> Result<StatusCode> {
+    user.human_only()?;
     let caller = require(&st, team, user.id, Role::Admin).await?;
     let current = role_of(&st, team, target).await.map_err(|_| AppError::not_found())?;
     // hay que superar el rol actual del objetivo y poder otorgar el nuevo
@@ -413,6 +433,7 @@ async fn remove_member(
     user: AuthUser,
     Path((team, target)): Path<(Id, Id)>,
 ) -> Result<StatusCode> {
+    user.human_only()?;
     let caller = role_of(&st, team, user.id).await?;
     let current = role_of(&st, team, target).await.map_err(|_| AppError::not_found())?;
     if current == Role::Owner {
@@ -453,6 +474,7 @@ async fn create_invite(
     Path(team): Path<Id>,
     Json(n): Json<NewInvite>,
 ) -> Result<Json<InviteCreated>> {
+    user.human_only()?;
     let caller = require(&st, team, user.id, Role::Admin).await?;
     if !can_grant(caller, n.role) {
         return Err(AppError::forbidden());
@@ -489,6 +511,7 @@ async fn list_invites(State(st): State<AppState>, user: AuthUser, Path(team): Pa
 }
 
 async fn revoke_invite(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>) -> Result<StatusCode> {
+    user.human_only()?;
     let team: Id = sqlx::query_scalar("SELECT team_id FROM invites WHERE id = ?").bind(id).fetch_one(&st.db).await?;
     require(&st, team, user.id, Role::Admin).await?;
     sqlx::query("DELETE FROM invites WHERE id = ?").bind(id).execute(&st.db).await?;
@@ -540,7 +563,7 @@ async fn accept_invite(
 
 async fn list_projects(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Vec<Project>>> {
     ensure_member(&st, team, user.id).await?;
-    let rows = sqlx::query("SELECT id, team_id, name, description, color FROM projects WHERE team_id = ? ORDER BY name LIMIT 200")
+    let rows = sqlx::query("SELECT id, team_id, name, description, color, work_dir, repo FROM projects WHERE team_id = ? ORDER BY name LIMIT 200")
         .bind(team)
         .fetch_all(&st.db)
         .await?;
@@ -561,18 +584,22 @@ async fn create_project(
     max_len("descripción", &n.description, DESCRIPTION_MAX)?;
     let color = n.color.unwrap_or_else(|| "#7aa2f7".into());
     limits::color(&color)?;
+    max_len("carpeta", &n.work_dir, 300)?;
+    max_len("repositorio", &n.repo, 300)?;
     if count(&st, "SELECT COUNT(*) FROM projects WHERE team_id = ?", team).await? >= MAX_PROJECTS_PER_TEAM {
         return Err(too_many("proyectos", MAX_PROJECTS_PER_TEAM));
     }
-    let id = sqlx::query("INSERT INTO projects (team_id, name, description, color) VALUES (?, ?, ?, ?)")
+    let id = sqlx::query("INSERT INTO projects (team_id, name, description, color, work_dir, repo) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(team)
         .bind(n.name.trim())
         .bind(&n.description)
         .bind(&color)
+        .bind(n.work_dir.trim())
+        .bind(n.repo.trim())
         .execute(&st.db)
         .await?
         .last_insert_rowid();
-    let p = Project { id, team_id: team, name: n.name.trim().into(), description: n.description, color };
+    let p = Project { id, team_id: team, name: n.name.trim().into(), description: n.description, color, work_dir: n.work_dir.trim().into(), repo: n.repo.trim().into() };
     st.emit(team, Event::ProjectCreated(p.clone()));
     Ok(Json(p))
 }
@@ -630,7 +657,7 @@ async fn create_task(
     if count(&st, "SELECT COUNT(*) FROM tasks WHERE project_id = ?", project).await? >= MAX_TASKS_PER_PROJECT {
         return Err(too_many("tareas", MAX_TASKS_PER_PROJECT));
     }
-    check_assign(&st, team, user.id, caller, None, n.assignee_id).await?;
+    check_assign(&st, team, user.id, caller, None, n.assignee_id, user.bot).await?;
     let recurrence = crate::extras::valid_recurrence(n.recurrence.as_deref())?;
     if let Some(parent) = n.parent_id {
         let row = sqlx::query("SELECT project_id, parent_id FROM tasks WHERE id = ?")
@@ -650,8 +677,8 @@ async fn create_task(
     }
     let now = Utc::now();
     let id = sqlx::query(
-        "INSERT INTO tasks (project_id, title, description, priority, assignee_id, due, parent_id, start, recurrence, created_at, updated_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (project_id, title, description, priority, assignee_id, due, parent_id, start, recurrence, created_at, updated_at, created_by) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(project)
     .bind(n.title.trim())
@@ -664,6 +691,7 @@ async fn create_task(
     .bind(recurrence)
     .bind(now)
     .bind(now)
+    .bind(user.id)
     .execute(&st.db)
     .await?
     .last_insert_rowid();
@@ -685,11 +713,12 @@ async fn update_task(
 ) -> Result<Json<Task>> {
     let team = team_of_task(&st, id).await?;
     let caller = require(&st, team, user.id, Role::Member).await?;
+    bot_owns(&st, &user, id).await?;
     if let Some(t) = &p.title { max_len("título", t, TITLE_MAX)?; }
     if let Some(d) = &p.description { max_len("descripción", d, DESCRIPTION_MAX)?; }
     let cur = fetch_task(&st, id).await?;
     if let Some(new) = p.assignee_id {
-        check_assign(&st, team, user.id, caller, cur.assignee_id, new).await?;
+        check_assign(&st, team, user.id, caller, cur.assignee_id, new, false).await?;
     }
     let assignee = p.assignee_id.unwrap_or(cur.assignee_id);
     let due = p.due.unwrap_or(cur.due);
@@ -730,6 +759,7 @@ async fn update_task(
 async fn delete_task(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>) -> Result<StatusCode> {
     let team = team_of_task(&st, id).await?;
     ensure_writer(&st, team, user.id).await?;
+    bot_owns(&st, &user, id).await?;
     let row = sqlx::query("SELECT project_id, parent_id FROM tasks WHERE id = ?").bind(id).fetch_one(&st.db).await?;
     let (project, parent): (Id, Option<Id>) = (row.get("project_id"), row.get("parent_id"));
     let title: String = sqlx::query_scalar("SELECT title FROM tasks WHERE id = ?").bind(id).fetch_one(&st.db).await.unwrap_or_default();

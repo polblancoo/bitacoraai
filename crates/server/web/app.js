@@ -116,7 +116,10 @@ const RECUR = [["", "No se repite"], ["daily", "Cada día"], ["weekly", "Cada se
 const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, true); } };
 const openPreview = guard(openPreviewRaw);
 const color = (name) => AVATAR[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR.length];
-const avatar = (name) => h("span", { class: "avatar", title: name, style: `background:${color(name)}` }, name.slice(0, 2).toUpperCase());
+const botInfo = (name) => (S.bots || []).find((b) => b.username === name);
+// una IA se ve con 🤖 y su modelo (ej. "claude:Opus"); las personas, con su nombre
+const label = (name) => { const b = botInfo(name); return b ? `🤖 ${name}${b.model ? " · " + b.model : ""}` : name; };
+const avatar = (name) => h("span", { class: "avatar" + (botInfo(name) ? " bot" : ""), title: label(name), style: `background:${color(name)}` }, botInfo(name) ? "🤖" : name.slice(0, 2).toUpperCase());
 
 // ---------- sesión ----------
 const logoutAll = guard(async () => {
@@ -220,11 +223,11 @@ const openProfile = guard(async () => {
 });
 
 async function selectTeam(team) {
-  S.team = team; S.projects = []; S.project = null; S.tasks = []; S.members = []; S.labels = []; S.canvas = null;
+  S.team = team; S.projects = []; S.project = null; S.tasks = []; S.members = []; S.labels = []; S.bots = []; S.canvas = null;
   if (team) {
-    [S.projects, S.members, S.labels] = await Promise.all([
+    [S.projects, S.members, S.labels, S.bots] = await Promise.all([
       api("GET", `/api/teams/${team.id}/projects`), api("GET", `/api/teams/${team.id}/members`),
-      api("GET", `/api/teams/${team.id}/labels`),
+      api("GET", `/api/teams/${team.id}/labels`), api("GET", `/api/teams/${team.id}/bots`).catch(() => []),
     ]);
     await selectProject(S.projects[0] || null);
     loadOverview();
@@ -262,6 +265,11 @@ function onEvent({ type, data }) {
   } else if (type === "task_deleted") {
     S.tasks = S.tasks.filter((t) => t.id !== data.id && t.parent_id !== data.id);
     if (S.open === data.id) closeModal();
+  } else if (type === "project_deleted") {
+    if (data.team_id === S.team?.id) {
+      S.projects = S.projects.filter((p) => p.id !== data.id);
+      if (S.project?.id === data.id) { selectProject(S.projects[0] || null).catch(() => {}); return; }
+    }
   } else if (type === "project_created") {
     if (data.team_id === S.team?.id && !S.projects.some((p) => p.id === data.id)) S.projects.push(data);
   } else if (type === "comment_added") {
@@ -336,6 +344,73 @@ const createProject = guard(async () => {
   if (!S.projects.some((x) => x.id === p.id)) S.projects.push(p);
   await selectProject(p);
 });
+// ---------- IAs (cuentas bot con token propio) ----------
+const mcpConfig = (token) => JSON.stringify({ mcpServers: { "rust-tui-manager": { command: "tm-mcp", env: { TM_URL: S.server, TM_TOKEN: token } } } }, null, 2);
+const copy = (text, msg) => navigator.clipboard?.writeText(text).then(() => toast(msg));
+function showBotToken(name, token) {
+  const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
+    h("div", { class: "modal" },
+      h("h3", {}, `🤖 Token de ${name}`),
+      h("p", {}, "Copialo ahora: no se vuelve a mostrar. Si lo perdés, generás uno nuevo y el anterior deja de funcionar."),
+      h("code", { class: "bot-token" }, token),
+      h("div", { class: "row" }, h("button", { onclick: () => copy(token, "Token copiado") }, "Copiar token")),
+      h("h3", {}, "Configuración para tu cliente MCP"),
+      h("pre", { class: "bot-cfg" }, mcpConfig(token)),
+      h("div", { class: "row" }, h("button", { onclick: () => copy(mcpConfig(token), "Configuración copiada") }, "Copiar configuración"),
+        h("button", { class: "primary", onclick: () => overlay.remove() }, "Listo"))));
+  document.body.append(overlay);
+}
+const loadBots = async () => { S.bots = await api("GET", `/api/teams/${S.team.id}/bots`).catch(() => []); render(); };
+const createBot = guard(async () => {
+  const f = await form("Nueva IA en el equipo", [
+    { name: "name", label: "Nombre (ej. claude-ana)", max: 32 },
+    { name: "model", label: "IA / modelo (ej. claude:Opus)", placeholder: "claude:Opus", max: 40 },
+    { name: "role", label: "Rol", type: "select", value: "member", options: [["member", "Miembro (crea y edita sus tareas)"], ["viewer", "Lector (solo mira)"]] },
+  ], "Crear"); if (!f) return;
+  const r = await api("POST", `/api/teams/${S.team.id}/bots`, { name: f.name, role: f.role, model: f.model });
+  S.members = await api("GET", `/api/teams/${S.team.id}/members`);
+  await loadBots(); showBotToken(r.user.username, r.token);
+});
+const botModal = (b) => {
+  const admin = can("admin");
+  const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
+    h("div", { class: "modal small" },
+      h("h3", {}, `🤖 ${b.username}`, b.model && h("small", { class: "inl" }, " · " + b.model)),
+      h("p", {}, `${b.role === "viewer" ? "Lector" : "Miembro"} · token ${b.active ? "activo" : "revocado"} · ${b.last_used ? "último uso " + new Date(b.last_used).toLocaleString() : "sin usar"}${b.created_by ? " · creada por " + b.created_by : ""}`),
+      h("div", { class: "row" },
+        admin && h("button", { onclick: guard(async () => {
+          const f = await form("IA / modelo", [{ name: "model", label: "Qué IA es (ej. claude:Opus)", value: b.model, max: 40 }], "Guardar"); if (!f) return;
+          await api("PATCH", `/api/bots/${b.id}`, { model: f.model }); overlay.remove(); await loadBots();
+        }) }, "Cambiar modelo"),
+        admin && h("button", { onclick: guard(async () => { const r = await api("POST", `/api/bots/${b.id}/token`); overlay.remove(); await loadBots(); showBotToken(b.username, r.token); }) }, "Nuevo token"),
+        admin && b.active && h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", `/api/bots/${b.id}/token`); overlay.remove(); await loadBots(); toast("Token revocado"); }) }, "Revocar"),
+        h("button", { onclick: () => overlay.remove() }, "Cerrar"))));
+  document.body.append(overlay);
+};
+const editProject = guard(async () => {
+  const p = S.project; if (!p) return;
+  const field = (label, value, ph, max) => [h("input", { value, placeholder: ph || "", maxLength: max }), label];
+  const [fn, fd, fw, fr] = [field("Nombre", p.name, "", 60), field("Descripción", p.description, "", 500),
+    field("Carpeta de trabajo (dónde vive el proyecto)", p.work_dir, "/home/ana/proyectos/app", 300), field("Repositorio", p.repo, "usuario/repo o URL", 300)];
+  const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
+    h("div", { class: "modal small", onkeydown: (e) => e.key === "Escape" && overlay.remove() },
+      h("h3", {}, "Proyecto"),
+      [fn, fd, fw, fr].map(([el, l]) => h("label", {}, l, el)),
+      h("div", { class: "row" },
+        h("button", { class: "danger", onclick: guard(async () => {
+          const c = await form("Eliminar proyecto", [{ name: "confirm", label: `Se borran también sus tareas. Escribí «${p.name}» para confirmar`, max: 60 }], "Eliminar"); if (!c) return;
+          await api("DELETE", `/api/projects/${p.id}?confirm=${encodeURIComponent(c.confirm)}`);
+          overlay.remove(); S.projects = S.projects.filter((x) => x.id !== p.id); await selectProject(S.projects[0] || null); toast("Proyecto eliminado");
+        }) }, "🗑 Eliminar"),
+        h("span", { class: "spacer" }),
+        h("button", { onclick: () => overlay.remove() }, "Cancelar"),
+        h("button", { class: "primary", onclick: guard(async () => {
+          if (!fn[0].value.trim()) { fn[0].focus(); return; }
+          const u = await api("PATCH", `/api/projects/${p.id}`, { name: fn[0].value, description: fd[0].value, work_dir: fw[0].value, repo: fr[0].value });
+          Object.assign(p, u); S.projects = S.projects.map((x) => (x.id === p.id ? p : x)); overlay.remove(); render();
+        }) }, "Guardar"))));
+  document.body.append(overlay); fn[0].focus();
+});
 const joinWithCode = guard(async () => {
   const f = await form("Unirse a un equipo", [{ name: "code", label: "Código de invitación", max: 64 }], "Unirme"); if (!f) return;
   const team = await api("POST", `/api/invites/${encodeURIComponent(f.code)}/accept`, {});
@@ -355,7 +430,7 @@ const openTeam = guard(async () => {
 
   const rows = S.members.map((m) => {
     const manageable = admin && m.role !== "owner" && RANK[m.role] < RANK[myRole()];
-    return h("div", { class: "member" }, avatar(m.username), h("span", { class: "grow" }, m.username),
+    return h("div", { class: "member" }, avatar(m.username), h("span", { class: "grow" }, label(m.username)),
       roleSel(m.role, guard(async (e) => {
         await api("PUT", `/api/teams/${S.team.id}/members/${m.id}`, { role: e.target.value }); refreshMembers();
       }), !manageable, RANK[myRole()]),
@@ -453,7 +528,7 @@ function teamPanel() {
       ROLES.filter(([r]) => r === m.role || (r !== "owner" && RANK[r] < RANK[mine])).map(([r, l]) => h("option", { value: r, selected: r === m.role }, l)));
   };
   const memberCard = (m) => h("div", { class: "tp-member" },
-    h("div", { class: "tp-line" }, avatar(m.username), h("span", { class: "tp-name grow" }, m.username, m.id === S.user.id && h("small", { class: "inl" }, " (vos)")), rolePick(m),
+    h("div", { class: "tp-line" }, avatar(m.username), h("span", { class: "tp-name grow" }, m.bot ? "🤖 " : "", m.username, m.bot && m.model && h("small", { class: "inl" }, " · " + m.model), m.id === S.user.id && h("small", { class: "inl" }, " (vos)")), rolePick(m),
       ((admin && m.role !== "owner" && RANK[m.role] < RANK[mine]) || (m.id === S.user.id && m.role !== "owner")) &&
         h("button", { class: "ghost danger", title: m.id === S.user.id ? "Salir del equipo" : "Quitar del equipo", onclick: guard(async () => {
           if (!confirm(m.id === S.user.id ? "¿Salir del equipo?" : `¿Quitar a ${m.username}?`)) return;
@@ -502,7 +577,7 @@ function teamPanel() {
         !admin && h("small", {}, "Solo un admin o el dueño puede cambiar los datos del equipo y gestionar miembros."))));
   return box;
 }
-const RELEASES_URL = "https://github.com/polblancoo/tui_comandNote/releases/latest";
+const RELEASES_URL = "https://github.com/polblancoo/Rust_tuiManager/releases/latest";
 const inviteMessage = (code) => [
   `Te invito al equipo «${S.team.name}» en Rust TUI Manager.`,
   "",
@@ -568,7 +643,7 @@ const openTask = guard(async (task) => {
     : S.members.filter((m) => m.id === meId && can("member") && (ass == null || ass === meId));
   const who = h("select", { disabled: !leader && !(can("member") && (ass == null || ass === meId)) },
     h("option", { value: "" }, "Sin asignar"),
-    (leader ? pickable : [...pickable, ...S.members.filter((m) => m.id === ass && m.id !== meId)]).map((m) => h("option", { value: m.id, selected: ass === m.id }, m.id === meId && !leader ? `Yo (${m.username})` : m.username)));
+    (leader ? pickable : [...pickable, ...S.members.filter((m) => m.id === ass && m.id !== meId)]).map((m) => h("option", { value: m.id, selected: ass === m.id }, m.id === meId && !leader ? `Yo (${m.username})` : label(m.username))));
   const whoHint = leader ? "Como líder podés asignarla a cualquier miembro" : can("member") ? "Podés tomar una tarea libre o soltar la tuya" : "";
   const start = h("input", { type: "date", value: cur().start ? cur().start.slice(0, 10) : "" });
   const rec = h("select", { disabled: !can("member") }, RECUR.map(([v, l]) => h("option", { value: v, selected: (cur().recurrence || "") === v }, l)));
@@ -804,11 +879,14 @@ function appView() {
   return h("div", { class: "shell" + (S.panel && S.team ? " with-panel" : "") },
     h("aside", {},
       h("div", { class: "brand" }, "▣ Rust TUI Manager"),
-      h("div", {}, h("h2", {}, "Equipos", h("span", {}, h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
+      h("div", {}, h("h2", {}, "Equipos", h("span", {}, S.team && h("button", { class: "ghost", onclick: () => { S.panel = true; store.set("panel", "1"); loadOverview(); setTimeout(() => document.querySelector(".tp-sec:last-child")?.scrollIntoView(), 400); }, title: "Editar o eliminar el equipo actual (ajustes en el panel de la derecha)" }, "⚙"), h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
         h("div", { class: "nav" }, S.teams.map((t) => h("button", { class: t.id === S.team?.id ? "active" : "", onclick: () => selectTeam(t).catch((e) => toast(e.message, true)) }, t.name)))),
       S.team && h("div", {}, h("h2", {}, "Proyectos", h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
         h("div", { class: "nav" }, S.projects.map((p) => h("button", { class: p.id === S.project?.id ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
           h("span", { class: "dot", style: `background:${p.color}` }), p.name)))),
+      S.team && h("div", {}, h("h2", {}, "🤖 IAs", can("admin") && h("button", { class: "ghost", onclick: createBot, title: "Sumar una IA al equipo (crea su token)" }, "+")),
+        h("div", { class: "nav" }, (S.bots || []).map((b) => h("button", { class: b.active ? "" : "revoked", onclick: () => botModal(b), title: b.active ? "Token activo" : "Token revocado" }, "🤖 " + b.username, b.model && h("small", { class: "inl" }, " · " + b.model))),
+          !(S.bots || []).length && h("small", { class: "hint" }, can("admin") ? "Sumá asistentes de código con «+»" : "Sin IAs en este equipo"))),
       h("button", { class: "cfg-btn", onclick: openSettings, title: "Configuración (,)" }, "⚙  Configuración"),
       h("div", { class: "me" }, h("span", { class: "live" + (S.online ? " on" : ""), title: S.online ? "en vivo" : "desconectado" }),
         S.user?.username, h("span", { class: "spacer" }),
@@ -820,12 +898,16 @@ function appView() {
       h("div", { class: "top" },
         h("h1", {}, S.project ? S.project.name : S.team ? "Sin proyectos" : "Creá un equipo para empezar"),
         h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
+        S.project && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
         S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
         h("div", { class: "seg" },
           [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"], ["activity", "Actividad"]].map(([v, l]) =>
             h("button", { class: S.view === v ? "on" : "", onclick: () => { S.view = v; render(); } }, l))),
         search),
+      S.project && (S.project.work_dir || S.project.repo) && h("div", { class: "proj-meta" },
+        S.project.work_dir && h("span", { title: "Carpeta de trabajo" }, "📁 " + S.project.work_dir),
+        S.project.repo && h("span", { title: "Repositorio" }, "🔗 " + S.project.repo)),
       S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
         : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos")),
     S.panel && S.team && teamPanel());
