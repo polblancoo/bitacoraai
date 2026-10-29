@@ -5,6 +5,7 @@ pub struct Config {
     pub server: Option<String>,
     pub token: Option<String>,
     pub username: Option<String>,
+    pub lang: Option<String>,
 }
 
 fn path() -> Option<std::path::PathBuf> {
@@ -16,6 +17,7 @@ pub fn load() -> Config {
 }
 
 pub fn save(c: &Config) {
+    let c = &Config { lang: Some(crate::i18n::code().into()), server: c.server.clone(), token: c.token.clone(), username: c.username.clone() };
     if let Some(p) = path() {
         let _ = std::fs::create_dir_all(p.parent().unwrap());
         let _ = std::fs::write(&p, serde_json::to_string_pretty(c).unwrap());

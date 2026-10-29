@@ -1,5 +1,6 @@
 mod api;
 mod config;
+mod i18n;
 mod ui;
 
 use anyhow::Result;
@@ -13,9 +14,10 @@ use futures_util::StreamExt;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::time::Duration;
 use tm_core::*;
+use i18n::{t, tf};
 use tokio::sync::mpsc;
 
-pub const CONFIG_ITEMS: usize = 12;
+pub const CONFIG_ITEMS: usize = 13;
 
 pub enum Msg {
     Key(KeyEvent),
@@ -172,6 +174,7 @@ impl App {
             server: Some(self.api.base.clone()),
             token: Some(auth.token),
             username: Some(auth.user.username.clone()),
+            ..Default::default()
         });
         self.me = Some(auth.user);
         self.mode = Mode::Board;
@@ -297,7 +300,7 @@ impl App {
             }
             tm_core::Event::MemberRemoved { team_id, user_id } => {
                 if self.me.as_ref().is_some_and(|m| m.id == user_id) {
-                    self.status = "✗ ya no sos parte de ese equipo".into();
+                    self.status = t("✗ ya no sos parte de ese equipo");
                     let _ = self.load_teams().await;
                 } else if team_id == self.cur_team() {
                     if let Ok(m) = self.api.members(team_id).await { self.members = m; }
@@ -348,14 +351,14 @@ impl App {
             PromptKind::AddMember => {
                 let role = self.sug_role;
                 let u = self.api.add_member(self.cur_team(), &text, Some(role)).await?;
-                self.status = format!("ℹ {} agregado al equipo como {}", u.username, role.label());
+                self.status = tf("ℹ {} agregado al equipo como {}", &[&u.username, &t(role.label())]);
             }
             PromptKind::AssignTo => {
                 let id = if text == "-" {
                     None
                 } else {
                     Some(self.members.iter().find(|m| m.username.eq_ignore_ascii_case(&text)).map(|m| m.id)
-                        .ok_or_else(|| anyhow::anyhow!("no hay un miembro llamado {text}"))?)
+                        .ok_or_else(|| anyhow::anyhow!(tf("no hay un miembro llamado {}", &[&text])))?)
                 };
                 if let Some(tid) = self.selected().map(|t| t.id) {
                     let t = self.api.patch_task(tid, &TaskPatch { assignee_id: Some(id), ..Default::default() }).await?;
@@ -365,26 +368,26 @@ impl App {
             PromptKind::SetEmail => {
                 self.api.set_email(&text).await?;
                 self.load_me().await;
-                self.status = "ℹ te enviamos un código de 6 dígitos: Ctrl+T v para confirmarlo".into();
+                self.status = t("ℹ te enviamos un código de 6 dígitos: Ctrl+T v para confirmarlo");
             }
             PromptKind::TeamMessage => {
                 let r = self.api.send_message(self.cur_team(), &text).await?;
-                self.status = format!("ℹ mensaje enviado a {} personas", r.sent);
+                self.status = tf("ℹ mensaje enviado a {} personas", &[&r.sent.to_string()]);
             }
             PromptKind::VerifyEmail => {
                 self.api.verify_email(&text).await?;
                 self.load_me().await;
-                self.status = "ℹ email verificado: vas a recibir avisos por correo".into();
+                self.status = t("ℹ email verificado: vas a recibir avisos por correo");
             }
             PromptKind::SetRole => {
                 let mut it = text.split_whitespace();
                 let name = it.next().unwrap_or_default();
                 let role = parse_role(it.next().unwrap_or_default())?;
                 let id = self.members.iter().find(|m| m.username.eq_ignore_ascii_case(name)).map(|m| m.id)
-                    .ok_or_else(|| anyhow::anyhow!("no hay un miembro llamado {name}"))?;
+                    .ok_or_else(|| anyhow::anyhow!(tf("no hay un miembro llamado {}", &[name])))?;
                 self.api.set_role(self.cur_team(), id, role).await?;
                 self.members = self.api.members(self.cur_team()).await?;
-                self.status = format!("ℹ {name} ahora es {}", role.label());
+                self.status = tf("ℹ {} ahora es {}", &[name, &t(role.label())]);
             }
             PromptKind::JoinCode => {
                 let team = self.api.accept_invite(&text).await?;
@@ -394,7 +397,7 @@ impl App {
                     self.project = 0;
                     self.load_team().await?;
                 }
-                self.status = format!("ℹ te uniste a {}", team.name);
+                self.status = tf("ℹ te uniste a {}", &[&team.name]);
             }
             PromptKind::Comment => {
                 if let Some(id) = self.selected().map(|t| t.id) {
@@ -568,7 +571,7 @@ impl App {
                 if self.email_info.as_ref().is_some_and(|m| m.telegram_linked) {
                     self.api.telegram_unlink().await?;
                     self.load_me().await;
-                    self.status = "ℹ Telegram desvinculado".into();
+                    self.status = t("ℹ Telegram desvinculado");
                 } else {
                     self.key_prefix('g').await?;
                 }
@@ -582,11 +585,16 @@ impl App {
             9 => self.prompt(PromptKind::NewTeam),
             10 => {
                 self.api.logout_all().await?;
-                config::save(&config::Config { server: Some(self.api.base.clone()), token: None, username: self.me.as_ref().map(|u| u.username.clone()) });
+                config::save(&config::Config { server: Some(self.api.base.clone()), token: None, username: self.me.as_ref().map(|u| u.username.clone()), ..Default::default() });
                 self.quit = true;
             }
             11 => { self.help_q.clear(); self.mode = Mode::Help; }
-            _ => self.status = "✗ primero creá o elegí un equipo".into(),
+            12 => {
+                i18n::next();
+                config::save(&config::Config { server: Some(self.api.base.clone()), token: self.api.token.clone(), username: self.me.as_ref().map(|u| u.username.clone()), ..Default::default() });
+                self.mode = Mode::Config;
+            }
+            _ => self.status = t("✗ primero creá o elegí un equipo"),
         }
         Ok(())
     }
@@ -598,7 +606,7 @@ impl App {
             'r' if has_team => self.prompt(PromptKind::SetRole),
             'i' if has_team => {
                 let inv = self.api.create_invite(self.cur_team(), Role::Member).await?;
-                self.status = format!("ℹ código de invitación (rol miembro, 7 días, 10 usos): {}", inv.code);
+                self.status = tf("ℹ código de invitación (rol miembro, 7 días, 10 usos): {}", &[&inv.code]);
             }
             'j' => self.prompt(PromptKind::JoinCode),
             't' => self.prompt(PromptKind::NewTeam),
@@ -607,11 +615,11 @@ impl App {
             's' if has_team => self.prompt(PromptKind::TeamMessage),
             'g' => {
                 let l = self.api.telegram_link().await?;
-                self.status = format!("ℹ Telegram: escribile a @{} → /start {}  (un solo uso, vence en {} min)", l.bot, l.code, l.expires_minutes);
+                self.status = tf("ℹ Telegram: escribile a @{} → /start {}  (un solo uso, vence en {} min)", &[&l.bot, &l.code, &l.expires_minutes.to_string()]);
             }
             'n' => self.open_inbox(true).await,
             'c' => { self.load_me().await; self.mode = Mode::Config; }
-            _ => self.status = "✗ atajo de equipo desconocido (m r i j t e v n)".into(),
+            _ => self.status = t("✗ atajo de equipo desconocido (m r i j t e v n)"),
         }
         Ok(())
     }
@@ -649,12 +657,12 @@ impl App {
                     self.open_prompt_suggest(PromptKind::AssignTo);
                     self.refresh_suggest(PromptKind::AssignTo).await;
                 } else {
-                    self.status = "✗ solo admin o dueño asigna a otros (con a tomás o soltás la tuya)".into();
+                    self.status = t("✗ solo admin o dueño asigna a otros (con a tomás o soltás la tuya)");
                 }
             }
             KeyCode::Char('X') => {
                 self.api.logout_all().await?;
-                config::save(&config::Config { server: Some(self.api.base.clone()), token: None, username: self.me.as_ref().map(|u| u.username.clone()) });
+                config::save(&config::Config { server: Some(self.api.base.clone()), token: None, username: self.me.as_ref().map(|u| u.username.clone()), ..Default::default() });
                 self.quit = true;
             }
             KeyCode::Left | KeyCode::Char('h') => self.col = (self.col + 2) % 3,
@@ -669,7 +677,7 @@ impl App {
             KeyCode::Char('J') => self.prompt(PromptKind::JoinCode),
             KeyCode::Char('I') if !self.teams.is_empty() => {
                 let inv = self.api.create_invite(self.cur_team(), Role::Member).await?;
-                self.status = format!("ℹ código de invitación (rol miembro, 7 días, 10 usos): {}", inv.code);
+                self.status = tf("ℹ código de invitación (rol miembro, 7 días, 10 usos): {}", &[&inv.code]);
             }
             KeyCode::Char('e') if self.selected().is_some() => {
                 self.input = self.selected().map(|t| t.title.clone()).unwrap_or_default();
@@ -749,7 +757,7 @@ fn parse_role(s: &str) -> Result<Role> {
         "viewer" | "lector" => Ok(Role::Viewer),
         "member" | "miembro" => Ok(Role::Member),
         "admin" => Ok(Role::Admin),
-        _ => Err(anyhow::anyhow!("rol inválido: usá viewer, member o admin")),
+        _ => Err(anyhow::anyhow!(t("rol inválido: usá viewer, member o admin"))),
     }
 }
 
@@ -779,6 +787,7 @@ fn spawn_ws(url: String, token: String, tx: mpsc::UnboundedSender<Msg>) {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cfg = config::load();
+    i18n::init(cfg.lang.as_deref());
     let server = std::env::args().nth(1).or(cfg.server.clone()).unwrap_or_else(|| "http://127.0.0.1:7878".into());
     let mut app = App {
         api: Api::new(&server, None),

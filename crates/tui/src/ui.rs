@@ -1,3 +1,4 @@
+use crate::i18n::{t, tf};
 use crate::{App, Mode, PromptKind};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -76,7 +77,7 @@ pub fn draw(f: &mut Frame, app: &App) {
             f.render_widget(Clear, area);
             f.render_widget(
                 Paragraph::new(Span::styled(
-                    " Ctrl+T ▸ m miembro · r rol · i invitar · j unirse · t nuevo equipo · e email · v verificar · s mensaje · g Telegram · n bandeja · c config · Esc cancela",
+                    t(" Ctrl+T ▸ m miembro · r rol · i invitar · j unirse · t nuevo equipo · e email · v verificar · s mensaje · g Telegram · n bandeja · c config · Esc cancela"),
                     Style::default().fg(BG).bg(YELLOW),
                 )),
                 area,
@@ -88,9 +89,9 @@ pub fn draw(f: &mut Frame, app: &App) {
 
 fn draw_login(f: &mut Frame, app: &App) {
     let area = centered(f.area(), 52, 13);
-    let labels = ["Servidor", "Usuario", "Contraseña"];
+    let labels = [t("Servidor"), t("Usuario"), t("Contraseña")];
     let mut lines = vec![Line::from(Span::styled(
-        if app.register { "Crear cuenta" } else { "Iniciar sesión" },
+        if app.register { t("Crear cuenta") } else { t("Iniciar sesión") },
         Style::default().fg(PURPLE).add_modifier(Modifier::BOLD),
     ))];
     lines.push(Line::raw(""));
@@ -101,7 +102,7 @@ fn draw_login(f: &mut Frame, app: &App) {
         lines.push(Line::from(vec![Span::styled(format!("{l:>11}  "), st), Span::raw(format!("{val}{cur}"))]));
     }
     lines.push(Line::raw(""));
-    lines.push(Line::from(Span::styled("Enter entrar · Tab campo · F2 login/registro · Esc salir", Style::default().fg(DIM))));
+    lines.push(Line::from(Span::styled(t("Enter entrar · Tab campo · F2 login/registro · Esc salir"),Style::default().fg(DIM))));
     if !app.status.is_empty() {
         lines.push(Line::from(Span::styled(app.status.clone(), Style::default().fg(RED))));
     }
@@ -121,7 +122,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::raw(" "));
     }
     if app.projects.is_empty() {
-        spans.push(Span::styled("sin proyectos — P para crear uno", Style::default().fg(DIM)));
+        spans.push(Span::styled(t("sin proyectos — P para crear uno"),Style::default().fg(DIM)));
     }
     let who = app.me.as_ref().map(|u| u.username.as_str()).unwrap_or("");
     let dot = if app.online { Span::styled("● ", Style::default().fg(GREEN)) } else { Span::styled("○ ", Style::default().fg(RED)) };
@@ -135,7 +136,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
             tm_core::Role::Member => m.username.clone(),
         })
         .collect();
-    let title = format!("{who} · equipo: {}", members.join(", "));
+    let title = tf("{} · equipo: {}", &[who, &members.join(", ")]);
     f.render_widget(
         Paragraph::new(Line::from(spans)).block(block(&title, false).title_top(Line::from(dot).right_aligned())),
         area,
@@ -168,7 +169,7 @@ fn draw_board(f: &mut Frame, app: &App, area: Rect) {
             })
             .collect();
         let active = app.col == c;
-        let title = format!("{} ({})", st.label(), tasks.len());
+        let title = format!("{} ({})", t(st.label()), tasks.len());
         let list = List::new(items)
             .block(block(&title, active))
             .highlight_style(Style::default().bg(Color::Rgb(41, 46, 66)).add_modifier(Modifier::BOLD))
@@ -185,7 +186,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     let text = if app.status.is_empty() {
         {
             let bell = if app.unread > 0 { format!("🔔{} (N) · ", app.unread) } else { String::new() };
-            format!("{bell}n tarea · Enter detalle · H/L mover · +/- prioridad · a tomar/soltar · A asignar · C configuración · Ctrl+T equipo · ? ayuda · q salir")
+            format!("{bell}{}", t("n tarea · Enter detalle · H/L mover · +/- prioridad · a tomar/soltar · A asignar · C configuración · Ctrl+T equipo · ? ayuda · q salir"))
         }
     } else {
         app.status.clone()
@@ -202,11 +203,11 @@ fn draw_detail(f: &mut Frame, app: &App) {
     let mut lines = vec![
         Line::from(Span::styled(t.title.clone(), Style::default().fg(BLUE).add_modifier(Modifier::BOLD))),
         Line::from(vec![
-            Span::styled(format!("{sym} prioridad {} ({})", t.priority, ["baja", "normal", "alta", "urgente"][t.priority.clamp(0, 3) as usize]), Style::default().fg(col)),
+            Span::styled(format!("{sym} {}", tf("prioridad {} ({})", &[&t.priority.to_string(), &crate::i18n::t(["baja", "normal", "alta", "urgente"][t.priority.clamp(0, 3) as usize])])), Style::default().fg(col)),
             Span::raw("  ·  "),
-            Span::raw(t.status.label()),
+            Span::raw(crate::i18n::t(t.status.label())),
             Span::raw("  ·  "),
-            Span::styled(t.assignee.as_deref().map(|a| format!("@{a}")).unwrap_or_else(|| "sin asignar".into()), Style::default().fg(PURPLE)),
+            Span::styled(t.assignee.as_deref().map(|a| format!("@{a}")).unwrap_or_else(|| crate::i18n::t("sin asignar")), Style::default().fg(PURPLE)),
         ]),
         Line::raw(""),
     ];
@@ -221,7 +222,7 @@ fn draw_detail(f: &mut Frame, app: &App) {
     }
     let subs = app.subtasks(t.id);
     if !subs.is_empty() {
-        lines.push(Line::from(Span::styled(format!("Subtareas ({}/{})", t.subtasks_done, t.subtasks_total), Style::default().fg(YELLOW))));
+        lines.push(Line::from(Span::styled(tf("Subtareas ({}/{})", &[&t.subtasks_done.to_string(), &t.subtasks_total.to_string()]), Style::default().fg(YELLOW))));
         for (i, st) in subs.iter().enumerate() {
             let done = st.status == Status::Done;
             let mut style = Style::default().fg(if done { DIM } else { FG });
@@ -230,7 +231,7 @@ fn draw_detail(f: &mut Frame, app: &App) {
         }
         lines.push(Line::raw(""));
     }
-    lines.push(Line::from(Span::styled(format!("Comentarios ({})", app.comments.len()), Style::default().fg(YELLOW))));
+    lines.push(Line::from(Span::styled(tf("Comentarios ({})", &[&app.comments.len().to_string()]), Style::default().fg(YELLOW))));
     for c in &app.comments {
         lines.push(Line::from(vec![
             Span::styled(format!("{} ", c.created_at.format("%d/%m %H:%M")), Style::default().fg(DIM)),
@@ -239,8 +240,8 @@ fn draw_detail(f: &mut Frame, app: &App) {
         ]));
     }
     lines.push(Line::raw(""));
-    lines.push(Line::from(Span::styled("s subtarea · j/k elegir · Espacio marcar · d borrar subtarea · l etiqueta · c comentar · Esc volver", Style::default().fg(DIM))));
-    f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block("Detalle", true)), area);
+    lines.push(Line::from(Span::styled(crate::i18n::t("s subtarea · j/k elegir · Espacio marcar · d borrar subtarea · l etiqueta · c comentar · Esc volver"),Style::default().fg(DIM))));
+    f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block(&crate::i18n::t("Detalle"), true)), area);
 }
 
 fn draw_prompt(f: &mut Frame, app: &App, kind: PromptKind) {
@@ -274,13 +275,13 @@ fn draw_prompt(f: &mut Frame, app: &App, kind: PromptKind) {
             lines.push(Line::from(Span::styled(format!(" {s} "), st)));
         }
         let hint = if kind == PromptKind::AddMember {
-            format!("↑/↓ elegir · Tab completa · Ctrl+R rol: {} · Enter agrega", app.sug_role.label())
+            tf("↑/↓ elegir · Tab completa · Ctrl+R rol: {} · Enter agrega", &[&t(app.sug_role.label())])
         } else {
-            "↑/↓ elegir · Tab completa · Enter asigna".into()
+            t("↑/↓ elegir · Tab completa · Enter asigna")
         };
         lines.push(Line::from(Span::styled(hint, Style::default().fg(DIM))));
     }
-    f.render_widget(Paragraph::new(lines).block(block(title, true)), area);
+    f.render_widget(Paragraph::new(lines).block(block(&t(title), true)), area);
 }
 
 fn draw_help(f: &mut Frame, app: &App) {
@@ -304,26 +305,27 @@ fn draw_help(f: &mut Frame, app: &App) {
         ("X", "cerrar sesión en todos los dispositivos"), ("?", "esta ayuda (escribí para buscar)"), ("q", "salir"),
     ];
     let q = app.help_q.to_lowercase();
-    let shown: Vec<&(&str, &str)> = rows.iter().filter(|(k, d)| q.is_empty() || k.to_lowercase().contains(&q) || d.to_lowercase().contains(&q)).collect();
-    let mut lines = vec![Line::from(vec![Span::styled("buscar: ", Style::default().fg(DIM)), Span::raw(format!("{}▏", app.help_q))]), Line::raw("")];
+    let rows: Vec<(String, String)> = rows.iter().map(|(k, d)| (t(k).replace("(detalle)", &t("(detalle)")).replace("Espacio", &t("Espacio")), t(d))).collect();
+    let shown: Vec<&(String, String)> = rows.iter().filter(|(k, d)| q.is_empty() || k.to_lowercase().contains(&q) || d.to_lowercase().contains(&q)).collect();
+    let mut lines = vec![Line::from(vec![Span::styled(t("buscar: "),Style::default().fg(DIM)), Span::raw(format!("{}▏", app.help_q))]), Line::raw("")];
     if shown.is_empty() {
-        lines.push(Line::from(Span::styled("sin coincidencias", Style::default().fg(DIM))));
+        lines.push(Line::from(Span::styled(t("sin coincidencias"),Style::default().fg(DIM))));
     }
-    lines.extend(shown.iter().map(|(k, d)| Line::from(vec![Span::styled(format!("{k:>14}  "), Style::default().fg(BLUE)), Span::raw(*d)])));
+    lines.extend(shown.iter().map(|(k, d)| Line::from(vec![Span::styled(format!("{k:>14}  "), Style::default().fg(BLUE)), Span::raw(d.clone())])));
     let h = (lines.len() as u16 + 2).max(8);
     let area = centered(f.area(), 68, h);
     f.render_widget(Clear, area);
-    f.render_widget(Paragraph::new(lines).block(block("Atajos · Esc cierra", true)), area);
+    f.render_widget(Paragraph::new(lines).block(block(&t("Atajos · Esc cierra"), true)), area);
 }
 
 fn draw_inbox(f: &mut Frame, app: &App) {
     let Some(inb) = &app.inbox else { return };
     let mut lines = vec![Line::from(Span::styled(
-        format!("Novedades ({} sin leer)", inb.unread.max(app.unread)),
+        tf("Novedades ({} sin leer)", &[&inb.unread.max(app.unread).to_string()]),
         Style::default().fg(YELLOW).add_modifier(Modifier::BOLD),
     ))];
     if inb.notifications.is_empty() {
-        lines.push(Line::from(Span::styled("  nada nuevo", Style::default().fg(DIM))));
+        lines.push(Line::from(Span::styled(t("  nada nuevo"),Style::default().fg(DIM))));
     }
     for n in inb.notifications.iter().take(8) {
         let (mark, st) = if n.read { ("  ", Style::default().fg(DIM)) } else { ("● ", Style::default().fg(FG)) };
@@ -334,52 +336,53 @@ fn draw_inbox(f: &mut Frame, app: &App) {
         ]));
     }
     lines.push(Line::raw(""));
-    lines.push(Line::from(Span::styled(format!("Mis tareas abiertas ({})", inb.tasks.len()), Style::default().fg(YELLOW).add_modifier(Modifier::BOLD))));
+    lines.push(Line::from(Span::styled(tf("Mis tareas abiertas ({})", &[&inb.tasks.len().to_string()]), Style::default().fg(YELLOW).add_modifier(Modifier::BOLD))));
     for (i, it) in inb.tasks.iter().enumerate() {
         let (sym, col) = prio(it.task.priority);
         let sel = if i == app.inbox_sel { Style::default().bg(Color::Rgb(41, 46, 66)).add_modifier(Modifier::BOLD) } else { Style::default() };
         lines.push(Line::from(vec![
             Span::styled(format!(" {sym} "), Style::default().fg(col)),
             Span::styled(it.task.title.clone(), sel),
-            Span::styled(format!("  {} / {} · {}", it.team, it.project, it.task.status.label()), Style::default().fg(DIM)),
+            Span::styled(format!("  {} / {} · {}", it.team, it.project, t(it.task.status.label())), Style::default().fg(DIM)),
         ]));
     }
     lines.push(Line::raw(""));
-    lines.push(Line::from(Span::styled("j/k elegir · Enter ir a la tarea · Esc cerrar (marca como leído)", Style::default().fg(DIM))));
+    lines.push(Line::from(Span::styled(t("j/k elegir · Enter ir a la tarea · Esc cerrar (marca como leído)"),Style::default().fg(DIM))));
     let area = centered(f.area(), 90, (lines.len() as u16 + 2).min(f.area().height));
     f.render_widget(Clear, area);
-    f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block("Bandeja", true)), area);
+    f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block(&t("Bandeja"), true)), area);
 }
 
 fn draw_config(f: &mut Frame, app: &App) {
     let me = app.email_info.as_ref();
     let email = match me {
         Some(m) if m.email.is_some() && m.email_verified => format!("✓ {}", m.email.clone().unwrap_or_default()),
-        Some(m) if m.email.is_some() => format!("{} (sin verificar)", m.email.clone().unwrap_or_default()),
-        _ => "sin cargar".into(),
+        Some(m) if m.email.is_some() => tf("{} (sin verificar)", &[&m.email.clone().unwrap_or_default()]),
+        _ => t("sin cargar"),
     };
     let tg = match me {
-        Some(m) if !m.telegram_available => "el servidor no tiene el bot".to_string(),
-        Some(m) if m.telegram_linked => "✓ vinculado · Enter desvincula".to_string(),
-        _ => "sin vincular · Enter vincula".to_string(),
+        Some(m) if !m.telegram_available => t("el servidor no tiene el bot"),
+        Some(m) if m.telegram_linked => t("✓ vinculado · Enter desvincula"),
+        _ => t("sin vincular · Enter vincula"),
     };
     let team = app.teams.get(app.team).map(|t| t.name.as_str()).unwrap_or("—");
     let rows: [(String, String); crate::CONFIG_ITEMS] = [
-        ("Email para avisos".into(), email),
-        ("Verificar el email".into(), "código de 6 dígitos".into()),
+        (t("Email para avisos"), email),
+        (t("Verificar el email"), t("código de 6 dígitos")),
         ("Telegram".into(), tg),
-        ("Bandeja de novedades".into(), format!("{} sin leer", app.unread)),
-        ("Enviar un mensaje al equipo".into(), team.into()),
-        ("Agregar un miembro".into(), "con búsqueda".into()),
-        ("Cambiar el rol de un miembro".into(), String::new()),
-        ("Generar código de invitación".into(), String::new()),
-        ("Unirme a un equipo con código".into(), String::new()),
-        ("Crear un equipo nuevo".into(), String::new()),
-        ("Cerrar sesión en todos los dispositivos".into(), "cierra el TUI".into()),
-        ("Atajos y ayuda".into(), "?".into()),
+        (t("Bandeja de novedades"), tf("{} sin leer", &[&app.unread.to_string()])),
+        (t("Enviar un mensaje al equipo"), team.into()),
+        (t("Agregar un miembro"), t("con búsqueda")),
+        (t("Cambiar el rol de un miembro"), String::new()),
+        (t("Generar código de invitación"), String::new()),
+        (t("Unirme a un equipo con código"), String::new()),
+        (t("Crear un equipo nuevo"), String::new()),
+        (t("Cerrar sesión en todos los dispositivos"), t("cierra el TUI")),
+        (t("Atajos y ayuda"), "?".into()),
+        (t("Idioma / Language"), format!("{} · {}", crate::i18n::name(), t("Enter cambia"))),
     ];
     let mut lines = vec![
-        Line::from(Span::styled(format!("Usuario: {}   ·   Equipo: {team}", app.me.as_ref().map(|u| u.username.as_str()).unwrap_or("")), Style::default().fg(DIM))),
+        Line::from(Span::styled(tf("Usuario: {}   ·   Equipo: {}", &[app.me.as_ref().map(|u| u.username.as_str()).unwrap_or(""), team]), Style::default().fg(DIM))),
         Line::raw(""),
     ];
     for (i, (name, state)) in rows.iter().enumerate() {
@@ -391,8 +394,8 @@ fn draw_config(f: &mut Frame, app: &App) {
         ]));
     }
     lines.push(Line::raw(""));
-    lines.push(Line::from(Span::styled("j/k elegir · Enter abrir · Esc cerrar", Style::default().fg(DIM))));
+    lines.push(Line::from(Span::styled(t("j/k elegir · Enter abrir · Esc cerrar"),Style::default().fg(DIM))));
     let area = centered(f.area(), 92, (lines.len() as u16 + 2).min(f.area().height));
     f.render_widget(Clear, area);
-    f.render_widget(Paragraph::new(lines).block(block("Configuración", true)), area);
+    f.render_widget(Paragraph::new(lines).block(block(&t("Configuración"), true)), area);
 }
