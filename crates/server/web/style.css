@@ -103,6 +103,9 @@ span.chip { cursor: inherit; padding: 0 8px; font-size: 11px; }
 .grow { flex: 1; }
 .member select { width: auto; padding: 4px 8px; }
 .members-list { display: grid; gap: 6px; }
+.user-results { display: flex; flex-wrap: wrap; gap: 6px; }
+.user-results button { display: inline-flex; align-items: center; gap: 6px; }
+.user-results .avatar { margin: 0; width: 22px; height: 22px; font-size: 10px; }
 .invite-out { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .invite-out code { background: var(--bg2); border: 1px dashed var(--green); color: var(--green); padding: 6px 10px; border-radius: 8px; user-select: all; }
 .invite-out small { color: var(--dim); }

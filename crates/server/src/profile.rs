@@ -117,14 +117,17 @@ async fn search_users(State(st): State<AppState>, user: AuthUser, Query(p): Quer
     if q.is_empty() {
         return Ok(Json(vec![]));
     }
-    // escapa los comodines de LIKE para que el prefijo se tome literal
-    let like = format!("{}%", q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+    // escapa los comodines de LIKE para que el texto se tome literal; primero los que empiezan igual
+    let like = format!("%{}%", q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+    let prefix = format!("{}%", q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
     let rows = sqlx::query(
         "SELECT id, username FROM users WHERE username LIKE ? ESCAPE '\\' \
-         AND id NOT IN (SELECT user_id FROM team_members WHERE team_id = ?) ORDER BY username LIMIT 8",
+         AND id NOT IN (SELECT user_id FROM team_members WHERE team_id = ?) \
+         ORDER BY username LIKE ? ESCAPE '\\' DESC, username LIMIT 8",
     )
-    .bind(like)
+    .bind(&like)
     .bind(p.team_id)
+    .bind(&prefix)
     .fetch_all(&st.db)
     .await?;
     Ok(Json(rows.iter().map(|r| User { id: r.get("id"), username: r.get("username") }).collect()))

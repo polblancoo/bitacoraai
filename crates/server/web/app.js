@@ -369,28 +369,32 @@ const openTeam = guard(async () => {
   if (!admin) body.push(h("small", { class: "warn" }, "Solo un admin o el dueño del equipo puede agregar miembros y generar códigos de invitación."));
   if (admin) {
     const user = h("input", { placeholder: "Buscar usuario…", maxLength: 32, autocomplete: "off" });
-    user.setAttribute("list", "user-suggest");
-    const sug = h("datalist", { id: "user-suggest" });
+    const sug = h("div", { class: "user-results" });
     const hint = h("small", { class: "warn" });
-    let lastQ = "";
-    user.addEventListener("input", async () => {
-      const q = user.value.trim(); if (!q || q === lastQ) return; lastQ = q;
+    let lastQ = null;
+    const search = async () => {
+      const q = user.value.trim(); if (q === lastQ) return; lastQ = q;
+      if (!q) { sug.replaceChildren(); hint.textContent = ""; return; }
       try {
         const us = await api("GET", `/api/users/search?q=${encodeURIComponent(q)}&team_id=${S.team.id}`);
-        sug.replaceChildren(...us.map((u) => h("option", { value: u.username })));
-        hint.textContent = us.length ? "" : "No hay usuarios registrados con ese nombre: pedile que se registre o mandale un código de invitación.";
-      } catch {}
-    });
+        if (user.value.trim() !== q) return;
+        sug.replaceChildren(...us.map((u) => h("button", { class: "ghost", onclick: () => { user.value = u.username; lastQ = null; sug.replaceChildren(); hint.textContent = ""; } },
+          avatar(u.username), u.username)));
+        hint.textContent = us.length ? "Tocá un usuario para elegirlo." : "No hay usuarios registrados con ese nombre (o ya están en el equipo): pedile que se registre o mandale un código de invitación.";
+      } catch (e) { hint.textContent = e.message; }
+    };
+    user.addEventListener("input", search);
     const role = roleSel("member", null, false, RANK[myRole()]);
     const inv = h("div", { class: "invite-out" });
     const grant = ROLES.filter(([r]) => RANK[r] < RANK[myRole()] && r !== "owner");
     const invRole = h("select", {}, grant.map(([r, l]) => h("option", { value: r, selected: r === "member" }, l)));
     body.push(
       h("h3", {}, "Agregar por usuario (ya registrado)"),
-      h("div", { class: "row" }, user, sug, role, h("button", { class: "primary", onclick: guard(async () => {
+      h("div", { class: "row" }, user, role, h("button", { class: "primary", onclick: guard(async () => {
         await api("POST", `/api/teams/${S.team.id}/members`, { username: user.value, role: role.value });
-        user.value = ""; toast("Miembro agregado");
+        user.value = ""; lastQ = null; sug.replaceChildren(); toast("Miembro agregado"); refreshMembers();
       }) }, "Agregar")),
+      sug,
       hint,
       h("h3", {}, "Invitar con un código (si todavía no tiene cuenta)"),
       h("div", { class: "row" }, invRole, h("button", { onclick: guard(async () => {
