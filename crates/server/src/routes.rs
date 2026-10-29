@@ -480,19 +480,20 @@ async fn request_help(
             None => sqlx::query_scalar(sqlx::AssertSqlSafe(pick("AND m.role IN ('owner','admin')"))).bind(team).fetch_optional(&st.db).await?,
         },
     };
-    let who = match assignee {
-        Some(id) => format!(" → pedido para {}", member_name(&st, id).await),
-        None => String::new(),
-    };
-    let Json(c) = add_comment(State(st.clone()), AuthUser { id: user.id, bot: user.bot }, Path(task), Json(NewComment { body: format!("🙋 {q}{who}") })).await?;
     let title: String = format!("🙋 Pedido de #{task}: {}", q.lines().next().unwrap_or("").chars().take(80).collect::<String>());
     let Json(req) = create_task(
         State(st.clone()),
         AuthUser { id: user.id, bot: user.bot },
         Path(t.project_id),
-        Json(NewTask { title, description: format!("{q}\n\nPedido por una IA desde la tarea #{task} «{}». Cuando lo resuelvas, pegá el resultado como comentario en la tarea #{task} y marcá esta como Hecha.", t.title), priority: 3, assignee_id: assignee, ..Default::default() }),
+        Json(NewTask { title, description: format!("{q}\n\nPedido por una IA desde la tarea #{task} «{}». Respondé con un comentario en la tarea #{task} (la IA lo lee ahí) y marcá esta como Hecha.", t.title), priority: 3, assignee_id: assignee, ..Default::default() }),
     )
     .await?;
+    let para = match assignee {
+        Some(id) => format!("para {}", member_name(&st, id).await),
+        None => "sin asignar".into(),
+    };
+    let body = format!("🙋 {q}\n\n📌 Se creó la tarea #{} ({para}). Para responder, comentá acá, en este mensaje: la IA lo recibe y sigue.", req.id);
+    let Json(c) = add_comment(State(st.clone()), AuthUser { id: user.id, bot: user.bot }, Path(task), Json(NewComment { body })).await?;
     Ok(Json(HelpOut { comment_id: c.id, task_id: req.id, assignee_id: assignee }))
 }
 
