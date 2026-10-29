@@ -115,6 +115,7 @@ Para Telegram, creá un bot con [@BotFather](https://t.me/BotFather) y pasale el
 |---|---|
 | `TM_REMINDER_SECS` | Cada cuántos segundos se revisan los vencimientos (por defecto 300) |
 | `TM_TELEGRAM_TOKEN` | Token del bot. El servidor lo atiende por *long polling*: no necesita URL pública ni HTTPS propio |
+| `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET`, `TM_GOOGLE_REDIRECT` | Cliente OAuth de Google Cloud que activa la sincronización con Google Calendar (redirección: `https://tu-servidor/api/google/callback`) |
 
 Cada usuario lo vincula en **Configuración → Telegram** (web/escritorio) o con `Ctrl+T g` (TUI): genera un código de un solo uso (15 min) y se lo manda al bot como `/start CÓDIGO`; `/stop` desvincula. Una vez vinculado, el bot también responde: `/tareas` (tus tareas abiertas) y `/hecho N` (cierra la tarea N si es tuya, o cualquiera si sos admin). Solo se escribe a chats vinculados así, nunca a ids arbitrarios.
 

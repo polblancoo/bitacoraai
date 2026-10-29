@@ -149,7 +149,7 @@ async function loadInbox(auto) {
   const [inbox, me] = await Promise.all([api("GET", "/api/inbox"), api("GET", "/api/me")]).catch(() => [null, null]);
   if (!inbox) return;
   S.inbox = inbox; S.me = me; S.unread = inbox.unread;
-  if (!auto || inbox.unread > 0 || inbox.tasks.length > 0) openInbox();
+  if (!auto || inbox.unread > 0) openInbox();
   else render();
 }
 
@@ -189,7 +189,7 @@ function openInbox() {
           h("span", { class: "grow" }, it.task.title),
           h("small", {}, `${it.team} / ${it.project}${it.task.due ? " · vence " + new Date(it.task.due).toLocaleDateString() : ""}`)))),
       h("div", { class: "row" }, h("button", { onclick: openProfile }, "Mi email"), h("span", { class: "spacer" }),
-        h("button", { class: "primary", onclick: closeInbox }, "Marcar como leído y cerrar")))));
+        h("button", { class: "primary", onclick: closeInbox }, S.unread ? "Marcar como leído y cerrar" : "Cerrar")))));
 }
 
 const openProfile = guard(async () => {
@@ -399,8 +399,12 @@ const openTeam = guard(async () => {
       h("h3", {}, "Invitar con un código (si todavía no tiene cuenta)"),
       h("div", { class: "row" }, invRole, h("button", { onclick: guard(async () => {
         const r = await api("POST", `/api/teams/${S.team.id}/invites`, { role: invRole.value });
+        const msg = inviteMessage(r.code);
         inv.replaceChildren(h("code", {}, r.code), h("button", { onclick: () => navigator.clipboard?.writeText(r.code).then(() => toast("Código copiado")) }, "Copiar"),
-          h("small", {}, "Se muestra una sola vez · vence en 7 días · 10 usos"));
+          h("button", { title: "Texto listo para pegar en WhatsApp, Telegram, etc.", onclick: () => navigator.clipboard?.writeText(msg).then(() => toast("Invitación copiada: pegala en un chat")) }, "Copiar invitación"),
+          h("a", { class: "btnlike", href: `mailto:?subject=${encodeURIComponent("Invitación a Rust TUI Manager")}&body=${encodeURIComponent(msg)}` }, "Enviar por email"),
+          h("small", {}, "Se muestra una sola vez · vence en 7 días · 10 usos"),
+          /localhost|127\.0\.0\.1/.test(S.server) && h("small", { class: "warn" }, "Ojo: tu servidor es local (" + S.server + "); para que otra persona entre, tiene que ser una dirección que ella alcance."));
       }) }, "Generar código")),
       inv,
       invites.length > 0 && h("h3", {}, "Invitaciones activas"),
@@ -413,6 +417,19 @@ const openTeam = guard(async () => {
   document.body.append(h("div", { class: "overlay", id: "team-modal", onmousedown: (e) => e.target.id === "team-modal" && e.target.remove() },
     h("div", { class: "modal" }, body)));
 });
+const RELEASES_URL = "https://github.com/polblancoo/tui_comandNote/releases/latest";
+const inviteMessage = (code) => [
+  `Te invito al equipo «${S.team.name}» en Rust TUI Manager.`,
+  "",
+  `1. Instalá la app (Linux .deb/.rpm/AppImage): ${RELEASES_URL}`,
+  `   o abrila directo en el navegador: ${S.server}`,
+  `2. Servidor: ${S.server}`,
+  "3. Creá tu cuenta y tocá «Unirme con un código» (el ↪ de la barra lateral).",
+  `4. Pegá este código: ${code}`,
+  "",
+  "El código vence en 7 días.",
+].join("\n");
+
 const createTask = guard(async (status) => {
   const f = await form("Nueva tarea", [
     { name: "title", label: "Título", max: 200 },
@@ -789,52 +806,117 @@ function activityView() {
 const IS_WEB = /^https?:$/.test(location.protocol) && location.hostname !== "tauri.localhost";
 const VIEWS = [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"], ["activity", "Actividad"]];
 
+// Ayuda de cada fila de Configuración: qué hace (usuario) y qué hay que tener en el servidor (admin del servidor)
+const CFG_HELP = {
+  user: ["Usuario", "Es tu nombre en la app. Tus compañeros te buscan por él cuando un admin te agrega a un equipo.", null],
+  email: ["Email para avisos", "Tocá «Configurar», escribí tu email y poné el código de 6 dígitos que te llega. Solo los emails verificados reciben avisos: asignaciones, menciones, recordatorios y mensajes del equipo.",
+    "Necesita TM_SMTP_URL (por ejemplo smtps://usuario:clave@host:465) y TM_SMTP_FROM; con cuenta SMTP que requiera login, también TM_SMTP_USER y TM_SMTP_PASSWORD. Sin eso el servidor no manda emails y acá no se puede verificar."],
+  telegram: ["Telegram", "Tocá «Vincular», abrí el bot que se muestra y mandale /start CÓDIGO. Después recibís las novedades en Telegram y podés usar /tareas, /hecho N (marca la tarea N como hecha) y /stop (desvincula).",
+    "Creá un bot con @BotFather en Telegram y arrancá tm-server con TM_TELEGRAM_TOKEN=<token>. No necesita URL pública (usa long polling). Sin el token, esta fila dice «el servidor no tiene el bot configurado»."],
+  inbox: ["Bandeja de novedades", "Reúne lo que te pasó: asignaciones, comentarios, menciones (@usuario), recordatorios y mensajes. Se marcan como leídas al cerrarla. También abre con la campana 🔔 o Ctrl+T n.",
+    "Los recordatorios de tareas por vencer salen solos; la frecuencia se ajusta con TM_REMINDER_SECS (300 segundos por defecto)."],
+  logout: ["Cerrar sesión", "Sale de la app en este dispositivo. Tus datos quedan en el servidor.", null],
+  logoutAll: ["Cerrar todas las sesiones", "Úsalo si perdiste un dispositivo o sospechás que alguien más entró: invalida todas tus sesiones abiertas y tenés que volver a iniciar sesión en cada dispositivo.", null],
+  role: ["Tu rol", "Lector: solo mira. Miembro: crea, edita y comenta tareas y escribe al equipo. Admin: además agrega miembros, cambia roles y genera invitaciones. Dueño: todo lo anterior y es quien creó el equipo. Si necesitás otro permiso, pedíselo a un admin.",
+    "El rol es por equipo, no del servidor: administrar el servidor (variables de entorno, base de datos) es independiente de ser admin o dueño de un equipo."],
+  message: ["Mensaje al equipo", "Escribe un aviso que le llega a todos los miembros del equipo por bandeja, y por email y Telegram a quienes lo tengan conectado.", null],
+  members: ["Miembros e invitaciones", "Mirá quiénes están en el equipo. Si sos admin o dueño: buscá a alguien ya registrado y agregalo, o generá un código de invitación (y «Copiar invitación» arma el texto con el enlace de instalación para pegar en un chat).", null],
+  join: ["Unirme con un código", "Si un admin te pasó un código de invitación, pegalo acá para entrar a su equipo.", null],
+  newTeam: ["Crear un equipo", "Creás un equipo nuevo y quedás como Dueño. Después invitás a la gente desde «Miembros, roles e invitaciones».", null],
+  project: ["Proyecto", "Un proyecto agrupa las tareas del equipo (tablero, calendario, Gantt y pizarra). Creá uno con «Nuevo proyecto».", null],
+  duplicate: ["Usar como plantilla", "Crea un proyecto nuevo copiando las tareas, etiquetas y dependencias del actual, para repetir un proceso sin armarlo de cero.", null],
+  export: ["Exportar", "Descarga todas las tareas del proyecto en CSV (para planilla) o JSON (para copia de seguridad o scripts).", null],
+  view: ["Vista inicial", "Qué vista se abre primero en este dispositivo: tablero, calendario, Gantt, pizarra o actividad. Se cambia en cualquier momento con las teclas 1 a 5.", null],
+  server: ["Servidor", "Es la dirección donde corre tm-server (por ejemplo https://tareas.miempresa.com). En la web propia del servidor no se cambia; en la app de escritorio o la TUI la escribís una vez y volvés a iniciar sesión.",
+    "tm-server escucha en TM_ADDR (0.0.0.0:7878 por defecto). Fuera de tu red, ponelo detrás de HTTPS: TM_TLS_CERT y TM_TLS_KEY, o un proxy con TM_TRUSTED_PROXY=1. La web integrada se desactiva con TM_WEB=0."],
+  shortcuts: ["Atajos de teclado", "Muestra todos los atajos, con buscador. También se abre con la tecla ?.", null],
+};
+const cfgHelp = (key) => {
+  const [title, user, admin] = CFG_HELP[key];
+  document.getElementById("cfg-help")?.remove();
+  const close = () => document.getElementById("cfg-help")?.remove();
+  document.body.append(h("div", { class: "overlay", id: "cfg-help", onmousedown: (e) => e.target.id === "cfg-help" && close() },
+    h("div", { class: "modal" },
+      h("h3", {}, title),
+      h("h4", {}, "Si sos usuario"), h("p", {}, user),
+      admin && [h("h4", {}, "Si administrás el servidor"), h("p", {}, admin)],
+      h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { class: "primary", onclick: close }, "Entendido")))));
+};
+
+const googleHelp = () => {
+  document.getElementById("gc-help")?.remove();
+  const code = (t) => h("code", {}, t);
+  document.body.append(h("div", { class: "overlay", id: "gc-help", onmousedown: (e) => e.target.id === "gc-help" && e.target.remove() },
+    h("div", { class: "modal" },
+      h("h3", {}, "Google Calendar"),
+      h("p", {}, "Tus tareas con fecha (asignadas a vos o sin responsable, de tus equipos) aparecen como eventos de día completo en tu calendario principal. Si cambian, se borran o las terminás, el evento se actualiza solo (cada minuto). Es de un solo sentido: lo que cambies en Google no vuelve a la app."),
+      h("h3", {}, "Para usarlo"),
+      h("p", {}, "Tocá «Conectar», elegí tu cuenta de Google y aceptá el permiso de eventos. Podés desconectar cuando quieras: se quitan los eventos que creó la app."),
+      h("h3", {}, "Si dice «el servidor no tiene Google configurado»"),
+      h("p", {}, "Lo configura UNA vez quien administra el servidor (no cada usuario):"),
+      h("ol", {},
+        h("li", {}, "En console.cloud.google.com creá un proyecto y habilitá la «Google Calendar API»."),
+        h("li", {}, "En «Google Auth platform» configurá la pantalla de consentimiento (tipo Externo) y agregá como «usuarios de prueba» los Gmail de quienes lo usarán (hasta 100; para abrirlo a todos hay que pasar la verificación de Google)."),
+        h("li", {}, "En «Clientes» creá un ID de cliente tipo «Aplicación web» con la redirección ", code("https://TU-SERVIDOR/api/google/callback"), " (con HTTPS; ", code("http://localhost:7878/api/google/callback"), " sirve solo para probar en la misma PC)."),
+        h("li", {}, "Arrancá tm-server con ", code("TM_GOOGLE_CLIENT_ID"), ", ", code("TM_GOOGLE_CLIENT_SECRET"), " y ", code("TM_GOOGLE_REDIRECT"), ". El secreto es privado: no lo compartas ni lo subas a git.")),
+      h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { class: "primary", onclick: () => document.getElementById("gc-help")?.remove() }, "Entendido")))));
+};
 const openSettings = guard(async () => {
   document.getElementById("settings-modal")?.remove();
   S.me = await api("GET", "/api/me");
   const me = S.me, close = () => document.getElementById("settings-modal")?.remove();
   const go = (fn) => () => { close(); fn(); };
   const sec = (title, ...kids) => h("section", { class: "cfg-sec" }, h("h3", {}, title), ...kids);
-  const line = (label, ...ctl) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, label), ...ctl);
+  const line = (label, ...ctl) => {
+    const [text, key] = Array.isArray(label) ? label : [label, null];
+    return h("div", { class: "cfg-line" }, h("span", { class: "grow" }, text),
+      key && h("button", { class: "ghost help", title: "¿Qué es esto?", onclick: () => (key === "google" ? googleHelp() : cfgHelp(key)) }, "?"), ...ctl);
+  };
 
   const view = h("select", { onchange: (e) => { store.set("view", e.target.value); S.view = e.target.value; render(); } },
     VIEWS.map(([v, l]) => h("option", { value: v, selected: S.view === v }, l)));
   const server = h("input", { value: S.server, disabled: IS_WEB, maxLength: 200 });
   const tgState = !me.telegram_available ? "el servidor no tiene el bot configurado" : me.telegram_linked ? "✓ vinculado" : "sin vincular";
+  const gc = await api("GET", "/api/google").catch(() => ({ available: false }));
+  const gcState = !gc.available ? "el servidor no tiene Google configurado" : gc.linked ? `✓ conectado (${gc.events} tareas con fecha en tu calendario)` : "sin conectar";
   const emailState = !me.email ? "sin cargar" : me.email_verified ? `✓ ${me.email}` : `${me.email} (sin verificar)`;
 
   document.body.append(h("div", { class: "overlay", id: "settings-modal", onmousedown: (e) => e.target.id === "settings-modal" && close() },
     h("div", { class: "modal" },
       h("h2", {}, "Configuración"),
       sec("Cuenta",
-        line(`Usuario: ${me.username}`),
-        line(`Email para avisos: ${emailState}`, h("button", { onclick: go(openProfile) }, "Configurar")),
-        line(`Telegram: ${tgState}`, me.telegram_available && (me.telegram_linked
+        line([`Usuario: ${me.username}`, "user"]),
+        line([`Email para avisos: ${emailState}`, "email"], h("button", { onclick: go(openProfile) }, "Configurar")),
+        line([`Telegram: ${tgState}`, "telegram"], me.telegram_available && (me.telegram_linked
           ? h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/telegram"); close(); openSettings(); }) }, "Desvincular")
           : h("button", { onclick: () => { close(); linkTelegram(); } }, "Vincular"))),
-        line("Bandeja de novedades", h("button", { onclick: go(() => loadInbox(false)) }, S.unread ? `Abrir (${S.unread})` : "Abrir")),
-        line("Cerrar sesión en este dispositivo", h("button", { onclick: () => { close(); logout(); } }, "Salir")),
-        line("Cerrar sesión en todos los dispositivos", h("button", { class: "danger", onclick: () => { close(); logoutAll(); } }, "Cerrar todas"))),
+        line([`Google Calendar: ${gcState}`, "google"], gc.available && (gc.linked
+          ? [h("button", { onclick: guard(async () => { const r = await api("POST", "/api/google/sync"); toast(`Calendario al día (${r.created} nuevos, ${r.updated} cambiados, ${r.deleted} quitados)`); close(); openSettings(); }) }, "Sincronizar"),
+            h("button", { class: "danger", onclick: guard(async () => { if (!confirm("¿Desconectar y quitar de tu calendario los eventos creados por la app?")) return; await api("DELETE", "/api/google"); close(); openSettings(); }) }, "Desconectar")]
+          : h("button", { onclick: guard(async () => { const l = await api("POST", "/api/google/link"); window.open(l.url, "_blank", "noopener"); toast("Autorizá en la pestaña de Google y después volvé a abrir Configuración"); }) }, "Conectar"))),
+        line(["Bandeja de novedades", "inbox"], h("button", { onclick: go(() => loadInbox(false)) }, S.unread ? `Abrir (${S.unread})` : "Abrir")),
+        line(["Cerrar sesión en este dispositivo", "logout"], h("button", { onclick: () => { close(); logout(); } }, "Salir")),
+        line(["Cerrar sesión en todos los dispositivos", "logoutAll"], h("button", { class: "danger", onclick: () => { close(); logoutAll(); } }, "Cerrar todas"))),
       S.team && sec(`Equipo «${S.team.name}»`,
-        line(`Tu rol: ${ROLES.find(([r]) => r === myRole())?.[1]}`),
-        can("member") && line("Enviar un mensaje al equipo", h("button", { onclick: go(sendTeamMessage) }, "Escribir")),
-        line("Miembros, roles e invitaciones", h("button", { onclick: go(openTeam) }, "Administrar")),
-        line("Unirme a otro equipo con un código", h("button", { onclick: go(joinWithCode) }, "Unirme")),
-        line("Crear un equipo nuevo", h("button", { onclick: go(createTeam) }, "Crear"))),
+        line([`Tu rol: ${ROLES.find(([r]) => r === myRole())?.[1]}`, "role"]),
+        can("member") && line(["Enviar un mensaje al equipo", "message"], h("button", { onclick: go(sendTeamMessage) }, "Escribir")),
+        line(["Miembros, roles e invitaciones", "members"], h("button", { onclick: go(openTeam) }, "Administrar")),
+        line(["Unirme a otro equipo con un código", "join"], h("button", { onclick: go(joinWithCode) }, "Unirme")),
+        line(["Crear un equipo nuevo", "newTeam"], h("button", { onclick: go(createTeam) }, "Crear"))),
       S.team && sec("Proyecto",
-        line(S.project ? `Proyecto actual: ${S.project.name}` : "Sin proyectos", h("button", { onclick: go(createProject) }, "Nuevo proyecto")),
-        S.project && can("member") && line("Usar como plantilla (copia tareas, etiquetas y dependencias)", h("button", { onclick: go(duplicateProject) }, "Duplicar")),
-        S.project && line("Exportar las tareas", h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
+        line([S.project ? `Proyecto actual: ${S.project.name}` : "Sin proyectos", "project"], h("button", { onclick: go(createProject) }, "Nuevo proyecto")),
+        S.project && can("member") && line(["Usar como plantilla (copia tareas, etiquetas y dependencias)", "duplicate"], h("button", { onclick: go(duplicateProject) }, "Duplicar")),
+        S.project && line(["Exportar las tareas", "export"], h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
           h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
       sec("Preferencias",
-        line("Vista inicial", view),
-        line("Servidor", server),
+        line(["Vista inicial", "view"], view),
+        line(["Servidor", "server"], server),
         IS_WEB ? h("small", {}, "Estás usando la web del propio servidor: la dirección no se cambia desde acá.")
           : h("div", { class: "row" }, h("button", { onclick: guard(async () => {
             const url = server.value.trim().replace(/\/$/, ""); if (!/^https?:\/\//.test(url)) throw new Error("la dirección debe empezar con http:// o https://");
             S.server = url; store.set("server", url); toast("Servidor guardado: volvé a iniciar sesión"); close(); logout();
           }) }, "Guardar servidor y reiniciar sesión"))),
-      sec("Ayuda", line("Atajos de teclado (también con ?)", h("button", { onclick: go(helpModal) }, "Ver atajos"))),
+      sec("Ayuda", line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos"))),
       h("div", { class: "row" }, h("button", { class: "primary", onclick: close }, "Listo")))));
 });
 

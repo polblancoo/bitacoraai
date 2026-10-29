@@ -134,3 +134,16 @@ CREATE TABLE IF NOT EXISTS activity (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_activity_project ON activity(project_id, id);
+
+CREATE TABLE IF NOT EXISTS google_links (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    refresh_token TEXT NOT NULL,
+    linked_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS google_events (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    task_id INTEGER NOT NULL,
+    event_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    PRIMARY KEY (user_id, task_id)
+);

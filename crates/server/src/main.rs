@@ -4,6 +4,7 @@ mod canvas;
 mod limits;
 mod notify;
 mod extras;
+mod google;
 mod telegram;
 mod web;
 mod profile;
@@ -43,6 +44,7 @@ pub struct AppState {
     pub mailer: Option<Arc<notify::Mailer>>,
     pub email_limiter: Arc<limits::RateLimiter<Id>>,
     pub telegram: Option<Arc<telegram::Telegram>>,
+    pub google: Option<Arc<google::Google>>,
 }
 
 impl AppState {
@@ -167,11 +169,13 @@ async fn main() -> anyhow::Result<()> {
         mailer: notify::Mailer::from_env().map(Arc::new),
         email_limiter: Default::default(),
         telegram: telegram::Telegram::from_env().await.map(Arc::new),
+        google: google::Google::from_env().map(Arc::new),
     };
     telegram::spawn_poller(state.clone());
     extras::spawn_reminders(state.clone());
+    google::spawn_sync(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

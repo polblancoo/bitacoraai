@@ -47,6 +47,8 @@ La base SQLite se crea sola (con permisos `0600`) y el esquema se migra al arran
 | `TM_SMTP_URL` / `TM_SMTP_FROM` | — | Habilitan los avisos por email (opcional): `smtps://host:465`, `Tareas <avisos@ejemplo.com>` |
 | `TM_REMINDER_SECS` | `300` | Cada cuántos segundos se revisan los vencimientos para los recordatorios |
 | `TM_TELEGRAM_TOKEN` | — | Token del bot de Telegram (de @BotFather); activa vincular cuentas y avisos por Telegram |
+| `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET`, `TM_GOOGLE_REDIRECT` | — | Cliente OAuth de Google Cloud («Aplicación web») que activa Google Calendar; la redirección es `https://tu-servidor/api/google/callback` |
+| `TM_GOOGLE_SYNC_SECS` | `60` | Cada cuántos segundos se sincroniza el calendario de los usuarios conectados |
 | `TM_SMTP_USER` / `TM_SMTP_PASSWORD` | — | Credenciales SMTP, si hacen falta |
 
 Nuevos endpoints: `GET /api/me`, `PUT/DELETE /api/me/email`, `POST /api/me/email/verify`, `GET /api/users/search?q=&team_id=` (solo admin del equipo), `POST /api/me/telegram/link`, `DELETE /api/me/telegram`, `POST /api/teams/{id}/messages` (miembro o más), `GET/POST /api/tasks/{id}/attachments` (cuerpo binario, `?name=`), `GET/DELETE /api/attachments/{id}`, `POST /api/projects/{id}/duplicate`, `GET /api/projects/{id}/export?format=csv|json`, `GET /api/projects/{id}/activity`, `GET /api/inbox`, `POST /api/notifications/read`, `PUT/DELETE /api/tasks/{id}/deps/{dep}`, y la pizarra: `GET /api/projects/{id}/canvas`, `POST .../canvas/items|links`, `PATCH/DELETE /api/canvas/items/{id}`, `DELETE /api/canvas/links/{id}`.
@@ -88,3 +90,7 @@ Cuerpo de 64 KB; usuario 3–32 caracteres, contraseña 8–128; título 200, de
 ## Licencia
 
 MIT
+
+## Google Calendar
+
+Cada usuario conecta su cuenta desde Configuración → Google Calendar y sus tareas con fecha (asignadas a él o sin responsable, de sus equipos) aparecen como eventos de día completo en su calendario principal; se actualizan o se borran solos. La sincronización es de un solo sentido. Quien administra el servidor lo configura una sola vez: crea un proyecto en Google Cloud, habilita la *Google Calendar API*, configura la pantalla de consentimiento (con los Gmail de prueba, hasta 100, o la verificación de Google para abrirla) y crea un cliente OAuth tipo «Aplicación web»; el secreto no se comparte ni se sube a git.
