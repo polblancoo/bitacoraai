@@ -119,6 +119,7 @@ El comando también recibe `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_U
 
 - **El texto de las tareas llega al agente como instrucciones.** Quien puede asignarle una tarea a la IA puede, en la práctica, darle órdenes. Asigná tareas solo desde cuentas de confianza.
 - Corré el agente con **permisos acotados**: un usuario sin privilegios, la carpeta del proyecto y nada más. Evitá opciones del estilo «saltear todos los permisos».
+- **Comandos prohibidos**: en la ficha de la IA, **🚫 Comandos prohibidos** (uno por línea, ej. `Bash(rm:*)`). `tm-agent` se la pasa al comando en `TM_DENY` y el agente de ejemplo (`run-claude.sh`) la suma a `--disallowedTools`. Si a la IA le bloquean algo que necesita, te avisa con una alarma 🙋 (`tm-agent ask`).
 - El **token** es la llave de esa IA: guardalo en un archivo con permisos `600`, no en el repositorio. Se revoca con un clic en la web.
 - Una IA **no puede** crear ni borrar equipos, invitar gente ni cambiar roles.
 

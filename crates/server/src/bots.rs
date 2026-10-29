@@ -24,6 +24,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/teams/{id}/bots", get(list_bots).post(create_bot))
         .route("/api/bots/{uid}/token", post(rotate).delete(revoke))
         .route("/api/bots/{uid}", axum::routing::patch(update_bot))
+        .route("/api/me/deny", get(my_deny))
 }
 
 #[derive(Deserialize)]
@@ -38,7 +39,9 @@ struct NewBot {
 
 #[derive(Deserialize)]
 struct UpdateBot {
-    model: String,
+    model: Option<String>,
+    /// Comandos prohibidos para esta IA, uno por línea (por ejemplo `Bash(rm:*)`).
+    deny: Option<String>,
 }
 
 fn new_token() -> String {
@@ -75,7 +78,7 @@ async fn manages_bot(st: &AppState, caller: Id, bot: Id) -> Result<()> {
 async fn list_bots(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
     require(&st, team, user.id, Role::Viewer).await?;
     let rows = sqlx::query(
-        "SELECT u.id, u.username, u.model, m.role, m.joined_at, cb.username AS created_by, t.last_used, t.id AS tok \
+        "SELECT u.id, u.username, u.model, u.deny, m.role, m.joined_at, cb.username AS created_by, t.last_used, t.id AS tok \
          FROM team_members m JOIN users u ON u.id = m.user_id \
          LEFT JOIN api_tokens t ON t.user_id = u.id LEFT JOIN users cb ON cb.id = t.created_by \
          WHERE m.team_id = ? AND u.is_bot = 1 ORDER BY u.username",
@@ -90,6 +93,7 @@ async fn list_bots(State(st): State<AppState>, user: AuthUser, Path(team): Path<
                     "id": r.get::<Id, _>("id"),
                     "username": r.get::<String, _>("username"),
                     "model": r.get::<String, _>("model"),
+                    "deny": r.get::<String, _>("deny"),
                     "role": r.get::<String, _>("role"),
                     "joined_at": r.get::<Option<String>, _>("joined_at"),
                     "created_by": r.get::<Option<String>, _>("created_by"),
@@ -149,7 +153,20 @@ async fn revoke(State(st): State<AppState>, user: AuthUser, Path(uid): Path<Id>)
 async fn update_bot(State(st): State<AppState>, user: AuthUser, Path(uid): Path<Id>, Json(b): Json<UpdateBot>) -> Result<StatusCode> {
     user.human_only()?;
     manages_bot(&st, user.id, uid).await?;
-    limits::max_len("modelo", &b.model, 40)?;
-    sqlx::query("UPDATE users SET model = ? WHERE id = ?").bind(b.model.trim()).bind(uid).execute(&st.db).await?;
+    if let Some(model) = &b.model {
+        limits::max_len("modelo", model, 40)?;
+        sqlx::query("UPDATE users SET model = ? WHERE id = ?").bind(model.trim()).bind(uid).execute(&st.db).await?;
+    }
+    if let Some(deny) = &b.deny {
+        limits::max_len("lista de comandos prohibidos", deny, 4000)?;
+        let clean = deny.lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n");
+        sqlx::query("UPDATE users SET deny = ? WHERE id = ?").bind(clean).bind(uid).execute(&st.db).await?;
+    }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// La IA lee su propia lista de comandos prohibidos (la edita un admin desde la app).
+async fn my_deny(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+    let deny: String = sqlx::query_scalar("SELECT deny FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
+    Ok(Json(json!({ "deny": deny })))
 }

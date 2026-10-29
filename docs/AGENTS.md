@@ -122,6 +122,7 @@ The command also receives `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_UR
 
 - **The text of tasks reaches the agent as instructions.** Whoever can assign a task to the AI can, in practice, give it orders. Assign tasks only from trusted accounts.
 - Run the agent with **limited permissions**: an unprivileged user, the project folder and nothing else. Avoid options like «skip all permissions».
+- **Forbidden commands**: in the AI's card, **🚫 Comandos prohibidos** (one per line, e.g. `Bash(rm:*)`). `tm-agent` hands the list to your command in `TM_DENY`, and an example wrapper can add it to Claude Code's `--disallowedTools`. If the AI is blocked from something it needs, it alerts you with a 🙋 alarm (`tm-agent ask`).
 - The **token** is that AI's key: keep it in a file with `600` permissions, not in the repository. It is revoked with one click on the web.
 - An AI **cannot** create or delete teams, invite people or change roles.
 

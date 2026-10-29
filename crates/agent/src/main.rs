@@ -157,10 +157,13 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     api.say(job.id, &format!("▶ Empiezo con esta tarea. Trabajo en `{}`.", dir.display())).await;
     let prompt = prompt_for(api, job, &dir).await;
 
+    // Lista de comandos prohibidos que un admin edita desde la app (ficha de la IA).
+    let deny = api.get("/api/me/deny").await.ok().and_then(|v| v["deny"].as_str().map(String::from)).unwrap_or_default();
     let mut cmd = if cfg!(windows) { let mut c = Command::new("cmd"); c.arg("/C"); c } else { let mut c = Command::new("sh"); c.arg("-c"); c };
     cmd.arg(&api.cfg.cmd)
         .current_dir(&dir)
         .env("TM_TASK_PROMPT", &prompt)
+        .env("TM_DENY", deny)
         .env("TM_TASK_ID", job.id.to_string())
         .env("TM_TASK_TITLE", &job.title)
         .env("TM_PROJECT_ID", job.project_id.to_string())
