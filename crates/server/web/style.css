@@ -278,3 +278,32 @@ small.inl { opacity: .75; font-weight: 400; }
 .nav button small.inl, .tp-name small.inl { display: block; font-size: 11px; margin-left: 0; }
 ol.guide { padding-left: 20px; display: grid; gap: 6px; font-size: 13px; }
 ol.guide pre { margin: 4px 0; }
+
+/* portafolio */
+.portfolio { flex: 1; padding: 16px 22px; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow: auto; }
+.pf-tiles { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.pf-tile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 16px; display: flex; flex-direction: column; min-width: 110px; }
+.pf-tile b { font-size: 24px; line-height: 1.1; }
+.pf-tile span { color: var(--dim); font-size: 12px; }
+.pf-tile.bad b { color: var(--red); }
+.pf-tile.warn b { color: var(--yellow); }
+.pf-tiles > button { align-self: center; margin-left: auto; }
+.pf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.pf-card { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--green); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
+.pf-card:hover { border-color: var(--blue); }
+.pf-card.late { border-left-color: var(--red); }
+.pf-card.stalled { border-left-color: var(--yellow); }
+.pf-card.done { border-left-color: var(--blue); }
+.pf-card.empty { border-left-color: var(--dim); }
+.pf-head { display: flex; align-items: center; gap: 8px; }
+.pf-health { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.pf-bar { height: 8px; background: var(--bg2); border-radius: 4px; overflow: hidden; display: flex; }
+.pf-bar i { display: block; height: 100%; }
+.pf-bar .done { background: var(--green); }
+.pf-bar .doing { background: var(--yellow); }
+.pf-nums { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--dim); }
+.pf-nums .bad { color: var(--red); }
+.pf-nums .warn { color: var(--yellow); }
+.pf-people { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-chip { background: var(--card2); border-radius: 999px; padding: 2px 9px; font-size: 12px; }
+.pf-foot { display: flex; flex-wrap: wrap; gap: 2px 12px; color: var(--dim); }

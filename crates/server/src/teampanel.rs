@@ -13,6 +13,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use chrono::{Duration, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::Row;
@@ -21,6 +22,7 @@ use tm_core::{Event, Id, Role};
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/teams/{id}/overview", get(overview))
+        .route("/api/teams/{id}/portfolio", get(portfolio))
         .route("/api/teams/{id}", axum::routing::patch(update_team).delete(delete_team))
         .route("/api/teams/{id}/transfer", post(transfer))
         .route("/api/projects/{id}", axum::routing::patch(update_project).delete(delete_project))
@@ -208,4 +210,89 @@ async fn delete_project(State(st): State<AppState>, user: AuthUser, Path(id): Pa
     sqlx::query("DELETE FROM projects WHERE id = ?").bind(id).execute(&st.db).await?;
     st.emit(team, Event::ProjectDeleted { id, team_id: team });
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Portafolio: el avance de todos los proyectos del equipo en una sola consulta (para el panel de comando).
+async fn portfolio(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
+    require(&st, team, user.id, Role::Viewer).await?;
+    let now = Utc::now();
+    let rows = sqlx::query(
+        "SELECT p.id, p.name, p.color, p.work_dir, p.repo, COUNT(t.id) AS total, \
+         COALESCE(SUM(t.status = 'done'), 0) AS done, COALESCE(SUM(t.status = 'doing'), 0) AS doing, COALESCE(SUM(t.status = 'todo'), 0) AS todo, \
+         COALESCE(SUM(t.status != 'done' AND t.due IS NOT NULL AND t.due < ?), 0) AS overdue, \
+         COALESCE(SUM(t.status != 'done' AND t.assignee_id IS NULL), 0) AS unassigned, \
+         MIN(CASE WHEN t.status != 'done' THEN t.due END) AS next_due, \
+         (SELECT MAX(a.created_at) FROM activity a WHERE a.project_id = p.id) AS last_activity \
+         FROM projects p LEFT JOIN tasks t ON t.project_id = p.id AND t.parent_id IS NULL \
+         WHERE p.team_id = ? GROUP BY p.id ORDER BY p.name",
+    )
+    .bind(now)
+    .bind(team)
+    .fetch_all(&st.db)
+    .await?;
+    let people = sqlx::query(
+        "SELECT t.project_id, u.username, u.is_bot, COUNT(*) AS open, COALESCE(SUM(t.status = 'doing'), 0) AS doing \
+         FROM tasks t JOIN projects p ON p.id = t.project_id JOIN users u ON u.id = t.assignee_id \
+         WHERE p.team_id = ? AND t.status != 'done' AND t.parent_id IS NULL GROUP BY t.project_id, u.id ORDER BY open DESC",
+    )
+    .bind(team)
+    .fetch_all(&st.db)
+    .await?;
+    let since = now - Duration::hours(24);
+    let ai = sqlx::query(
+        "SELECT a.project_id, COUNT(*) AS n FROM activity a JOIN projects p ON p.id = a.project_id JOIN users u ON u.id = a.user_id \
+         WHERE p.team_id = ? AND u.is_bot = 1 AND a.created_at > ? GROUP BY a.project_id",
+    )
+    .bind(team)
+    .bind(since)
+    .fetch_all(&st.db)
+    .await?;
+    let recent = sqlx::query(
+        "SELECT p.name AS project, u.username, a.text, a.created_at FROM activity a JOIN projects p ON p.id = a.project_id \
+         JOIN users u ON u.id = a.user_id WHERE p.team_id = ? AND u.is_bot = 1 ORDER BY a.id DESC LIMIT 8",
+    )
+    .bind(team)
+    .fetch_all(&st.db)
+    .await?;
+
+    let stale = (now - Duration::days(7)).to_rfc3339();
+    let projects: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            let id: Id = r.get("id");
+            let (total, done, overdue): (i64, i64, i64) = (r.get("total"), r.get("done"), r.get("overdue"));
+            let open = total - done;
+            let last: Option<String> = r.get("last_activity");
+            let health = if total == 0 {
+                "empty"
+            } else if open == 0 {
+                "done"
+            } else if overdue > 0 {
+                "late"
+            } else if last.as_deref().map_or(true, |l| l < stale.as_str()) {
+                "stalled"
+            } else {
+                "ok"
+            };
+            let who: Vec<Value> = people
+                .iter()
+                .filter(|x| x.get::<Id, _>("project_id") == id)
+                .map(|x| json!({ "username": x.get::<String, _>("username"), "bot": x.get::<i64, _>("is_bot") == 1, "open": x.get::<i64, _>("open"), "doing": x.get::<i64, _>("doing") }))
+                .collect();
+            let ai_24h = ai.iter().find(|x| x.get::<Id, _>("project_id") == id).map_or(0, |x| x.get::<i64, _>("n"));
+            json!({
+                "id": id, "name": r.get::<String, _>("name"), "color": r.get::<String, _>("color"),
+                "work_dir": r.get::<String, _>("work_dir"), "repo": r.get::<String, _>("repo"),
+                "total": total, "done": done, "doing": r.get::<i64, _>("doing"), "todo": r.get::<i64, _>("todo"),
+                "overdue": overdue, "unassigned": r.get::<i64, _>("unassigned"),
+                "next_due": r.get::<Option<String>, _>("next_due"), "last_activity": last,
+                "health": health, "people": who, "ai_24h": ai_24h,
+            })
+        })
+        .collect();
+    let recent: Vec<Value> = recent
+        .iter()
+        .map(|r| json!({ "project": r.get::<String, _>("project"), "who": r.get::<String, _>("username"), "text": r.get::<String, _>("text"), "at": r.get::<String, _>("created_at") }))
+        .collect();
+    Ok(Json(json!({ "projects": projects, "ai_recent": recent })))
 }

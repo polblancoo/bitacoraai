@@ -224,7 +224,7 @@ const openProfile = guard(async () => {
 });
 
 async function selectTeam(team) {
-  S.team = team; S.projects = []; S.project = null; S.tasks = []; S.members = []; S.labels = []; S.bots = []; S.canvas = null;
+  S.portfolio = false; S.team = team; S.projects = []; S.project = null; S.tasks = []; S.members = []; S.labels = []; S.bots = []; S.canvas = null;
   if (team) {
     [S.projects, S.members, S.labels, S.bots] = await Promise.all([
       api("GET", `/api/teams/${team.id}/projects`), api("GET", `/api/teams/${team.id}/members`),
@@ -236,7 +236,7 @@ async function selectTeam(team) {
 }
 
 async function selectProject(p) {
-  S.project = p; S.canvas = null; S.tasks = p ? await api("GET", `/api/projects/${p.id}/tasks`) : [];
+  S.portfolio = false; S.project = p; S.canvas = null; S.tasks = p ? await api("GET", `/api/projects/${p.id}/tasks`) : [];
   render();
 }
 
@@ -253,6 +253,7 @@ function connectWs() {
 }
 
 function onEvent({ type, data }) {
+  if (S.portfolio) { clearTimeout(onEvent.pf); onEvent.pf = setTimeout(() => loadPortfolio(true), 800); }
   if (type === "task_created" || type === "task_updated") {
     if (data.project_id === S.project?.id) {
       const i = S.tasks.findIndex((t) => t.id === data.id);
@@ -927,7 +928,8 @@ function appView() {
       h("div", {}, h("h2", {}, "Equipos", h("span", {}, S.team && h("button", { class: "ghost", onclick: () => { S.panel = true; store.set("panel", "1"); loadOverview(); setTimeout(() => document.querySelector(".tp-sec:last-child")?.scrollIntoView(), 400); }, title: "Editar o eliminar el equipo actual (ajustes en el panel de la derecha)" }, "⚙"), h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
         h("div", { class: "nav" }, S.teams.map((t) => h("button", { class: t.id === S.team?.id ? "active" : "", onclick: () => selectTeam(t).catch((e) => toast(e.message, true)) }, t.name)))),
       S.team && h("div", {}, h("h2", {}, "Proyectos", h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
-        h("div", { class: "nav" }, S.projects.map((p) => h("button", { class: p.id === S.project?.id ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
+        h("div", { class: "nav" }, S.projects.length > 0 && h("button", { class: S.portfolio ? "active" : "", onclick: openPortfolio, title: "Avance de todos los proyectos del equipo" }, "📊 Portafolio"),
+          S.projects.map((p) => h("button", { class: p.id === S.project?.id && !S.portfolio ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
           h("span", { class: "dot", style: `background:${p.color}` }), p.name)))),
       S.team && h("div", {}, h("h2", {}, "🤖 IAs", can("admin") && h("button", { class: "ghost", onclick: createBot, title: "Sumar una IA al equipo (crea su token)" }, "+")),
         h("div", { class: "nav" }, (S.bots || []).map((b) => h("button", { class: b.active ? "" : "revoked", onclick: () => botModal(b), title: b.active ? "Token activo" : "Token revocado" }, "🤖 " + b.username, b.model && h("small", { class: "inl" }, " · " + b.model))),
@@ -941,19 +943,19 @@ function appView() {
         h("button", { class: "ghost", onclick: logoutAll, title: "Cierra la sesión en todos los dispositivos" }, "⏻"))),
     h("main", {},
       h("div", { class: "top" },
-        h("h1", {}, S.project ? S.project.name : S.team ? "Sin proyectos" : "Creá un equipo para empezar"),
+        h("h1", {}, S.portfolio ? "📊 Portafolio" : S.project ? S.project.name : S.team ? "Sin proyectos" : "Creá un equipo para empezar"),
         h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
-        S.project && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
+        S.project && !S.portfolio && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
         S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
-        h("div", { class: "seg" },
+        !S.portfolio && h("div", { class: "seg" },
           [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"], ["activity", "Actividad"]].map(([v, l]) =>
             h("button", { class: S.view === v ? "on" : "", onclick: () => { S.view = v; render(); } }, l))),
         search),
-      S.project && (S.project.work_dir || S.project.repo) && h("div", { class: "proj-meta" },
+      S.project && !S.portfolio && (S.project.work_dir || S.project.repo) && h("div", { class: "proj-meta" },
         S.project.work_dir && h("span", { title: "Carpeta de trabajo" }, "📁 " + S.project.work_dir),
         S.project.repo && h("span", { title: "Repositorio" }, "🔗 " + S.project.repo)),
-      S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
+      S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
         : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos")),
     S.panel && S.team && teamPanel());
 }
@@ -1000,6 +1002,51 @@ const duplicateProject = guard(async () => {
 });
 
 // ---------- actividad ----------
+// ---------- portafolio: el avance de todos los proyectos del equipo ----------
+const HEALTH = { ok: ["🟢", "Al día"], late: ["🔴", "Con vencidas"], stalled: ["🟡", "Sin movimiento"], done: ["✅", "Terminado"], empty: ["⚪", "Sin tareas"] };
+const openPortfolio = guard(async () => { S.portfolio = true; S.pf = null; render(); await loadPortfolio(); });
+async function loadPortfolio(quiet) {
+  const team = S.team?.id; if (!team) return;
+  try { const d = await api("GET", `/api/teams/${team}/portfolio`); if (S.portfolio && S.team?.id === team) { S.pf = d; render(); } }
+  catch (e) { if (!quiet) toast(e.message, true); }
+}
+const ago = (iso) => {
+  if (!iso) return "—";
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+  return m < 1 ? "ahora" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`;
+};
+function portfolioView() {
+  if (!S.pf) return h("div", { class: "empty" }, "Cargando…");
+  const ps = S.pf.projects;
+  const sum = (k) => ps.reduce((n, p) => n + p[k], 0);
+  const total = sum("total"), done = sum("done");
+  const tile = (n, label, cls) => h("div", { class: "pf-tile " + (cls || "") }, h("b", {}, n), h("span", {}, label));
+  const card = (p) => {
+    const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+    const [icon, label] = HEALTH[p.health];
+    return h("div", { class: "pf-card " + p.health, onclick: () => selectProject(S.projects.find((x) => x.id === p.id)).catch((e) => toast(e.message, true)), title: "Abrir el proyecto" },
+      h("div", { class: "pf-head" }, h("span", { class: "dot", style: `background:${p.color}` }), h("b", { class: "grow" }, p.name), h("span", { class: "pf-health" }, icon + " ", label)),
+      h("div", { class: "pf-bar", title: `${p.done} de ${p.total} hechas` },
+        h("i", { class: "done", style: `width:${p.total ? (p.done / p.total) * 100 : 0}%` }), h("i", { class: "doing", style: `width:${p.total ? (p.doing / p.total) * 100 : 0}%` })),
+      h("div", { class: "pf-nums" }, h("span", {}, `${pct}% · ${p.done}/${p.total}`), h("span", {}, `En curso ${p.doing}`), h("span", {}, `Por hacer ${p.todo}`),
+        p.overdue > 0 && h("span", { class: "bad" }, `⏰ ${p.overdue} vencidas`), p.unassigned > 0 && h("span", { class: "warn" }, `${p.unassigned} sin asignar`)),
+      h("div", { class: "pf-people" }, p.people.length ? p.people.slice(0, 6).map((x) => h("span", { class: "pf-chip", title: `${x.open} abiertas, ${x.doing} en curso` }, (x.bot ? "🤖 " : "") + x.username + " · " + x.open)) : h("small", { class: "hint" }, "Nadie con tareas abiertas")),
+      h("div", { class: "pf-foot" }, h("small", {}, "Última actividad: " + ago(p.last_activity)), p.ai_24h > 0 && h("small", {}, `🤖 ${p.ai_24h} acciones de IAs en 24 h`),
+        p.next_due && h("small", {}, "Próximo vencimiento: " + new Date(p.next_due).toLocaleDateString())));
+  };
+  const risk = ps.filter((p) => p.health === "late" || p.health === "stalled").length;
+  return h("div", { class: "portfolio" },
+    h("div", { class: "pf-tiles" },
+      tile(ps.length, "proyectos"), tile(total ? Math.round((done / total) * 100) + "%" : "—", "avance general"), tile(sum("doing"), "en curso"),
+      tile(sum("overdue"), "vencidas", sum("overdue") ? "bad" : ""), tile(risk, "proyectos en riesgo", risk ? "warn" : ""),
+      h("button", { onclick: () => loadPortfolio() }, "Actualizar")),
+    h("div", { class: "pf-grid" }, ps.map(card)),
+    h("h3", {}, "🤖 Lo último que hicieron las IAs"),
+    S.pf.ai_recent.length === 0 ? h("small", { class: "hint" }, "Todavía no hay actividad de IAs.")
+      : h("div", { class: "act-list" }, S.pf.ai_recent.map((a) => h("div", { class: "act-row" }, avatar(a.who),
+        h("span", { class: "grow" }, h("b", {}, a.who), " ", a.text, h("small", { class: "inl" }, " · " + a.project)), h("small", {}, ago(a.at))))));
+}
+
 function activityView() {
   if (!S.activity || S.activity.project_id !== S.project.id) {
     S.activity = { project_id: S.project.id, items: [] };
@@ -1012,7 +1059,7 @@ function activityView() {
       h("button", { onclick: () => { S.activity = null; render(); } }, "Actualizar")),
     items.length === 0 ? h("div", { class: "empty" }, "Todavía no hay actividad.")
       : h("div", { class: "act-list" }, items.map((a) => h("div", { class: "act-row" }, avatar(a.username || "?"),
-        h("span", { class: "grow" }, h("b", {}, a.username || "alguien"), " " + a.text), h("small", {}, new Date(a.created_at).toLocaleString())))));
+        h("span", { class: "grow" }, h("b", {}, a.username || "alguien"), " ", a.text), h("small", {}, new Date(a.created_at).toLocaleString())))));
 }
 
 // ---------- configuración ----------

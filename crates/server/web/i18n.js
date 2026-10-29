@@ -769,6 +769,16 @@
 },
   };
   const R = [
+    [/^hace (\d+) min$/, "$1 min ago", "há $1 min"],
+    [/^hace (\d+) h$/, "$1 h ago", "há $1 h"],
+    [/^hace (\d+) d$/, "$1 d ago", "há $1 d"],
+    [/^En curso (\d+)$/, "Doing $1", "Em andamento $1"],
+    [/^Por hacer (\d+)$/, "To do $1", "A fazer $1"],
+    [/^⏰ (\d+) vencidas$/, "⏰ $1 overdue", "⏰ $1 vencidas"],
+    [/^(\d+) sin asignar$/, "$1 unassigned", "$1 sem responsável"],
+    [/^🤖 (\d+) acciones de IAs en 24 h$/, "🤖 $1 AI actions in 24 h", "🤖 $1 ações de IAs em 24 h"],
+    [/^(\d+) de (\d+) hechas$/, "$1 of $2 done", "$1 de $2 concluídas"],
+    [/^(\d+) abiertas, (\d+) en curso$/, "$1 open, $2 doing", "$1 abertas, $2 em andamento"],
     [/^comentó en «(.*)»$/, "commented on «$1»", "comentou em «$1»"],
     [/^creó la tarea «(.*)»$/, "created the task «$1»", "criou a tarefa «$1»"],
     [/^borró la tarea «(.*)»$/, "deleted the task «$1»", "apagou a tarefa «$1»"],
@@ -798,6 +808,7 @@
     [/^Vence (\S+)$/, "Due $1", "Vence $1"],
   ];
   D.en["Equipo"] = "Team"; D.pt["Equipo"] = "Equipe"; D.en["alguien"] = "someone"; D.pt["alguien"] = "alguém"; D.en["creó el equipo"] = "created the team"; D.pt["creó el equipo"] = "criou a equipe";
+  Object.assign(D.en, {"📊 Portafolio": "📊 Portfolio", "Portafolio": "Portfolio", "Avance de todos los proyectos del equipo": "Progress of all the team's projects", "Al día": "On track", "Con vencidas": "Has overdue", "Sin movimiento": "No activity", "Terminado": "Finished", "Sin tareas": "No tasks", "Abrir el proyecto": "Open the project", "ahora": "now", "—": "—", "Nadie con tareas abiertas": "Nobody with open tasks", "Última actividad": "Last activity", "Próximo vencimiento": "Next due date", "proyectos": "projects", "avance general": "overall progress", "en curso": "doing", "vencidas": "overdue", "proyectos en riesgo": "projects at risk", "🤖 Lo último que hicieron las IAs": "🤖 Latest from the AIs", "Todavía no hay actividad de IAs.": "No AI activity yet."}); Object.assign(D.pt, {"📊 Portafolio": "📊 Portfólio", "Portafolio": "Portfólio", "Avance de todos los proyectos del equipo": "Andamento de todos os projetos da equipe", "Al día": "Em dia", "Con vencidas": "Com vencidas", "Sin movimiento": "Sem movimento", "Terminado": "Concluído", "Sin tareas": "Sem tarefas", "Abrir el proyecto": "Abrir o projeto", "ahora": "agora", "—": "—", "Nadie con tareas abiertas": "Ninguém com tarefas abertas", "Última actividad": "Última atividade", "Próximo vencimiento": "Próximo vencimento", "proyectos": "projetos", "avance general": "andamento geral", "en curso": "em andamento", "vencidas": "vencidas", "proyectos en riesgo": "projetos em risco", "🤖 Lo último que hicieron las IAs": "🤖 O que as IAs fizeram por último", "Todavía no hay actividad de IAs.": "Ainda não há atividade de IAs."});
   const DOW = { es: ["L", "M", "X", "J", "V", "S", "D"], en: ["M", "T", "W", "T", "F", "S", "S"], pt: ["S", "T", "Q", "Q", "S", "S", "D"] };
   function tr(s) {
     if (lang === "es" || typeof s !== "string" || !s) return s;

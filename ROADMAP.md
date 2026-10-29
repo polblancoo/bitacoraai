@@ -24,7 +24,7 @@ Un CTO (o varios admins) arma varios proyectos, asigna recursos **humanos e IA**
 - [ ] Alertas al líder/admin: bloqueos, vencidas, sin actividad.
 
 ### Fase 4 — Vista de comando y gráficos
-- [ ] **Panel de portafolio**: tarjetas de todos los proyectos con avance, líder, recursos (personas/IAs), vencidas, bloqueadas y última actividad.
+- [x] **Panel de portafolio** (📊 en la barra lateral): tarjetas de todos los proyectos con avance, recursos (personas/IAs), vencidas, sin asignar, estado (al día, con vencidas, sin movimiento) y última actividad, más lo último que hicieron las IAs. Pendiente: líder por proyecto, bloqueadas y gráficos de tendencia.
 - [ ] Debajo del tablero de cada proyecto: **avance** (burndown/acumulado), reparto por estado y responsable, y **timeline** de hitos y actividad.
 
 ### Fase 5 — Control
