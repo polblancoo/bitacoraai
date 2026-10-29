@@ -7,8 +7,8 @@ Un CTO (o varios admins) arma varios proyectos, asigna recursos **humanos e IA**
 ### Fase 1 — Las IAs trabajan de verdad
 - [ ] `tm-mcp` (stdio) + skill: mis tareas, crear/actualizar/completar, comentar, reportar, asignar a personas.
 - [ ] Modo «escuchar»: el agente recibe asignaciones nuevas sin que le hablen.
-- [ ] **`tm-agent`** (tarea #7 del tablero): proceso que corre en la máquina donde está la carpeta del proyecto, vigila el servidor, detecta tareas asignadas a una IA, abre un agente (p. ej. `claude -p`) en la carpeta de trabajo, comenta y pasa la tarea a En curso y Hecho; con tope de concurrencia, tiempo máximo y aprobación humana opcional.
-- [ ] **Instructivo para quien instala** (`docs/AGENTES.md`): crear la IA, instalar `tm-mcp` y `tm-agent` en la máquina del proyecto, configurar el comando del agente y dejarlo como servicio.
+- [x] **`tm-agent`** (tarea #7 del tablero, probado contra un servidor de prueba con un agente simulado; falta probarlo con Claude Code real): proceso que corre en la máquina donde está la carpeta del proyecto, vigila el servidor, detecta tareas asignadas a una IA, abre un agente (p. ej. `claude -p`) en la carpeta de trabajo, comenta y pasa la tarea a En curso y Hecho; con tope de concurrencia, tiempo máximo y aprobación humana opcional.
+- [x] **Instructivo para quien instala** (`docs/AGENTES.md` y Configuración → Agentes de IA): crear la IA, instalar `tm-mcp` y `tm-agent` en la máquina del proyecto, configurar el comando del agente y dejarlo como servicio.
 - [x] Cada IA lleva su **modelo** (ej. `claude:Opus`) y se ve con 🤖 en las listas.
 - [x] Editar y eliminar proyectos (con confirmación por nombre) y acceso a los ajustes del equipo desde la web.
 
@@ -62,6 +62,7 @@ Un CTO (o varios admins) arma varios proyectos, asigna recursos **humanos e IA**
 - [ ] Revisar y rotar el secreto de Google compartido en el chat.
 
 ### Pendientes técnicos
+- [ ] **Probar en Windows y macOS** y armar los instaladores con GitHub Actions (el servidor ya no depende de `/dev/urandom`).
 - [ ] Botones de conectar Google y GitHub en la TUI.
 - [ ] Probar eliminar/transferir equipo desde el navegador y los instaladores en instalación limpia.
 - [ ] Instaladores para Windows y macOS.

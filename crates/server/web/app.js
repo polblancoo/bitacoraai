@@ -347,6 +347,23 @@ const createProject = guard(async () => {
 // ---------- IAs (cuentas bot con token propio) ----------
 const mcpConfig = (token) => JSON.stringify({ mcpServers: { "rust-tui-manager": { command: "tm-mcp", env: { TM_URL: S.server, TM_TOKEN: token } } } }, null, 2);
 const copy = (text, msg) => navigator.clipboard?.writeText(text).then(() => toast(msg));
+const agentCmd = (token) => `TM_URL=${S.server} \\\nTM_TOKEN=${token || "tmk_…"} \\\nTM_AGENT_CMD='claude -p "$TM_TASK_PROMPT" --permission-mode acceptEdits' \\\ntm-agent`;
+function agentsGuide() {
+  const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
+    h("div", { class: "modal" },
+      h("h3", {}, "🤖 Que una IA trabaje sola: tm-agent"),
+      h("p", {}, "Una IA solo actúa mientras algo la despierta. tm-agent es ese «algo»: corre en la máquina donde está la carpeta del proyecto, mira este servidor y, cuando le asignás una tarea a la IA, abre un agente en la carpeta de trabajo, comenta y pasa la tarea a En curso y Hecho."),
+      h("ol", { class: "guide" },
+        h("li", {}, "Creá la IA en la barra lateral (🤖 IAs → «+») y copiá su token."),
+        h("li", {}, "Definí la carpeta de trabajo del proyecto (⚙ Proyecto): tiene que existir en la máquina donde corre tm-agent."),
+        h("li", {}, "Instalá tm-agent en esa máquina: cargo install --git https://github.com/polblancoo/Rust_tuiManager rust-tui-manager-agent"),
+        h("li", {}, "Ejecutalo con el token y el comando de tu agente (Claude Code, Gemini CLI, un script…). Ejemplo:"),
+        h("pre", { class: "bot-cfg" }, agentCmd()),
+        h("li", {}, "Asignale una tarea a la IA: en unos segundos pasa a En curso, queda comentada y termina en Hecho. Si falla, vuelve a Por hacer con el error.")),
+      h("p", {}, "⚠ El texto de las tareas llega al agente como instrucciones: dejalo correr con una carpeta y permisos acotados, y asigná tareas solo desde cuentas de confianza. Instructivo completo (servicio, seguridad, variables): docs/AGENTES.md en el repositorio."),
+      h("div", { class: "row" }, h("button", { onclick: () => copy(agentCmd(), "Comando copiado") }, "Copiar ejemplo"), h("button", { class: "primary", onclick: () => overlay.remove() }, "Cerrar"))));
+  document.body.append(overlay);
+}
 function showBotToken(name, token) {
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
     h("div", { class: "modal" },
@@ -354,6 +371,9 @@ function showBotToken(name, token) {
       h("p", {}, "Copialo ahora: no se vuelve a mostrar. Si lo perdés, generás uno nuevo y el anterior deja de funcionar."),
       h("code", { class: "bot-token" }, token),
       h("div", { class: "row" }, h("button", { onclick: () => copy(token, "Token copiado") }, "Copiar token")),
+      h("h3", {}, "Para que trabaje sola (tm-agent)"),
+      h("pre", { class: "bot-cfg" }, agentCmd(token)),
+      h("div", { class: "row" }, h("button", { onclick: () => copy(agentCmd(token), "Comando copiado") }, "Copiar comando"), h("button", { onclick: agentsGuide }, "Ver instructivo")),
       h("h3", {}, "Configuración para tu cliente MCP"),
       h("pre", { class: "bot-cfg" }, mcpConfig(token)),
       h("div", { class: "row" }, h("button", { onclick: () => copy(mcpConfig(token), "Configuración copiada") }, "Copiar configuración"),
@@ -989,6 +1009,8 @@ const CFG_HELP = {
     "El rol es por equipo, no del servidor: administrar el servidor (variables de entorno, base de datos) es independiente de ser admin o dueño de un equipo."],
   message: ["Mensaje al equipo", "Escribe un aviso que le llega a todos los miembros del equipo por bandeja, y por email y Telegram a quienes lo tengan conectado.", null],
   members: ["Miembros e invitaciones", "Mirá quiénes están en el equipo. Si sos admin o dueño: buscá a alguien ya registrado y agregalo, o generá un código de invitación (y «Copiar invitación» arma el texto con el enlace de instalación para pegar en un chat).", null],
+  agents: ["Agentes de IA (tm-agent)", "Para que una IA trabaje sola cuando le asignás una tarea, instalás tm-agent en la máquina donde está la carpeta del proyecto. Tocá «Ver instructivo» para los pasos y el comando listo.",
+    "tm-agent no es parte del servidor: es otro programa que se conecta al servidor con el token de la IA. Se instala con cargo install --git https://github.com/polblancoo/Rust_tuiManager rust-tui-manager-agent y se deja como servicio (systemd, launchd o el Programador de tareas)."],
   join: ["Unirme con un código", "Si un admin te pasó un código de invitación, pegalo acá para entrar a su equipo.", null],
   newTeam: ["Crear un equipo", "Creás un equipo nuevo y quedás como Dueño. Después invitás a la gente desde «Miembros, roles e invitaciones».", null],
   project: ["Proyecto", "Un proyecto agrupa las tareas del equipo (tablero, calendario, Gantt y pizarra). Creá uno con «Nuevo proyecto».", null],
@@ -1069,6 +1091,7 @@ const openSettings = guard(async () => {
         line([`Tu rol: ${ROLES.find(([r]) => r === myRole())?.[1]}`, "role"]),
         can("member") && line(["Enviar un mensaje al equipo", "message"], h("button", { onclick: go(sendTeamMessage) }, "Escribir")),
         line(["Miembros, roles e invitaciones", "members"], h("button", { onclick: go(openTeam) }, "Administrar")),
+        can("admin") && line(["Agentes de IA: que trabajen solos (tm-agent)", "agents"], h("button", { onclick: go(agentsGuide) }, "Ver instructivo")),
         line(["Unirme a otro equipo con un código", "join"], h("button", { onclick: go(joinWithCode) }, "Unirme")),
         line(["Crear un equipo nuevo", "newTeam"], h("button", { onclick: go(createTeam) }, "Crear"))),
       S.team && sec("Proyecto",

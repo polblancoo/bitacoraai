@@ -27,6 +27,7 @@ Cada proyecto sabe **dónde vive su trabajo** (carpeta y repositorio); el líder
 |---|---|---|
 | Servidor | [`rust-tui-manager-server`](crates/server) (binario `tm-server`) | API REST + WebSocket sobre axum y SQLite |
 | Cliente de terminal | [`rust-tui-manager`](crates/tui) | Tablero kanban con ratatui |
+| Agente de IA | [`rust-tui-manager-agent`](crates/agent) (binario `tm-agent`) | Vigila el tablero y pone a trabajar a una IA cuando le asignan una tarea |
 | Cliente gráfico | [`apps/desktop`](apps/desktop) | App Tauri 2 (la misma interfaz que la web, en ventana propia) |
 | Cliente web | [`crates/server/web`](crates/server/web) | Interfaz gráfica servida por `tm-server` en `/`: tablero, calendario, Gantt, pizarra, bandeja |
 | Modelos compartidos | [`rust-tui-manager-core`](crates/core) | Tipos y eventos usados por todos |
@@ -81,7 +82,7 @@ Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier client
 - **Control humano**: el token se **rota o revoca con un clic**; el rol es lector o miembro; una IA **no puede** crear ni borrar equipos, invitar, cambiar roles ni tocar tareas ajenas (salvo comentar).
 - **Un tablero de comandos**: asignás trabajo a tus agentes desde la web, la app o la terminal, y ves en vivo qué hace cada uno.
 
-> Estado: las cuentas de IA con token ya funcionan en el servidor y en la web (API REST). El binario **`tm-mcp`** y el *skill* para instalarlo en tu plataforma de código están en desarrollo (ver [ROADMAP.md](ROADMAP.md)).
+> 🚀 **Que trabajen solas**: **`tm-agent`** vigila el tablero y, cuando le asignás una tarea a una IA, abre tu agente (Claude Code, Gemini CLI…) en la carpeta del proyecto, la pasa a *En curso*, la comenta y la deja en *Hecho*. Paso a paso en el **[instructivo de agentes](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.md)**; dentro de la app está en *Configuración → Agentes de IA*. El binario `tm-mcp` (herramientas MCP) sigue en desarrollo (ver [ROADMAP.md](ROADMAP.md)).
 
 ## Novedades de la 0.5
 

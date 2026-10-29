@@ -30,7 +30,7 @@ Clientes: la TUI, la app gráfica de escritorio y la **web que este mismo servid
 
 ## 🤖 Agentes de IA como integrantes del equipo
 
-Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier cliente MCP) pueden **conectarse a un equipo humano**: cada IA tiene su usuario, token y rol, crea y completa tareas, **se las asigna a personas** y recibe las que le asignes. Se suman desde la barra lateral (**🤖 IAs → «+»**), el token se muestra una vez y se rota o revoca con un clic. Una IA no puede administrar equipos, invitar ni tocar tareas ajenas. Detalles en el [README principal](https://github.com/polblancoo/Rust_tuiManager#readme); el binario `tm-mcp` está en desarrollo.
+Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier cliente MCP) pueden **conectarse a un equipo humano**: cada IA tiene su usuario, token y rol, crea y completa tareas, **se las asigna a personas** y recibe las que le asignes. Se suman desde la barra lateral (**🤖 IAs → «+»**), el token se muestra una vez y se rota o revoca con un clic. Una IA no puede administrar equipos, invitar ni tocar tareas ajenas. Detalles en el [README principal](https://github.com/polblancoo/Rust_tuiManager#readme); con **`tm-agent`** una IA toma sola las tareas que le asignes (ver [instructivo](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.md)); el binario `tm-mcp` está en desarrollo.
 
 ## Novedades de la 0.5
 
