@@ -10,6 +10,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 
 const INDEX: &str = include_str!("../web/index.html");
 const APP_JS: &str = include_str!("../web/app.js");
+const I18N_JS: &str = include_str!("../web/i18n.js");
 const CANVAS_JS: &str = include_str!("../web/canvas.js");
 const STYLE: &str = include_str!("../web/style.css");
 const MANIFEST: &str = include_str!("../web/manifest.webmanifest");
@@ -34,6 +35,7 @@ pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
         .route("/", get(|| async { asset("text/html; charset=utf-8", INDEX) }))
         .route("/app.js", get(|| async { asset("text/javascript; charset=utf-8", APP_JS) }))
+        .route("/i18n.js", get(|| async { asset("text/javascript; charset=utf-8", I18N_JS) }))
         .route("/canvas.js", get(|| async { asset("text/javascript; charset=utf-8", CANVAS_JS) }))
         .route("/style.css", get(|| async { asset("text/css; charset=utf-8", STYLE) }))
         .route("/manifest.webmanifest", get(|| async { asset("application/manifest+json", MANIFEST) }))

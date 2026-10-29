@@ -36,19 +36,20 @@ function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v == null || v === false) continue;
-    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    if (typeof v === "string" && (k === "title" || k === "placeholder" || k === "aria-label" || k === "alt")) el.setAttribute(k, tr(v));
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
     else if (k === "class") el.className = v;
     else if (k === "style") el.style.cssText = v;
     else if (k in el) el[k] = v;
     else el.setAttribute(k, v);
   }
-  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(typeof kid === "string" ? tr(kid) : kid);
   return el;
 }
 
 function toast(msg, error = false) {
   const t = document.getElementById("toast");
-  t.textContent = msg; t.className = error ? "error" : ""; t.hidden = false;
+  t.textContent = tr(msg); t.className = error ? "error" : ""; t.hidden = false;
   clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 3500);
 }
 
@@ -910,7 +911,7 @@ function calendarView() {
       h("button", { class: "ghost", onclick: () => { S.month = new Date(); render(); } }, "Hoy"),
       h("span", { class: "spacer" }), h("small", {}, `${undated} pendientes sin fecha`)),
     h("div", { class: "cal-grid" },
-      ["L", "M", "X", "J", "V", "S", "D"].map((d) => h("div", { class: "cal-dow" }, d)),
+      tr.dow().map((d) => h("div", { class: "cal-dow" }, d)),
       days.map((d) => h("div", { class: "cal-day" + (d.getMonth() !== mo ? " other" : "") + (d.toDateString() === today ? " today" : "") },
         h("span", { class: "num" }, d.getDate()),
         (byDay[d.toDateString()] || []).map((t) => h("div", {
@@ -1124,6 +1125,8 @@ const openSettings = guard(async () => {
         S.project && line(["Exportar las tareas", "export"], h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
           h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
       sec("Preferencias",
+        line("Idioma / Language", h("select", { onchange: (e) => tr.set(e.target.value) },
+          Object.entries(tr.langs).map(([k, n]) => h("option", { value: k, selected: tr.lang === k }, n)))),
         line(["Vista inicial", "view"], view),
         line(["Servidor", "server"], server),
         IS_WEB ? h("small", {}, "Estás usando la web del propio servidor: la dirección no se cambia desde acá.")

@@ -1,8 +1,8 @@
 "use strict";
 // Service worker mínimo: guarda la interfaz para abrirla al instante y sin conexión.
 // Nunca toca la API ni el WebSocket: los datos siempre vienen del servidor.
-const CACHE = "tm-shell-v1";
-const SHELL = ["/", "/app.js", "/canvas.js", "/style.css", "/manifest.webmanifest", "/icon-192.png"];
+const CACHE = "tm-shell-v2";
+const SHELL = ["/", "/i18n.js", "/app.js", "/canvas.js", "/style.css", "/manifest.webmanifest", "/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
