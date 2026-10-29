@@ -1,76 +1,78 @@
+<p align="center"><b>English</b> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/crates/tui/README.es.md">Español</a> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/crates/tui/README.pt.md">Português</a></p>
+
 # rust-tui-manager
 
-> 🎛️ **Tablero de comando para tus proyectos**: dirigí varios proyectos a la vez —una fábrica de apps, una planilla, un onboarding, lo que sea— con **personas e IAs en el mismo tablero**. Cada proyecto sabe dónde vive su trabajo (carpeta y repo). Self-hosted.
+> 🎛️ **A command board for your projects**: run several projects at once —an app factory, a spreadsheet, an onboarding, anything— with **people and AIs on the same board**. Every project knows where its work lives (folder and repo). Self-hosted.
 
-Cliente de terminal (ratatui) del gestor de tareas colaborativo [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). Necesita un servidor [`rust-tui-manager-server`](https://crates.io/crates/rust-tui-manager-server) en marcha.
+Terminal client (ratatui) of the collaborative task manager [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). It needs a running [`rust-tui-manager-server`](https://crates.io/crates/rust-tui-manager-server).
 
-> **Versiones 0.2 en adelante**: este crate pasó de ser un gestor local de notas y snippets a ser un cliente de red. El código anterior está en la carpeta `legacy/` del repositorio y en las versiones 0.1.x.
+> **Versions 0.2 onwards**: this crate went from being a local notes and snippets manager to being a network client. The earlier code is in the `legacy/` folder of the repository and in the 0.1.x releases.
 
-![Tablero en la terminal](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/tui-board.png)
+![Board in the terminal](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/tui-board.png)
 
-![Detalle de una tarea: subtareas, etiquetas y comentarios](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/tui-detail.png)
+![Task detail: subtasks, labels and comments](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/tui-detail.png)
 
-> 👉 **[Guía paso a paso: tu primer proyecto](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIA.md)**, con capturas.
+> 👉 **[Step-by-step guide: your first project](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIDE.md)**, with screenshots.
 
-## 🤖 Agentes de IA como integrantes del equipo
+## 🤖 AI agents as team members
 
-Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier cliente MCP) pueden **conectarse a un equipo humano**: cada IA tiene su usuario, token y rol, crea y completa tareas, **se las asigna a personas** y recibe las que le asignes. Se suman desde la barra lateral (**🤖 IAs → «+»**), el token se muestra una vez y se rota o revoca con un clic. Una IA no puede administrar equipos, invitar ni tocar tareas ajenas. Detalles en el [README principal](https://github.com/polblancoo/Rust_tuiManager#readme); con **`tm-agent`** una IA toma sola las tareas que le asignes (ver [instructivo](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.md)); el binario `tm-mcp` está en desarrollo.
+Coding assistants (Claude Code, Cursor, Windsurf, Zed or any MCP client) can **join a human team**: each AI has its own user, token, role and model (e.g. `claude:Opus`), creates and completes tasks, **assigns them to people** and receives the ones you assign. They are added from the sidebar of the web or desktop app (**🤖 AIs → «+»**); the token is shown once and rotated or revoked with one click. An AI cannot administer teams, invite people or touch other people's tasks. Details in the [main README](https://github.com/polblancoo/Rust_tuiManager#readme); with **`tm-agent`** an AI picks up the tasks you assign on its own (see the [agents guide](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTS.md)); the `tm-mcp` binary is in development. In this client, AI accounts show up as members.
 
-## Uso
+## Usage
 
 ```sh
 cargo install rust-tui-manager
 rust-tui-manager http://127.0.0.1:7878
 ```
 
-En la pantalla de acceso, `F2` alterna entre iniciar sesión y crear cuenta. La sesión se guarda en `~/.config/rust-tui-manager/client.json` (permisos `0600`) y el servidor se recuerda para la próxima vez.
+On the sign-in screen, `F2` toggles between signing in and creating an account. The session is saved in `~/.config/rust-tui-manager/client.json` (`0600` permissions) and the server is remembered for next time.
 
-## Atajos
+## Shortcuts
 
-**Tablero**
+**Board**
 
-| Tecla | Acción |
+| Key | Action |
 |---|---|
-| `h` `l` / `←` `→` | Cambiar de columna |
-| `j` `k` / `↑` `↓` | Mover la selección |
-| `Enter` | Abrir detalle (subtareas, etiquetas, comentarios) |
-| `n` | Nueva tarea |
-| `e` | Editar el título |
-| `d` | Borrar la tarea |
-| `H` / `L` | Mover la tarea de estado |
-| `+` / `-` | Subir o bajar la prioridad |
-| `a` | Tomar la tarea o soltar la mía |
-| `A` | Asignar a un miembro, con sugerencias (admin o dueño; `-` quita) |
-| `N` | Bandeja: novedades y mis tareas (se abre sola al iniciar sesión) |
-| `Tab` / `Shift+Tab` | Proyecto siguiente o anterior |
-| `[` / `]` | Equipo anterior o siguiente |
-| `P` / `T` | Nuevo proyecto / nuevo equipo |
-| `m` | Agregar miembro con búsqueda: `↑↓` elegir, `Tab` completa, `Ctrl+R` cambia el rol |
-| `Ctrl+T` + letra | Prefijo de equipo: `m` miembro · `r` rol · `i` invitar · `j` unirse · `t` equipo · `e` mi email · `v` verificar email · `s` mensaje al equipo · `g` vincular Telegram · `n` bandeja |
-| `R` | Cambiar el rol de un miembro: `usuario rol` |
-| `I` | Generar un código de invitación (rol miembro, 7 días, 10 usos) |
-| `J` | Unirse a un equipo con un código |
-| `X` | Cerrar sesión en todos los dispositivos |
-| `C` | Menú de configuración: email, Telegram, bandeja, mensajes y equipo, sesión |
-| `?` | Ayuda con buscador de atajos |
-| `q` | Salir |
+| `h` `l` / `←` `→` | Switch column |
+| `j` `k` / `↑` `↓` | Move the selection |
+| `Enter` | Open detail (subtasks, labels, comments) |
+| `n` | New task |
+| `e` | Edit the title |
+| `d` | Delete the task |
+| `H` / `L` | Move the task to another status |
+| `+` / `-` | Raise or lower the priority |
+| `a` | Take the task or release mine |
+| `A` | Assign to a member, with suggestions (admin or owner; `-` clears) |
+| `N` | Inbox: news and my tasks (opens by itself at sign-in) |
+| `Tab` / `Shift+Tab` | Next or previous project |
+| `[` / `]` | Previous or next team |
+| `P` / `T` | New project / new team |
+| `m` | Add a member with search: `↑↓` choose, `Tab` completes, `Ctrl+R` changes the role |
+| `Ctrl+T` + letter | Team prefix: `m` member · `r` role · `i` invite · `j` join · `t` team · `e` my email · `v` verify email · `s` message the team · `g` link Telegram · `n` inbox |
+| `R` | Change a member's role: `user role` |
+| `I` | Generate an invitation code (member role, 7 days, 10 uses) |
+| `J` | Join a team with a code |
+| `X` | Sign out of all devices |
+| `C` | Settings menu: email, Telegram, inbox, messages and team, session |
+| `?` | Help with shortcut search |
+| `q` | Quit |
 
-**Detalle de una tarea**
+**Task detail**
 
-| Tecla | Acción |
+| Key | Action |
 |---|---|
-| `s` | Nueva subtarea |
-| `j` `k` | Elegir subtarea |
-| `Espacio` / `x` | Marcar o desmarcar la subtarea |
-| `d` | Borrar la subtarea |
-| `l` | Poner o quitar una etiqueta (se crea si no existe) |
-| `c` | Comentar |
-| `Esc` | Volver |
+| `s` | New subtask |
+| `j` `k` | Choose a subtask |
+| `Space` / `x` | Check or uncheck the subtask |
+| `d` | Delete the subtask |
+| `l` | Add or remove a label (created if it does not exist) |
+| `c` | Comment |
+| `Esc` | Back |
 
-La cabecera marca los roles: `★` dueño, `⚙` admin, `👁` lector. El punto verde de la esquina indica conexión en vivo.
+The header marks roles: `★` owner, `⚙` admin, `👁` viewer. The green dot in the corner shows a live connection.
 
-Más información, seguridad y configuración del servidor en el [README del proyecto](https://github.com/polblancoo/Rust_tuiManager).
+More information, security and server configuration in the [project README](https://github.com/polblancoo/Rust_tuiManager).
 
-## Licencia
+## License
 
 MIT

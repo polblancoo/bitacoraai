@@ -1,3 +1,5 @@
+<p align="center"><a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIDE.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIA.pt.md">Português</a></p>
+
 # Guía paso a paso: tu primer proyecto en el tablero de comando
 
 Rust TUI Manager es un **tablero de comando**: un lugar donde ves y dirigís varios proyectos a la vez, con personas e IAs como recursos. Esta guía es para quien va a **dirigir trabajo con un equipo de personas y de IAs**: un CTO, una jefa de operaciones, una dueña de agencia… El proyecto puede ser una **app**, una **planilla de presupuesto**, un **proceso de onboarding**, una campaña, una auditoría: Rust TUI Manager no sabe de apps, sabe de **tareas, responsables y avance**. En 10 minutos tenés el primero armado.
@@ -25,7 +27,7 @@ El servidor guarda todo (equipos, tareas, usuarios) y sirve la web. Se instala u
 2. Descomprimí y ejecutá `./tm-server`.
 3. Abrí `http://localhost:7878` en el navegador.
 
-Para que otras personas entren desde otras máquinas, poné el servidor en una dirección que alcancen (idealmente con HTTPS: ver [Configuración del servidor](../README.md#configuración-del-servidor)). Si solo vas a probar, alcanza con `localhost`.
+Para que otras personas entren desde otras máquinas, poné el servidor en una dirección que alcancen (idealmente con HTTPS: ver [Configuración del servidor](https://github.com/polblancoo/Rust_tuiManager/blob/main/README.es.md)). Si solo vas a probar, alcanza con `localhost`.
 
 Prefieras terminal o ventana propia, también hay un cliente de terminal y una app de escritorio en la misma página de descargas.
 
@@ -95,7 +97,7 @@ Las IAs (Claude Code, Cursor, Windsurf, Zed, Gemini u otro cliente compatible co
 - ❌ Crear o borrar equipos, invitar gente, cambiar roles, o tocar tareas ajenas (salvo comentar).
 - Todo lo que hace queda **a su nombre** en la actividad, y se ve con 🤖 en el panel.
 
-> 🚧 **Estado**: las cuentas de IA y sus tokens ya funcionan contra la API del servidor. El binario `tm-mcp` y el *skill* que las conectan directo a tu plataforma de código están en desarrollo (ver el [ROADMAP](../ROADMAP.md)).
+> 🚧 **Estado**: las cuentas de IA y sus tokens ya funcionan contra la API del servidor. El binario `tm-mcp` y el *skill* que las conectan directo a tu plataforma de código están en desarrollo (ver el [ROADMAP](https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md)).
 
 ## 6. Armar y asignar tareas
 
@@ -126,7 +128,7 @@ Además, **Google Calendar** (tus tareas con fecha aparecen en tu calendario) se
 
 Hoy, para delegar un proyecto: sumá a la persona con rol **Admin** (puede asignar tareas, agregar gente y generar invitaciones) y asignale las tareas principales. Ella arma su parte y suma a su gente.
 
-> 🚧 **Próximamente**: **líder por proyecto** (con alcance solo en ese proyecto), **ámbito configurable por IA** (qué proyectos toca, si puede invitar a otras IAs), **reportes de avance** y un **panel de portafolio** con todos tus proyectos a la vez. Mirá la [hoja de ruta](../ROADMAP.md).
+> 🚧 **Próximamente**: **líder por proyecto** (con alcance solo en ese proyecto), **ámbito configurable por IA** (qué proyectos toca, si puede invitar a otras IAs), **reportes de avance** y un **panel de portafolio** con todos tus proyectos a la vez. Mirá la [hoja de ruta](https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md).
 
 ---
 

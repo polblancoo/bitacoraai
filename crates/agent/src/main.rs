@@ -28,7 +28,11 @@ Variables de entorno:
 El comando corre en la carpeta de trabajo del proyecto con TM_TASK_PROMPT, TM_TASK_ID, TM_TASK_TITLE,
 TM_PROJECT_ID, TM_URL y TM_TOKEN en el entorno. Si termina bien, la tarea pasa a Hecho; si falla,
 vuelve a Por hacer con un comentario y, mientras el agente siga corriendo, no se reintenta
-hasta que alguien la modifique.";
+hasta que alguien la modifique.
+
+Alarma de asistencia: dentro del agente, `tm-agent ask \"¿Puedo borrar X?\"` comenta en la tarea con 🙋
+(avisa a admins y responsables, por la web, Telegram y email) y espera la respuesta humana: la imprime
+por stdout y el agente la recibe como resultado del comando. TM_ASK_TIMEOUT = segundos de espera (900).";
 
 struct Cfg {
     url: String,
@@ -121,7 +125,7 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path) -> String {
         .map(|a| a.iter().rev().take(10).rev().map(|c| format!("- {}: {}", c["username"].as_str().unwrap_or("?"), c["body"].as_str().unwrap_or(""))).collect())
         .unwrap_or_default();
     format!(
-        "Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nTrabajá dentro de la carpeta de trabajo. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
+        "Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout.\n\nTrabajá dentro de la carpeta de trabajo. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
         job.project,
         if job.repo.is_empty() { "(sin definir)" } else { &job.repo },
         dir.display(),
@@ -223,6 +227,39 @@ async fn pending(api: &Api, me: i64, skip: &HashMap<i64, String>, running: &Hash
     Ok(jobs)
 }
 
+/// `tm-agent ask «pregunta»`: levanta la alarma 🙋 en la tarea actual y espera la primera respuesta de otra persona.
+async fn ask(question: String) -> Result<()> {
+    if question.trim().is_empty() {
+        bail!("uso: tm-agent ask \"pregunta o pedido\"");
+    }
+    let task: i64 = std::env::var("TM_TASK_ID").ok().and_then(|v| v.parse().ok()).context("falta TM_TASK_ID (lo define tm-agent al lanzar al agente)")?;
+    let cfg = Cfg {
+        url: std::env::var("TM_URL").unwrap_or_else(|_| "http://127.0.0.1:7878".into()).trim_end_matches('/').into(),
+        token: std::env::var("TM_TOKEN").context("falta TM_TOKEN")?,
+        cmd: String::new(),
+        poll: 5,
+        timeout: 0,
+        max: 1,
+        fallback_dir: None,
+        once: true,
+    };
+    let wait = env_num("TM_ASK_TIMEOUT", 900u64);
+    let api = Api { http: reqwest::Client::new(), cfg };
+    let me = api.get("/api/me").await?["id"].as_i64().context("respuesta inesperada de /api/me")?;
+    let sent = api.call(Method::POST, &format!("/api/tasks/{task}/comments"), Some(json!({ "body": format!("🙋 {}", question.trim()) }))).await?;
+    let after = sent["id"].as_i64().unwrap_or(0);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(wait);
+    while tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_secs(api.cfg.poll)).await;
+        let Ok(list) = api.get(&format!("/api/tasks/{task}/comments")).await else { continue };
+        if let Some(c) = list.as_array().into_iter().flatten().find(|c| c["id"].as_i64().unwrap_or(0) > after && c["user_id"].as_i64() != Some(me)) {
+            println!("{}: {}", c["username"].as_str().unwrap_or("?"), c["body"].as_str().unwrap_or(""));
+            return Ok(());
+        }
+    }
+    bail!("nadie respondió en {wait} s; seguí sin esa respuesta o dejá la tarea documentada")
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     if std::env::args().any(|a| a == "--help" || a == "-h") {
@@ -232,6 +269,9 @@ async fn main() -> Result<()> {
     if std::env::args().any(|a| a == "--version" || a == "-V") {
         println!("tm-agent {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
+    }
+    if std::env::args().nth(1).as_deref() == Some("ask") {
+        return ask(std::env::args().skip(2).collect::<Vec<_>>().join(" ")).await;
     }
     let cfg = Cfg::from_env().inspect_err(|_| eprintln!("{HELP}\n"))?;
     let (poll, max, once) = (cfg.poll, cfg.max, cfg.once);

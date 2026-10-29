@@ -99,6 +99,11 @@ pub fn code_hash(code: &str) -> String {
 /// Atiende los mensajes que llegan al bot: `/start <código>` vincula, `/stop` desvincula.
 pub fn spawn_poller(st: AppState) {
     let Some(tg) = st.telegram.clone() else { return };
+    // solo avisos: no pide mensajes, así se puede compartir el bot con otro programa sin que compitan por getUpdates
+    if std::env::var("TM_TELEGRAM_SEND_ONLY").is_ok_and(|v| v == "1") {
+        tracing::info!("Telegram en modo solo envío (TM_TELEGRAM_SEND_ONLY=1): no se vincula por /start");
+        return;
+    }
     tokio::spawn(async move {
         let mut offset = 0i64;
         loop {

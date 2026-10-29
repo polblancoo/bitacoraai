@@ -836,8 +836,26 @@ async fn add_comment(
     let preview: String = c.body.chars().take(200).collect();
     crate::extras::log_task(&st, task, user.id, format!("comentó en «{title}»")).await;
     let mentioned = crate::extras::notify_mentions(&st, team, user.id, &c.username, task, &title, &c.body).await;
-    for to in people.into_iter().filter(|u| *u != user.id && !mentioned.contains(u)) {
-        crate::notify::notify(&st, to, "comment", Some(team), Some(task), format!("{} comentó en «{title}»: {preview}", c.username)).await;
+    // «🙋 …» es la alarma de asistencia (una IA pide autorización, una respuesta o una acción): avisa también a owners y admins
+    let alarm = c.body.starts_with('🙋');
+    let mut targets = people;
+    if alarm {
+        let admins: Vec<Id> = sqlx::query_scalar("SELECT user_id FROM team_members WHERE team_id = ? AND role IN ('owner', 'admin') LIMIT 20")
+            .bind(team)
+            .fetch_all(&st.db)
+            .await
+            .unwrap_or_default();
+        targets.extend(admins);
+        targets.sort_unstable();
+        targets.dedup();
+    }
+    for to in targets.into_iter().filter(|u| *u != user.id && !mentioned.contains(u)) {
+        let (kind, text) = if alarm {
+            ("attention", format!("🙋 {} necesita tu ayuda en «{title}»: {}", c.username, preview.trim_start_matches('🙋').trim()))
+        } else {
+            ("comment", format!("{} comentó en «{title}»: {preview}", c.username))
+        };
+        crate::notify::notify(&st, to, kind, Some(team), Some(task), text).await;
     }
     Ok(Json(c))
 }

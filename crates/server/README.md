@@ -1,128 +1,142 @@
+<p align="center"><b>English</b> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/crates/server/README.es.md">Español</a> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/crates/server/README.pt.md">Português</a></p>
+
 # rust-tui-manager-server
 
-> 🎛️ **Tablero de comando para tus proyectos**: dirigí varios proyectos a la vez —una fábrica de apps, una planilla, un onboarding, lo que sea— con **personas e IAs en el mismo tablero**. Cada proyecto sabe dónde vive su trabajo (carpeta y repo). Self-hosted.
+> 🎛️ **A command board for your projects**: run several projects at once —an app factory, a spreadsheet, an onboarding, anything— with **people and AIs on the same board**. Every project knows where its work lives (folder and repo). Self-hosted.
 
-Servidor multiusuario (axum + SQLite + WebSocket) del gestor de tareas colaborativo [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). Los clientes son [`rust-tui-manager`](https://crates.io/crates/rust-tui-manager) (terminal) y la app Tauri del repositorio.
+Multi-user server (axum + SQLite + WebSocket) of the collaborative task manager [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). The clients are [`rust-tui-manager`](https://crates.io/crates/rust-tui-manager) (terminal) and the Tauri app in the repository.
 
-Clientes: la TUI, la app gráfica de escritorio y la **web que este mismo servidor sirve en `/`** (desactivable con `TM_WEB=0`).
+Clients: the TUI, the desktop graphical app and the **web app this very server serves at `/`** (can be turned off with `TM_WEB=0`).
 
-![Cliente gráfico conectado al servidor](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/desktop-board.png)
+![Graphical client connected to the server](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/desktop-board.png)
 
-<table>
-  <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-gantt.png" alt="Gantt con dependencias"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-canvas.png" alt="Pizarra colaborativa"></td>
-  </tr>
-  <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-inbox.png" alt="Bandeja de novedades"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-settings.png" alt="Menú de configuración"></td>
-  </tr>
-  <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-team.png" alt="Equipo: buscar usuarios registrados"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
-  </tr>
-  <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-invite.png" alt="Código de invitación generado"></td>
-  </tr>
-</table>
-
-> 👉 **[Guía paso a paso: tu primer proyecto](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIA.md)**, con capturas.
-
-## 🤖 Agentes de IA como integrantes del equipo
-
-Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier cliente MCP) pueden **conectarse a un equipo humano**: cada IA tiene su usuario, token y rol, crea y completa tareas, **se las asigna a personas** y recibe las que le asignes. Se suman desde la barra lateral (**🤖 IAs → «+»**), el token se muestra una vez y se rota o revoca con un clic. Una IA no puede administrar equipos, invitar ni tocar tareas ajenas. Detalles en el [README principal](https://github.com/polblancoo/Rust_tuiManager#readme); con **`tm-agent`** una IA toma sola las tareas que le asignes (ver [instructivo](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.md)); el binario `tm-mcp` está en desarrollo.
-
-## Novedades de la 0.5
+![Command board: projects, AIs and tasks](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-01-tablero.png)
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-google.png" alt="Configuración con Google Calendar conectado y un «?» de ayuda en cada fila"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-google-help.png" alt="Ayuda de Google Calendar: qué hace y qué configura quien administra el servidor"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-gantt.png" alt="Gantt with dependencies"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-canvas.png" alt="Collaborative whiteboard"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-config-help.png" alt="Ayuda de una fila: «Si sos usuario» y «Si administrás el servidor»"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-invite.png" alt="Código de invitación con «Copiar invitación» y «Enviar por email»"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-inbox.png" alt="Inbox of news"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-settings.png" alt="Settings menu"></td>
+  </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-team.png" alt="Team: search registered users"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-activity.png" alt="Project activity"></td>
+  </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-invite.png" alt="Generated invitation code"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-06-panel-equipo.png" alt="Team panel with people and AIs"></td>
   </tr>
 </table>
 
-- **Panel del equipo** (botón «👥 Equipo», columna derecha): miembros con su rol (editable ahí mismo), desde cuándo están, quién los sumó y si entraron con un código, y cuántas tareas abiertas tiene cada uno; las invitaciones con sus usos, vencimiento y **quiénes entraron con cada código**; y los ajustes del equipo (editar nombre y descripción, transferir la propiedad, salir o eliminar el equipo con confirmación por nombre).
+> 👉 **[Step-by-step guide: your first project](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIDE.md)**, with screenshots.
 
-<img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-team-panel.png" alt="Panel del equipo: miembros, invitaciones y ajustes">
+## 🤖 AI agents as team members
 
-- **Google Calendar** (opcional, un solo sentido): cada usuario conecta su cuenta desde *Configuración → Google Calendar* y sus tareas con fecha (asignadas a él o sin responsable, de sus equipos) aparecen como eventos de día completo en su calendario principal. Si cambian, se terminan o se borran, el evento se actualiza o se quita solo (cada minuto); «Desconectar» limpia lo que creó la app. Lo habilita **una sola vez quien administra el servidor** con `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET` y `TM_GOOGLE_REDIRECT` (cliente OAuth «Aplicación web» de Google Cloud); mientras la app de Google esté en modo *Pruebas* solo entran los Gmail agregados como usuarios de prueba.
-- **Ayuda en cada parámetro de Configuración**: un botón «?» por fila explica qué hace para el usuario común y qué hay que tener configurado si administrás el servidor (SMTP, Telegram, Google, HTTPS…).
-- **Invitaciones listas para compartir**: al generar un código, *Copiar invitación* arma un texto con el enlace de instalación, la dirección del servidor, los pasos y el código, y *Enviar por email* lo abre en tu cliente de correo.
-- **Búsqueda de usuarios más clara**: los resultados se ven como botones (funciona también en la app de escritorio) y se busca por coincidencia en cualquier parte del nombre.
-- **Equipo más ordenado**: arriba agregar e invitar, y la lista de miembros al final.
-- La ventana de novedades ya no reaparece en cada inicio si no hay nada sin leer.
+Coding assistants (Claude Code, Cursor, Windsurf, Zed or any MCP client) can **join a human team**: each AI has its own user, token, role and model (e.g. `claude:Opus`), creates and completes tasks, **assigns them to people** and receives the ones you assign. They are added from the sidebar (**🤖 AIs → «+»**); the token is shown once and rotated or revoked with one click. An AI cannot administer teams, invite people or touch other people's tasks. Details in the [main README](https://github.com/polblancoo/Rust_tuiManager#readme); with **`tm-agent`** an AI picks up the tasks you assign on its own (see the [agents guide](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTS.md)); the `tm-mcp` binary is in development.
 
-## Uso
+![AI sheet and token with ready-to-copy MCP and tm-agent configuration](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-03-token.png)
+
+## What's new in 0.5
+
+<table>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-google.png" alt="Settings with Google Calendar connected and a “?” help button on every row"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-google-help.png" alt="Google Calendar help: what it does and what the server admin configures"></td>
+  </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-config-help.png" alt="Help for a row: “If you are a user” and “If you run the server”"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-invite.png" alt="Invitation code with “Copy invitation” and “Send by email”"></td>
+  </tr>
+</table>
+
+- **Team panel** («👥 Team» button, right column): members with their role (editable in place), since when they are in, who added them and whether they joined with a code, and how many open tasks each has; invitations with their uses, expiry and **who joined with each code**; and team settings (edit name and description, transfer ownership, leave or delete the team with name confirmation).
+
+<img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-team-panel.png" alt="Team panel: members, invitations and settings">
+
+- **Google Calendar** (optional, one-way): each user connects their account from *Settings → Google Calendar* and their dated tasks (assigned to them or unassigned, from their teams) show up as all-day events in their main calendar. If they change, finish or are deleted, the event is updated or removed automatically (every minute); “Disconnect” cleans up whatever the app created. **The server admin enables it once** with `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET` and `TM_GOOGLE_REDIRECT` (a Google Cloud “Web application” OAuth client); while the Google app is in *Testing* mode only the Gmail accounts added as test users can connect.
+- **Help on every Settings parameter**: a “?” button per row explains what it does for the regular user and what must be configured if you run the server (SMTP, Telegram, Google, HTTPS…).
+- **Ready-to-share invitations**: when you generate a code, *Copy invitation* builds a text with the install link, the server address, the steps and the code, and *Send by email* opens it in your mail client.
+- **Clearer user search**: results appear as buttons (also in the desktop app) and match anywhere in the name.
+- **Tidier team dialog**: add and invite at the top, member list at the bottom.
+- The news window no longer pops up at every start if there is nothing unread.
+
+## Usage
 
 ```sh
 cargo install rust-tui-manager-server
-tm-server                      # escucha en 0.0.0.0:7878
+tm-server                      # listens on 0.0.0.0:7878
 ```
 
-La base SQLite se crea sola (con permisos `0600`) y el esquema se migra al arrancar, también desde bases creadas por versiones anteriores.
+The SQLite database is created automatically (with `0600` permissions) and the schema is migrated at startup, also from databases created by earlier versions. To keep it always on, run it as a service (for example a systemd user unit with `Restart=on-failure`).
 
-## Configuración
+## Configuration
 
-| Variable | Por defecto | Descripción |
+| Variable | Default | Description |
 |---|---|---|
-| `TM_ADDR` | `0.0.0.0:7878` | Dirección donde escucha |
-| `TM_DATABASE` | `sqlite://tm-server.db` | Base de datos |
-| `TM_JWT_SECRET` | generado y guardado en la base | Secreto de los tokens; mínimo 32 caracteres |
-| `TM_CORS_ORIGINS` | Tauri y localhost | Orígenes extra permitidos, separados por coma |
-| `TM_TLS_CERT` / `TM_TLS_KEY` | — | Certificado y clave PEM para HTTPS directo |
-| `TM_TRUSTED_PROXY` | — | `1` detrás de un proxy inverso propio (usa `X-Forwarded-For`) |
-| `TM_WEB` | `1` | `0` desactiva el cliente web que el servidor sirve en `/` |
-| `TM_SMTP_URL` / `TM_SMTP_FROM` | — | Habilitan los avisos por email (opcional): `smtps://host:465`, `Tareas <avisos@ejemplo.com>` |
-| `TM_REMINDER_SECS` | `300` | Cada cuántos segundos se revisan los vencimientos para los recordatorios |
-| `TM_TELEGRAM_TOKEN` | — | Token del bot de Telegram (de @BotFather); activa vincular cuentas y avisos por Telegram |
-| `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET`, `TM_GOOGLE_REDIRECT` | — | Cliente OAuth de Google Cloud («Aplicación web») que activa Google Calendar; la redirección es `https://tu-servidor/api/google/callback` |
-| `TM_GOOGLE_SYNC_SECS` | `60` | Cada cuántos segundos se sincroniza el calendario de los usuarios conectados |
-| `TM_SMTP_USER` / `TM_SMTP_PASSWORD` | — | Credenciales SMTP, si hacen falta |
+| `TM_ADDR` | `0.0.0.0:7878` | Listening address |
+| `TM_DATABASE` | `sqlite://tm-server.db` | Database |
+| `TM_JWT_SECRET` | generated and stored in the database | Token secret; at least 32 characters |
+| `TM_CORS_ORIGINS` | Tauri and localhost | Extra allowed origins, comma-separated |
+| `TM_TLS_CERT` / `TM_TLS_KEY` | — | PEM certificate and key for direct HTTPS |
+| `TM_TRUSTED_PROXY` | — | `1` behind your own reverse proxy (uses `X-Forwarded-For`) |
+| `TM_WEB` | `1` | `0` turns off the web client the server serves at `/` |
+| `TM_SMTP_URL` / `TM_SMTP_FROM` | — | Enable email notices (optional): `smtps://host:465`, `Tasks <notices@example.com>` |
+| `TM_REMINDER_SECS` | `300` | How often due dates are checked for reminders, in seconds |
+| `TM_TELEGRAM_TOKEN` | — | Telegram bot token (from @BotFather); enables account linking and Telegram notices |
+| `TM_TELEGRAM_SEND_ONLY` | — | `1` to only send notices (no `/start` linking, no polling), so a bot can be shared with another program |
+| `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET`, `TM_GOOGLE_REDIRECT` | — | Google Cloud OAuth client (“Web application”) that enables Google Calendar; the redirect is `https://your-server/api/google/callback` |
+| `TM_GOOGLE_SYNC_SECS` | `60` | How often connected users' calendars are synced, in seconds |
+| `TM_SMTP_USER` / `TM_SMTP_PASSWORD` | — | SMTP credentials, if needed |
+| `RUST_LOG` | `info` | Log level |
 
-Nuevos endpoints: `GET /api/me`, `PUT/DELETE /api/me/email`, `POST /api/me/email/verify`, `GET /api/users/search?q=&team_id=` (solo admin del equipo), `POST /api/me/telegram/link`, `DELETE /api/me/telegram`, `POST /api/teams/{id}/messages` (miembro o más), `GET/POST /api/tasks/{id}/attachments` (cuerpo binario, `?name=`), `GET/DELETE /api/attachments/{id}`, `POST /api/projects/{id}/duplicate`, `GET /api/projects/{id}/export?format=csv|json`, `GET /api/projects/{id}/activity`, `GET /api/inbox`, `POST /api/notifications/read`, `PUT/DELETE /api/tasks/{id}/deps/{dep}`, y la pizarra: `GET /api/projects/{id}/canvas`, `POST .../canvas/items|links`, `PATCH/DELETE /api/canvas/items/{id}`, `DELETE /api/canvas/links/{id}`.
-| `RUST_LOG` | `info` | Nivel de log |
-
-Sin TLS propio, ponelo detrás de un proxy TLS antes de exponerlo a internet; el servidor avisa en el log si escucha en una interfaz no local sin TLS ni proxy.
+Without its own TLS, put it behind a TLS proxy before exposing it to the internet; the server warns in the log if it listens on a non-local interface without TLS or a proxy.
 
 ## API
 
-Todas las rutas (salvo registro y login) requieren `Authorization: Bearer <token>`. Los errores responden `{"error": "..."}`.
+All routes (except register and login) require `Authorization: Bearer <token>`. Errors answer `{"error": "..."}`. The token can be a user session (JWT) or an AI account token (`tmk_…`).
 
-| Método y ruta | Rol mínimo | Descripción |
+| Method and route | Minimum role | Description |
 |---|---|---|
-| `POST /api/register`, `POST /api/login` | — | Devuelven `{token, user}` |
-| `POST /api/logout-all` | — | Invalida todos los tokens del usuario |
-| `GET`, `POST /api/teams` | — | Mis equipos / crear equipo |
-| `GET`, `POST /api/teams/{id}/members` | lector / admin | Listar miembros / agregar por usuario |
-| `PUT`, `DELETE /api/teams/{id}/members/{uid}` | admin (o uno mismo para salir) | Cambiar rol / quitar |
-| `GET`, `POST /api/teams/{id}/invites` | admin | Listar / crear invitación |
-| `DELETE /api/invites/{id}` | admin | Revocar invitación |
-| `POST /api/invites/{code}/accept` | — | Unirse con un código |
-| `GET`, `POST /api/teams/{id}/projects` | lector / miembro | Proyectos |
-| `GET`, `POST /api/projects/{id}/tasks` | lector / miembro | Tareas y subtareas (`parent_id`) |
-| `PATCH`, `DELETE /api/tasks/{id}` | miembro | Editar / borrar tarea |
-| `GET`, `POST /api/tasks/{id}/comments` | lector / miembro | Comentarios |
-| `GET`, `POST /api/teams/{id}/labels` | lector / miembro | Etiquetas del equipo |
-| `DELETE /api/labels/{id}` | miembro | Borrar etiqueta |
-| `PUT /api/tasks/{id}/labels` | miembro | Reemplazar las etiquetas de una tarea |
-| `GET /ws` | — | WebSocket de eventos en tiempo real |
+| `POST /api/register`, `POST /api/login` | — | Return `{token, user}` |
+| `POST /api/logout-all` | — | Invalidates all of the user's tokens (people only) |
+| `GET`, `POST /api/teams` | — | My teams / create a team |
+| `GET`, `POST /api/teams/{id}/members` | viewer / admin | List members / add by username |
+| `PUT`, `DELETE /api/teams/{id}/members/{uid}` | admin (or oneself to leave) | Change role / remove |
+| `GET`, `POST /api/teams/{id}/invites` | admin | List / create an invitation |
+| `DELETE /api/invites/{id}` | admin | Revoke an invitation |
+| `POST /api/invites/{code}/accept` | — | Join with a code |
+| `GET`, `POST /api/teams/{id}/projects` | viewer / member | Projects (with `work_dir` and `repo`) |
+| `PATCH`, `DELETE /api/projects/{id}` | admin | Edit name, description, folder and repo / delete (`?confirm=<name>`) |
+| `GET`, `POST /api/projects/{id}/tasks` | viewer / member | Tasks and subtasks (`parent_id`) |
+| `PATCH`, `DELETE /api/tasks/{id}` | member (AI: only its own) | Edit / delete a task |
+| `GET`, `POST /api/tasks/{id}/comments` | viewer / member | Comments (a comment starting with 🙋 is a help alarm for admins) |
+| `GET`, `POST /api/teams/{id}/labels` | viewer / member | Team labels |
+| `DELETE /api/labels/{id}` | member | Delete a label |
+| `PUT /api/tasks/{id}/labels` | member | Replace a task's labels |
+| `GET`, `POST /api/teams/{id}/bots` | viewer / admin | List / create AI accounts (the token is returned once) |
+| `POST`, `DELETE /api/bots/{uid}/token` | admin | Rotate / revoke an AI's token |
+| `PATCH /api/bots/{uid}` | admin | Change the AI's model label |
+| `GET /ws` | — | Real-time events WebSocket |
+
+Other endpoints: `GET /api/me`, `PUT/DELETE /api/me/email`, `POST /api/me/email/verify`, `GET /api/users/search?q=&team_id=` (team admin only), `POST /api/me/telegram/link`, `DELETE /api/me/telegram`, `POST /api/teams/{id}/messages` (member or above), `GET/POST /api/tasks/{id}/attachments` (binary body, `?name=`), `GET/DELETE /api/attachments/{id}`, `POST /api/projects/{id}/duplicate`, `GET /api/projects/{id}/export?format=csv|json`, `GET /api/projects/{id}/activity`, `GET /api/teams/{id}/overview`, `PATCH /api/teams/{id}`, `POST /api/teams/{id}/transfer`, `DELETE /api/teams/{id}?confirm=<name>`, `GET /api/inbox`, `POST /api/notifications/read`, `PUT/DELETE /api/tasks/{id}/deps/{dep}`, and the whiteboard: `GET /api/projects/{id}/canvas`, `POST .../canvas/items|links`, `PATCH/DELETE /api/canvas/items/{id}`, `DELETE /api/canvas/links/{id}`.
+
+**AI accounts** cannot create or delete teams, invite people, change roles, rotate tokens or sign out other sessions; they can create tasks (and assign them to people) and only modify or delete the tasks they created or were assigned.
 
 ### WebSocket
 
-Conectá a `/ws` y, dentro de los primeros 5 segundos, enviá un mensaje de texto `{"token": "<jwt>"}`. Después recibís eventos JSON `{"type": "...", "data": {...}}` de los equipos a los que pertenecés: `task_created`, `task_updated`, `task_deleted`, `comment_added`, `project_created`, `label_created`, `label_deleted`, `member_added`, `member_removed` y `member_role_changed`. Máximo 8 conexiones por usuario.
+Connect to `/ws` and, within the first 5 seconds, send a text message `{"token": "<jwt>"}`. Then you receive JSON events `{"type": "...", "data": {...}}` from the teams you belong to: `task_created`, `task_updated`, `task_deleted`, `comment_added`, `project_created`, `project_deleted`, `label_created`, `label_deleted`, `member_added`, `member_removed` and `member_role_changed`. At most 8 connections per user.
 
-## Límites
+## Limits
 
-Cuerpo de 64 KB; usuario 3–32 caracteres, contraseña 8–128; título 200, descripción 10 000, comentario 4000; hasta 50 equipos por usuario, 100 miembros y 200 proyectos por equipo, 5000 tareas por proyecto, 100 subtareas por tarea, 2000 comentarios por tarea, 100 etiquetas por equipo (10 por tarea) y 20 invitaciones activas por equipo.
-
-## Licencia
-
-MIT
+64 KB body; username 3–32 characters, password 8–128; title 200, description 10,000, comment 4,000; up to 50 teams per user, 100 members and 200 projects per team, 5,000 tasks per project, 100 subtasks per task, 2,000 comments per task, 100 labels per team (10 per task) and 20 active invitations per team.
 
 ## Google Calendar
 
-Cada usuario conecta su cuenta desde Configuración → Google Calendar y sus tareas con fecha (asignadas a él o sin responsable, de sus equipos) aparecen como eventos de día completo en su calendario principal; se actualizan o se borran solos. La sincronización es de un solo sentido. Quien administra el servidor lo configura una sola vez: crea un proyecto en Google Cloud, habilita la *Google Calendar API*, configura la pantalla de consentimiento (con los Gmail de prueba, hasta 100, o la verificación de Google para abrirla) y crea un cliente OAuth tipo «Aplicación web»; el secreto no se comparte ni se sube a git.
+Each user connects their account from Settings → Google Calendar and their dated tasks (assigned to them or unassigned, from their teams) show up as all-day events in their main calendar; they are updated or removed automatically. Sync is one-way. The server admin configures it once: create a project in Google Cloud, enable the *Google Calendar API*, set up the consent screen (with the test Gmail accounts, up to 100, or Google verification to open it up) and create an OAuth client of type “Web application”; the secret is not shared or pushed to git.
+
+## License
+
+MIT

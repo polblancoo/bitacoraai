@@ -40,7 +40,7 @@ aside h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; co
 .live { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
 .live.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
 
-main { display: flex; flex-direction: column; min-width: 0; }
+main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .top { display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
 .top h1 { font-size: 18px; flex: 1; }
 .top input { width: 220px; }
@@ -48,13 +48,13 @@ main { display: flex; flex-direction: column; min-width: 0; }
 .avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--bg); border: 2px solid var(--bg); margin-left: -6px; }
 .members .avatar:first-child { margin-left: 0; }
 
-.board { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 18px 22px; overflow: hidden; }
+.board { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: 16px; padding: 18px 22px; min-height: 0; overflow: auto; }
 .col { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 0; }
 .col.over { border-color: var(--blue); background: #1b2033; }
 .col header { padding: 12px 14px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .col header .count { color: var(--dim); font-weight: 400; }
 .col header .bar { width: 4px; height: 16px; border-radius: 2px; }
-.cards { padding: 0 10px 10px; overflow: auto; display: grid; gap: 8px; align-content: start; flex: 1; }
+.cards { padding: 0 10px 10px; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; display: grid; gap: 8px; align-content: start; flex: 1; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: grab; display: grid; gap: 8px; }
 .card:hover { border-color: var(--blue); transform: translateY(-1px); }
 .card.dragging { opacity: .4; }
@@ -65,7 +65,7 @@ main { display: flex; flex-direction: column; min-width: 0; }
 .p2 { background: #4a3a22; color: var(--yellow); } .p3 { background: #4a2a35; color: var(--red); }
 .due.late { color: var(--red); }
 .spacer { flex: 1; }
-.add { margin: 0 10px 10px; background: transparent; border-style: dashed; color: var(--dim); }
+.add { flex: none; margin: 0 10px 10px; background: transparent; border-style: dashed; color: var(--dim); }
 .empty { margin: auto; text-align: center; color: var(--dim); }
 
 /* modal */

@@ -1,3 +1,5 @@
+<p align="center"><a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTS.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.pt.md">Português</a></p>
+
 # Instructivo: que una IA trabaje sola con `tm-agent`
 
 Una IA solo actúa mientras algo la despierta. **`tm-agent`** es ese «algo»: un programa chico que corre en la **máquina donde está la carpeta del proyecto**, mira tu servidor y, cuando le asignás una tarea a la IA:
@@ -21,7 +23,7 @@ El mismo instructivo está **dentro de la app**: *Configuración → Agentes de 
 
 - El servidor andando y una cuenta de **admin o dueño** del equipo.
 - Una máquina con la **carpeta del proyecto** y con el agente que querés usar instalado y con sesión iniciada (por ejemplo `claude`).
-- Rust (`cargo`) para instalar `tm-agent`. Instaladores listos para descargar: ver el [ROADMAP](../ROADMAP.md).
+- Rust (`cargo`) para instalar `tm-agent`. Instaladores listos para descargar: ver el [ROADMAP](https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md).
 
 ## Paso a paso
 
@@ -38,7 +40,7 @@ Con **⚙ Proyecto** completá **Carpeta de trabajo** (por ejemplo `/home/ana/pr
 En la máquina del proyecto:
 
 ```bash
-cargo install --git https://github.com/polblancoo/Rust_tuiManager rust-tui-manager-agent
+cargo install rust-tui-manager-agent
 ```
 
 ### 4. Elegir el comando del agente
