@@ -51,7 +51,7 @@ Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un �
   </tr>
 </table>
 
-## Novedades de la 0.5.0
+## Novedades de la 0.5
 
 <table>
   <tr>
@@ -63,6 +63,10 @@ Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un �
     <td><img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-invite.png" alt="Código de invitación con «Copiar invitación» y «Enviar por email»"></td>
   </tr>
 </table>
+
+- **Panel del equipo** (botón «👥 Equipo», columna derecha): miembros con su rol (editable ahí mismo), desde cuándo están, quién los sumó y si entraron con un código, y cuántas tareas abiertas tiene cada uno; las invitaciones con sus usos, vencimiento y **quiénes entraron con cada código**; y los ajustes del equipo (editar nombre y descripción, transferir la propiedad, salir o eliminar el equipo con confirmación por nombre).
+
+<img src="https://raw.githubusercontent.com/polblancoo/tui_comandNote/main/docs/screenshots/web-team-panel.png" alt="Panel del equipo: miembros, invitaciones y ajustes">
 
 - **Google Calendar** (opcional, un solo sentido): cada usuario conecta su cuenta desde *Configuración → Google Calendar* y sus tareas con fecha (asignadas a él o sin responsable, de sus equipos) aparecen como eventos de día completo en su calendario principal. Si cambian, se terminan o se borran, el evento se actualiza o se quita solo (cada minuto); «Desconectar» limpia lo que creó la app. Lo habilita **una sola vez quien administra el servidor** con `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET` y `TM_GOOGLE_REDIRECT` (cliente OAuth «Aplicación web» de Google Cloud); mientras la app de Google esté en modo *Pruebas* solo entran los Gmail agregados como usuarios de prueba.
 - **Ayuda en cada parámetro de Configuración**: un botón «?» por fila explica qué hace para el usuario común y qué hay que tener configurado si administrás el servidor (SMTP, Telegram, Google, HTTPS…).
@@ -91,7 +95,7 @@ Gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un �
 - **Web instalable (PWA)**: desde el navegador del celular o la compu podés "instalarla" como una app.
 - **Telegram** (opcional): cada usuario vincula su cuenta con el bot y recibe por ahí las novedades; cualquier miembro puede mandar **mensajes al equipo** (bandeja, email y Telegram).
 - **Agregar miembros con búsqueda** de usuarios registrados, atajos con prefijo `Ctrl+T` y **ayuda con buscador** (`?`) en ambos clientes.
-- **Google Calendar** (opcional): tus tareas con fecha aparecen en tu calendario; ver *Novedades de la 0.5.0*.
+- **Google Calendar** (opcional): tus tareas con fecha aparecen en tu calendario; ver *Novedades de la 0.5*.
 - **Tiempo real**: un cambio de cualquier usuario aparece al instante en todos los clientes del equipo.
 
 ## Instalación rápida

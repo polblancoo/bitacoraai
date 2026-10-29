@@ -27,6 +27,7 @@ button.danger:hover { border-color: var(--red); color: var(--red); }
 
 /* shell */
 .shell { display: grid; grid-template-columns: 240px 1fr; height: 100%; }
+.shell.with-panel { grid-template-columns: 240px 1fr 330px; }
 aside { background: var(--bg2); border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
 aside h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); display: flex; justify-content: space-between; align-items: center; }
 .brand { font-weight: 700; color: var(--purple); font-size: 15px; }
@@ -233,3 +234,29 @@ a.btnlike { background: var(--bg2); border: 1px solid var(--border, #3b4261); co
 .modal li code, .modal p code { background: var(--bg2); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
 .modal h4 { margin: 10px 0 2px; font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
 .cfg-line .help { flex: none; }
+
+/* panel del equipo */
+.team-panel { background: var(--bg2); border-left: 1px solid var(--line); padding: 16px 14px; display: flex; flex-direction: column; gap: 12px; overflow: auto; min-width: 0; }
+.tp-head { display: flex; align-items: center; gap: 8px; }
+.tp-head h3 { font-size: 17px; word-break: break-word; }
+.tp-desc { color: var(--dim); font-size: 13px; line-height: 1.4; }
+.tp-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--dim); }
+.tp-stats b { color: var(--fg); font-size: 15px; }
+.tp-sec { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.tp-sec h4 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.tp-list { display: grid; gap: 8px; }
+.tp-member { display: grid; gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.tp-member .avatar { margin: 0; border: 0; flex: none; }
+.tp-member .tp-line { flex-wrap: nowrap; margin-bottom: 2px; }
+.tp-member small.inl { display: inline; }
+.tp-member small, .tp-invite small { color: var(--dim); font-size: 11px; display: block; }
+.tp-member select { width: auto; padding: 3px 6px; font-size: 12px; }
+.tp-name { font-weight: 600; word-break: break-all; }
+.tp-invite { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 3px; }
+.tp-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tp-invite small.ok { color: var(--green); }
+.pill.role-owner { background: #3a2f55; color: var(--purple); } .pill.role-admin { background: #2a3a66; color: var(--blue); }
+.pill.role-member, .pill.role-viewer { background: #2d3350; color: var(--dim); }
+.top button.on { background: var(--card2); border-color: var(--blue); }
+@media (max-width: 1100px) { .shell.with-panel { grid-template-columns: 240px 1fr; } .shell.with-panel .team-panel { position: fixed; right: 0; top: 0; bottom: 0; width: min(340px, 92vw); z-index: 40; box-shadow: -10px 0 30px #0008; } }
+.tp-line small { display: inline; }

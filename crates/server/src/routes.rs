@@ -313,7 +313,7 @@ async fn create_team(State(st): State<AppState>, user: AuthUser, Json(n): Json<N
         .execute(&mut *tx)
         .await?
         .last_insert_rowid();
-    sqlx::query("INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, 'owner')").bind(id).bind(user.id).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO team_members (team_id, user_id, role, joined_at, via) VALUES (?, ?, 'owner', ?, 'owner')").bind(id).bind(user.id).bind(Utc::now()).execute(&mut *tx).await?;
     tx.commit().await?;
     // el dueño ya tiene abierto el WebSocket: este evento hace que se suscriba al equipo nuevo
     let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
@@ -341,14 +341,19 @@ async fn list_members(State(st): State<AppState>, user: AuthUser, Path(team): Pa
     ))
 }
 
-async fn insert_member(st: &AppState, team: Id, user: &User, role: Role) -> Result<bool> {
+/// `by`: quién lo sumó; `via`: "direct" (lo agregó un admin) o "invite" (entró con el código `invite_id`).
+async fn insert_member(st: &AppState, team: Id, user: &User, role: Role, by: Option<Id>, via: &str, invite_id: Option<Id>) -> Result<bool> {
     if count(st, "SELECT COUNT(*) FROM team_members WHERE team_id = ?", team).await? >= MAX_MEMBERS_PER_TEAM {
         return Err(too_many("miembros", MAX_MEMBERS_PER_TEAM));
     }
-    let res = sqlx::query("INSERT OR IGNORE INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)")
+    let res = sqlx::query("INSERT OR IGNORE INTO team_members (team_id, user_id, role, joined_at, invited_by, via, invite_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
         .bind(team)
         .bind(user.id)
         .bind(role.as_str())
+        .bind(Utc::now())
+        .bind(by)
+        .bind(via)
+        .bind(invite_id)
         .execute(&st.db)
         .await?;
     if res.rows_affected() > 0 {
@@ -371,7 +376,7 @@ async fn add_member(
     max_len("usuario", &a.username, USERNAME_MAX)?;
     let row = sqlx::query("SELECT id, username FROM users WHERE username = ?").bind(a.username.trim()).fetch_one(&st.db).await?;
     let new = User { id: row.get("id"), username: row.get("username") };
-    insert_member(&st, team, &new, role).await?;
+    insert_member(&st, team, &new, role, Some(user.id), "direct", None).await?;
     let team_name: String = sqlx::query_scalar("SELECT name FROM teams WHERE id = ?").bind(team).fetch_one(&st.db).await?;
     let who = crate::notify::username_of(&st, user.id).await;
     crate::notify::notify(&st, new.id, "member_added", Some(team), None, format!("{who} te sumó al equipo «{team_name}» como {}", role.label())).await;
@@ -503,7 +508,7 @@ async fn accept_invite(
     // el UPDATE condicional consume un uso de forma atómica (sin carreras entre dos aceptaciones)
     let used = sqlx::query(
         "UPDATE invites SET uses = uses + 1 WHERE code_hash = ? AND uses < max_uses AND expires_at > ? \
-         RETURNING team_id, role",
+         RETURNING team_id, role, id, created_by",
     )
     .bind(&hash)
     .bind(Utc::now())
@@ -511,6 +516,7 @@ async fn accept_invite(
     .await?
     .ok_or_else(|| AppError::bad("invitación inválida, vencida o agotada"))?;
     let (team, role): (Id, Role) = (used.get("team_id"), Role::parse(used.get("role")).unwrap_or(Role::Viewer));
+    let (invite_id, invited_by): (Id, Option<Id>) = (used.get("id"), used.get("created_by"));
     let already: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM team_members WHERE team_id = ? AND user_id = ?")
         .bind(team)
         .bind(user.id)
@@ -525,7 +531,7 @@ async fn accept_invite(
         id: user.id,
         username: sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?,
     };
-    insert_member(&st, team, &me, role).await?;
+    insert_member(&st, team, &me, role, invited_by, "invite", Some(invite_id)).await?;
     let row = sqlx::query("SELECT id, name, owner_id FROM teams WHERE id = ?").bind(team).fetch_one(&st.db).await?;
     Ok(Json(Team { id: row.get("id"), name: row.get("name"), owner_id: row.get("owner_id") }))
 }

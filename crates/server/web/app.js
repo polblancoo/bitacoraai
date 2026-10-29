@@ -17,6 +17,7 @@ const store = {
 };
 
 const S = {
+  panel: store.get("panel") === "1", overview: null,
   // servida por tm-server (web): el servidor es el propio origen; en Tauri se elige a mano
   server: /^https?:$/.test(location.protocol) && location.hostname !== "tauri.localhost" ? location.origin : store.get("server") || "http://127.0.0.1:7878",
   token: store.get("token"),
@@ -226,6 +227,7 @@ async function selectTeam(team) {
       api("GET", `/api/teams/${team.id}/labels`),
     ]);
     await selectProject(S.projects[0] || null);
+    loadOverview();
   } else render();
 }
 
@@ -293,7 +295,7 @@ function onEvent({ type, data }) {
   S.redrawSubs?.();
 }
 
-const refreshMembers = () => api("GET", `/api/teams/${S.team.id}/members`).then((m) => { S.members = m; render(); document.getElementById("team-modal") && openTeam(); }).catch(() => {});
+const refreshMembers = () => api("GET", `/api/teams/${S.team.id}/members`).then((m) => { S.members = m; render(); document.getElementById("team-modal") && openTeam(); loadOverview(); }).catch(() => {});
 
 // ---------- diálogos propios (en lugar de prompt() del navegador) ----------
 // fields: [{ name, label, type?: "text"|"textarea"|"select"|"date", options?: [[value,label]], value?, max? }]
@@ -417,6 +419,89 @@ const openTeam = guard(async () => {
   document.body.append(h("div", { class: "overlay", id: "team-modal", onmousedown: (e) => e.target.id === "team-modal" && e.target.remove() },
     h("div", { class: "modal" }, body)));
 });
+
+// ---------- panel del equipo (columna derecha) ----------
+const VIA = { owner: "creó el equipo", direct: "lo sumó un admin", invite: "entró con un código" };
+const fmtDay = (d) => (d ? new Date(d).toLocaleDateString() : "fecha desconocida");
+
+const loadOverview = async () => {
+  if (!S.panel || !S.team) return;
+  const team = S.team.id;
+  try {
+    const o = await api("GET", `/api/teams/${team}/overview`);
+    if (S.team?.id !== team) return;
+    S.overview = o; render();
+  } catch {}
+};
+const togglePanel = () => {
+  S.panel = !S.panel; store.set("panel", S.panel ? "1" : null);
+  S.panel ? loadOverview() : render();
+};
+
+function teamPanel() {
+  const o = S.overview && S.overview.id === S.team.id ? S.overview : null;
+  const box = h("section", { class: "team-panel" });
+  if (!o) { box.append(h("small", {}, "Cargando…")); return box; }
+  const mine = o.my_role, admin = RANK[mine] >= RANK.admin, owner = mine === "owner";
+  const sec = (title, ...kids) => h("div", { class: "tp-sec" }, h("h4", {}, title), ...kids);
+  const reload = async () => { const t = await api("GET", "/api/teams"); S.teams = t; S.team = t.find((x) => x.id === S.team.id) || S.team; await refreshMembers(); };
+
+  const rolePick = (m) => {
+    const can_edit = admin && m.role !== "owner" && RANK[m.role] < RANK[mine];
+    if (!can_edit) return h("span", { class: "pill role-" + m.role }, ROLES.find(([r]) => r === m.role)[1]);
+    return h("select", { onchange: guard(async (e) => { await api("PUT", `/api/teams/${o.id}/members/${m.id}`, { role: e.target.value }); }) },
+      ROLES.filter(([r]) => r === m.role || (r !== "owner" && RANK[r] < RANK[mine])).map(([r, l]) => h("option", { value: r, selected: r === m.role }, l)));
+  };
+  const memberCard = (m) => h("div", { class: "tp-member" },
+    h("div", { class: "tp-line" }, avatar(m.username), h("span", { class: "tp-name grow" }, m.username, m.id === S.user.id && h("small", { class: "inl" }, " (vos)")), rolePick(m),
+      ((admin && m.role !== "owner" && RANK[m.role] < RANK[mine]) || (m.id === S.user.id && m.role !== "owner")) &&
+        h("button", { class: "ghost danger", title: m.id === S.user.id ? "Salir del equipo" : "Quitar del equipo", onclick: guard(async () => {
+          if (!confirm(m.id === S.user.id ? "¿Salir del equipo?" : `¿Quitar a ${m.username}?`)) return;
+          await api("DELETE", `/api/teams/${o.id}/members/${m.id}`);
+          if (m.id === S.user.id) await boot();
+        }) }, "✕")),
+    h("small", {}, `Desde ${fmtDay(m.joined_at)}${m.via ? " · " + (m.invited_by && m.via !== "owner" ? `${VIA[m.via] || m.via} (${m.invited_by})` : VIA[m.via] || m.via) : ""}`),
+    h("small", {}, m.open_tasks ? `📌 ${m.open_tasks} ${m.open_tasks === 1 ? "tarea abierta" : "tareas abiertas"}` : "Sin tareas abiertas"));
+
+  const inviteCard = (i) => h("div", { class: "tp-invite" },
+    h("div", { class: "tp-line" }, h("b", {}, ROLES.find(([r]) => r === i.role)[1]), h("small", {}, `${i.uses}/${i.max_uses} usos`), h("span", { class: "spacer" }),
+      h("button", { class: "ghost danger", onclick: guard(async () => { await api("DELETE", `/api/invites/${i.id}`); loadOverview(); }) }, "Revocar")),
+    h("small", {}, `Creada por ${i.created_by || "—"} · vence ${fmtDay(i.expires_at)}`),
+    i.joined.length ? h("small", { class: "ok" }, "Entraron: " + i.joined.map((j) => `${j.username} (${fmtDay(j.joined_at)})`).join(", ")) : h("small", {}, "Todavía no entró nadie"));
+
+  const edit = guard(async () => {
+    const f = await form("Datos del equipo", [{ name: "name", label: "Nombre", value: o.name, max: 100 }, { name: "description", label: "Descripción (opcional)", type: "textarea", value: o.description, max: 500 }], "Guardar"); if (!f) return;
+    await api("PATCH", `/api/teams/${o.id}`, { name: f.name, description: f.description });
+    await reload();
+  });
+  const transfer = guard(async () => {
+    const others = o.members.filter((m) => m.id !== S.user.id); if (!others.length) throw new Error("No hay otros miembros a quienes transferir");
+    const f = await form("Transferir la propiedad", [{ name: "to", label: "Nuevo dueño (vos pasás a Admin)", type: "select", options: others.map((m) => [m.id, m.username]) }], "Transferir"); if (!f) return;
+    await api("POST", `/api/teams/${o.id}/transfer`, { user_id: +f.to });
+    toast("Propiedad transferida"); await reload();
+  });
+  const remove = guard(async () => {
+    const f = await form(`Eliminar «${o.name}»`, [{ name: "confirm", label: `Se borran proyectos, tareas e invitaciones. Escribí el nombre del equipo para confirmar (${o.name})` }], "Eliminar"); if (!f) return;
+    await api("DELETE", `/api/teams/${o.id}?confirm=${encodeURIComponent(f.confirm)}`);
+    toast("Equipo eliminado"); await boot();
+  });
+
+  box.append(
+    h("div", { class: "tp-head" }, h("h3", {}, o.name), h("span", { class: "spacer" }),
+      h("button", { class: "ghost", title: "Cerrar panel", onclick: togglePanel }, "✕")),
+    o.description && h("p", { class: "tp-desc" }, o.description),
+    h("div", { class: "tp-stats" }, h("span", {}, h("b", {}, o.members.length), " miembros"), h("span", {}, h("b", {}, o.projects), " proyectos"), h("span", {}, h("b", {}, o.open_tasks), " tareas abiertas")),
+    admin && h("div", { class: "row" }, h("button", { onclick: edit }, "✎ Editar datos"), h("button", { class: "primary", onclick: openTeam }, "➕ Agregar / invitar")),
+    sec(`Miembros (${o.members.length})`, h("div", { class: "tp-list" }, o.members.map(memberCard))),
+    admin && sec(`Invitaciones (${o.invites.length})`, o.invites.length ? h("div", { class: "tp-list" }, o.invites.map(inviteCard)) : h("small", {}, "No hay invitaciones. Generá un código con «Agregar / invitar».")),
+    sec("Ajustes",
+      h("div", { class: "tp-list" },
+        !owner && h("button", { class: "danger", onclick: guard(async () => { if (!confirm("¿Salir del equipo?")) return; await api("DELETE", `/api/teams/${o.id}/members/${S.user.id}`); await boot(); }) }, "Salir del equipo"),
+        owner && h("button", { onclick: transfer }, "Transferir la propiedad"),
+        owner && h("button", { class: "danger", onclick: remove }, "Eliminar el equipo"),
+        !admin && h("small", {}, "Solo un admin o el dueño puede cambiar los datos del equipo y gestionar miembros."))));
+  return box;
+}
 const RELEASES_URL = "https://github.com/polblancoo/tui_comandNote/releases/latest";
 const inviteMessage = (code) => [
   `Te invito al equipo «${S.team.name}» en Rust TUI Manager.`,
@@ -716,7 +801,7 @@ function calendarView() {
 
 function appView() {
   const search = h("input", { placeholder: "Buscar…", value: S.query, oninput: (e) => { S.query = e.target.value; render(true); } });
-  return h("div", { class: "shell" },
+  return h("div", { class: "shell" + (S.panel && S.team ? " with-panel" : "") },
     h("aside", {},
       h("div", { class: "brand" }, "▣ Rust TUI Manager"),
       h("div", {}, h("h2", {}, "Equipos", h("span", {}, h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
@@ -735,14 +820,15 @@ function appView() {
       h("div", { class: "top" },
         h("h1", {}, S.project ? S.project.name : S.team ? "Sin proyectos" : "Creá un equipo para empezar"),
         h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
-        S.team && h("button", { onclick: openTeam }, can("admin") ? "Equipo · Invitar" : "Equipo"),
+        S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
         S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
         h("div", { class: "seg" },
           [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"], ["activity", "Actividad"]].map(([v, l]) =>
             h("button", { class: S.view === v ? "on" : "", onclick: () => { S.view = v; render(); } }, l))),
         search),
       S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
-        : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos")));
+        : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos")),
+    S.panel && S.team && teamPanel());
 }
 
 function render(keepFocus) {
@@ -954,10 +1040,10 @@ document.addEventListener("keydown", (e) => {
     if (top) { top.id === "inbox-modal" ? closeInbox() : top.id === "modal" ? closeModal() : top.remove(); }
     S.prefix = false; return;
   }
-  if (e.ctrlKey && e.key.toLowerCase() === "t") { e.preventDefault(); S.prefix = true; toast("Ctrl+T ▸ m miembros · i invitar · j unirse · t equipo · p proyecto · e email · n bandeja · s mensaje · g Telegram · c config"); return; }
+  if (e.ctrlKey && e.key.toLowerCase() === "t") { e.preventDefault(); S.prefix = true; toast("Ctrl+T ▸ m miembros · i invitar · j unirse · t panel del equipo · p proyecto · e email · n bandeja · s mensaje · g Telegram · c config"); return; }
   if (S.prefix) {
     S.prefix = false; e.preventDefault();
-    const act = { m: () => S.team && openTeam(), i: () => S.team && openTeam(), j: joinWithCode, t: createTeam, p: () => S.team && createProject(), e: openProfile, n: () => loadInbox(false), c: openSettings, s: () => S.team && can("member") && sendTeamMessage(), g: linkTelegram }[e.key.toLowerCase()];
+    const act = { m: () => S.team && openTeam(), i: () => S.team && openTeam(), j: joinWithCode, t: togglePanel, p: () => S.team && createProject(), e: openProfile, n: () => loadInbox(false), c: openSettings, s: () => S.team && can("member") && sendTeamMessage(), g: linkTelegram }[e.key.toLowerCase()];
     act ? act() : toast("Atajo de equipo desconocido", true);
     return;
   }

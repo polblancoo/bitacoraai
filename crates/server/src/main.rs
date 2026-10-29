@@ -5,6 +5,7 @@ mod limits;
 mod notify;
 mod extras;
 mod google;
+mod teampanel;
 mod telegram;
 mod web;
 mod profile;
@@ -92,6 +93,11 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE users ADD COLUMN tg_code_expires TEXT",
         "ALTER TABLE tasks ADD COLUMN recurrence TEXT",
         "ALTER TABLE tasks ADD COLUMN remind_state INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE team_members ADD COLUMN joined_at TEXT",
+        "ALTER TABLE team_members ADD COLUMN invited_by INTEGER",
+        "ALTER TABLE team_members ADD COLUMN via TEXT",
+        "ALTER TABLE team_members ADD COLUMN invite_id INTEGER",
+        "ALTER TABLE teams ADD COLUMN description TEXT NOT NULL DEFAULT ''",
     ] {
         let _ = sqlx::query(alter).execute(db).await;
     }
@@ -175,7 +181,7 @@ async fn main() -> anyhow::Result<()> {
     extras::spawn_reminders(state.clone());
     google::spawn_sync(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(teampanel::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))
