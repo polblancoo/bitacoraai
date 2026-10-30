@@ -389,8 +389,12 @@ const createTeam = guard(async () => {
   S.teams.push(t); await selectTeam(t);
 });
 const createProject = guard(async () => {
-  const f = await form("Nuevo proyecto", [{ name: "name", label: "Nombre del proyecto", max: 60 }], "Crear"); if (!f) return;
-  const p = await api("POST", `/api/teams/${S.team.id}/projects`, { name: f.name });
+  const f = await form("Nuevo proyecto", [
+    { name: "name", label: "Nombre del proyecto", max: 60 },
+    { name: "work_dir", label: "Carpeta de trabajo, dónde vive el proyecto (opcional)", max: 300, placeholder: "/home/ana/proyectos/app" },
+    { name: "repo", label: "Repositorio (opcional)", max: 300, placeholder: "usuario/repo o URL" },
+  ], "Crear"); if (!f) return;
+  const p = await api("POST", `/api/teams/${S.team.id}/projects`, { name: f.name, work_dir: f.work_dir, repo: f.repo });
   if (!S.projects.some((x) => x.id === p.id)) S.projects.push(p);
   await selectProject(p);
 });

@@ -8,6 +8,8 @@
   if (!LANGS[lang]) { const n = (navigator.language || "en").slice(0, 2).toLowerCase(); lang = LANGS[n] ? n : "en"; }
   const D = {
     en: {
+ "Carpeta de trabajo, dónde vive el proyecto (opcional)": "Work folder, where the project lives (optional)",
+ "Repositorio (opcional)": "Repository (optional)",
  "🙋 Pedido de una IA": "🙋 Request from an AI",
  "1. Copiá y ejecutá en tu terminal:": "1. Copy and run in your terminal:",
  "2. Pegá la salida acá y enviala:": "2. Paste the output here and send it:",
@@ -472,6 +474,8 @@
  " personas": " people"
 },
     pt: {
+ "Carpeta de trabajo, dónde vive el proyecto (opcional)": "Pasta de trabalho, onde o projeto vive (opcional)",
+ "Repositorio (opcional)": "Repositório (opcional)",
  "🙋 Pedido de una IA": "🙋 Pedido de uma IA",
  "1. Copiá y ejecutá en tu terminal:": "1. Copie e execute no seu terminal:",
  "2. Pegá la salida acá y enviala:": "2. Cole a saída aqui e envie:",
