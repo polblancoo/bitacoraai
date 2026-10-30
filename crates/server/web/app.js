@@ -1814,6 +1814,8 @@ function licenseBanner() {
     h("button", { class: "ghost", title: "No volver a mostrar durante 7 días", onclick: () => { store.set("lic_dismiss", String(Date.now() + 7 * 864e5)); render(); } }, "Recordarme en 7 días"));
 }
 
+const netName = (r) => ({ tron: "Tron (TRC-20)", solana: "Solana (SPL)", ethereum: "Ethereum (ERC-20)" }[r] || r);
+
 const openLicense = guard(async () => {
   document.getElementById("lic-modal")?.remove();
   const close = () => { clearInterval(S.licPoll); document.getElementById("lic-modal")?.remove(); };
@@ -1845,7 +1847,7 @@ const openLicense = guard(async () => {
     if (o.qr_svg) qr.innerHTML = o.qr_svg;
     const state = h("p", { class: "hint" }, "⏳ Esperando el pago… (se revisa solo cada pocos segundos)");
     body.replaceChildren(
-      h("h4", {}, `Pagá exactamente ${o.monto} ${o.cripto} en la red ${o.red === "tron" ? "Tron (TRC-20)" : "Ethereum (ERC-20)"}`),
+      h("h4", {}, `Pagá exactamente ${o.monto} ${o.cripto} en la red ${netName(o.red)}`),
       h("p", { class: "hint" }, "Los últimos decimales identifican tu pago: mandá el monto exacto, sin redondear. Si el monto no coincide no se reconoce solo."),
       h("div", { class: "lic-pay" }, qr, h("div", {},
         h("label", {}, "Monto", mono(o.monto, "Monto copiado")),
@@ -1868,7 +1870,7 @@ const openLicense = guard(async () => {
     if (!pl.planes.length || !pl.metodos.length) { body.replaceChildren(h("p", {}, "Todavía no hay planes o formas de pago disponibles. Probá más tarde."), h("button", { onclick: openLicense }, "← Volver")); return; }
     const email = h("input", { type: "email", placeholder: "tu@email.com (acá te llega el código)", maxLength: 120 });
     const plan = h("select", {}, pl.planes.map((p) => h("option", { value: p.plan }, `${p.nombre}: hasta ${p.max_usuarios} personas · USD ${p.precio_usd} por ${p.dias >= 365 ? "año" : p.dias + " días"}`)));
-    const met = h("select", {}, pl.metodos.map((m, i) => h("option", { value: i }, `${m.cripto} en ${m.red === "tron" ? "Tron (TRC-20)" : "Ethereum (ERC-20)"}`)));
+    const met = h("select", {}, pl.metodos.map((m, i) => h("option", { value: i }, `${m.cripto} en ${netName(m.red)}`)));
     const cont = h("small", { class: "hint" });
     const upd = () => { const m = pl.metodos[+met.value]; cont.replaceChildren("Contrato del token: ", h("code", {}, m.contrato), " ", link(m.explorador_token, "ver en el explorador")); };
     met.onchange = upd; upd();

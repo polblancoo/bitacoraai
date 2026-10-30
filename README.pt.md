@@ -113,7 +113,7 @@ Os assistentes de código (Claude Code, Cursor, Windsurf, Zed ou qualquer client
 ## Novidades da 0.7.0
 
 ### 🏢 Licença comercial e aviso de instalação
-O Rust TUI Manager continua **AGPL-3.0-only e grátis**. Se você o usa numa empresa e não quer cumprir a AGPL (por exemplo, não publicar suas alterações), existe uma **licença comercial anual**: **Configurações → 🏢 Licença**. Você paga em **USDT na Tron ou Ethereum** com um QR; o app mostra o valor exato (as últimas casas decimais identificam seu pagamento), o endereço e o **contrato do token** com link para o explorador. Quando a rede confirma o pagamento, você recebe um e-mail com o código e a licença se ativa sozinha.
+O Rust TUI Manager continua **AGPL-3.0-only e grátis**. Se você o usa numa empresa e não quer cumprir a AGPL (por exemplo, não publicar suas alterações), existe uma **licença comercial anual**: **Configurações → 🏢 Licença**. Você paga em **USDT na Solana ou Ethereum** com um QR; o app mostra o valor exato (as últimas casas decimais identificam seu pagamento), o endereço e o **contrato do token** com link para o explorador. Quando a rede confirma o pagamento, você recebe um e-mail com o código e a licença se ativa sozinha.
 
 - **Aviso suave**: quando o servidor passa de 3 pessoas ou 2 IAs (ou você declara que é de empresa) aparece uma barra no topo. Pode ser dispensada por 7 dias e **nunca bloqueia nada**.
 - **Aviso de instalação (telemetria)**: uma vez por dia o servidor avisa que existe. Envia um código aleatório guardado no seu banco, a versão, o sistema operacional e **quantas** pessoas, IAs, projetos e equipes existem. **Nunca** nomes, e-mails, tarefas nem conteúdo; o IP não é guardado (só serve para saber o país). Desligue com `TM_TELEMETRY=0` ou pela janela Licença.

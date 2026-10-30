@@ -253,7 +253,7 @@ Each session leaves a 📝 comment and a `.tm/terminal-tarea-N.md` note in the p
 The program is **AGPL-3.0-only and free**. The **commercial license** is for those who use it in a company and don't want to comply with the AGPL. In **Settings → 🏢 License** (first registered person on the server only):
 
 1. Choose whether the server is **personal** or **company**.
-2. **Buy a commercial license** → pick the plan, the network (**USDT on Tron or Ethereum**) and your email.
+2. **Buy a commercial license** → pick the plan, the network (**USDT on Solana or Ethereum**) and your email.
 3. Pay **exactly** the amount shown (the last decimals identify your payment) to the given address; the QR carries it. Check the **token contract** with the explorer link.
 4. The app checks the payment by itself. When confirmed you get an email with the code `TM-XXXX-XXXX-XXXX` and the license activates itself. Otherwise paste the code under **Already have a code?**.
 

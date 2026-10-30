@@ -4611,7 +4611,7 @@ dependencies = [
 
 [[package]]
 name = "rust-tui-manager"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -4628,7 +4628,7 @@ dependencies = [
 
 [[package]]
 name = "rust-tui-manager-agent"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -4641,7 +4641,7 @@ dependencies = [
 
 [[package]]
 name = "rust-tui-manager-core"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "chrono",
  "serde",
@@ -4651,7 +4651,7 @@ dependencies = [
 
 [[package]]
 name = "rust-tui-manager-server"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "argon2",
@@ -6158,7 +6158,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tm-desktop"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "tauri",
  "tauri-build",

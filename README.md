@@ -113,7 +113,7 @@ Coding assistants (Claude Code, Cursor, Windsurf, Zed or any [MCP](https://model
 ## What's new in 0.7.0
 
 ### 🏢 Commercial license and install ping
-Rust TUI Manager is still **AGPL-3.0-only and free**. If you use it in a company and don't want to comply with the AGPL (for example, not publishing your changes), there is a **yearly commercial license**: **Settings → 🏢 License**. You pay in **USDT on Tron or Ethereum** with a QR; the app shows the exact amount (the last decimals identify your payment), the address and the **token contract** with an explorer link. When the network confirms the payment you get an email with your code and the license activates itself.
+Rust TUI Manager is still **AGPL-3.0-only and free**. If you use it in a company and don't want to comply with the AGPL (for example, not publishing your changes), there is a **yearly commercial license**: **Settings → 🏢 License**. You pay in **USDT on Solana or Ethereum** with a QR; the app shows the exact amount (the last decimals identify your payment), the address and the **token contract** with an explorer link. When the network confirms the payment you get an email with your code and the license activates itself.
 
 - **Soft notice**: when the server goes past 3 people or 2 AIs (or you declare it a company server) a bar appears on top. It can be dismissed for 7 days and **never blocks anything**.
 - **Install ping (telemetry)**: once a day the server reports that it exists. It sends a random code stored in your database, the version, the operating system and **how many** people, AIs, projects and teams there are. **Never** names, emails, tasks or content; the IP is not stored (it is only used to find the country). Turn it off with `TM_TELEMETRY=0` or from the License window.

@@ -194,12 +194,14 @@ struct OrderBody {
     red: String,
 }
 
-/// Contenido del QR: en Ethereum la transferencia del token ya armada (EIP-681); en Tron, la dirección.
+/// Contenido del QR: en Ethereum la transferencia del token ya armada (EIP-681); en Solana, un pago Solana Pay con el monto y el token; si no, la dirección.
 fn qr_payload(red: &str, direccion: &str, contrato: &str, monto: &str) -> String {
     if red == "ethereum" {
         let units = monto.replace('.', "");
         let units = units.trim_start_matches('0');
         format!("ethereum:{contrato}@1/transfer?address={direccion}&uint256={}", if units.is_empty() { "0" } else { units })
+    } else if red == "solana" {
+        format!("solana:{direccion}?amount={monto}&spl-token={contrato}")
     } else {
         direccion.to_string()
     }
@@ -279,8 +281,13 @@ mod tests {
     }
 
     #[test]
-    fn qr_tron_es_la_direccion() {
+    fn qr_solana_es_solana_pay() {
+        assert_eq!(qr_payload("solana", "G5PV", "Es9v", "120.003417"), "solana:G5PV?amount=120.003417&spl-token=Es9v");
+        assert!(qr_svg("solana:G5PV?amount=1&spl-token=Es9v").is_some_and(|s| s.contains("<svg")));
+    }
+
+    #[test]
+    fn qr_otra_red_es_la_direccion() {
         assert_eq!(qr_payload("tron", "TXyz", "TR7", "120.003417"), "TXyz");
-        assert!(qr_svg("TXyz").is_some_and(|s| s.contains("<svg")));
     }
 }

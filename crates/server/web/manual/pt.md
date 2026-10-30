@@ -251,7 +251,7 @@ Cada sessão deixa um comentário 📝 e uma nota `.tm/terminal-tarea-N.md` na p
 O programa é **AGPL-3.0-only e grátis**. A **licença comercial** é para quem o usa numa empresa e não quer cumprir a AGPL. Em **Configurações → 🏢 Licença** (só a primeira pessoa registrada no servidor):
 
 1. Escolha se o servidor é **pessoal** ou de **empresa**.
-2. **Comprar uma licença comercial** → escolha o plano, a rede (**USDT na Tron ou na Ethereum**) e seu e-mail.
+2. **Comprar uma licença comercial** → escolha o plano, a rede (**USDT na Solana ou na Ethereum**) e seu e-mail.
 3. Pague **exatamente** o valor mostrado (as últimas casas decimais identificam seu pagamento) ao endereço indicado; o QR já o traz. Verifique o **contrato do token** com o link do explorador.
 4. O app verifica o pagamento sozinho. Quando confirmado, chega um e-mail com o código `TM-XXXX-XXXX-XXXX` e a licença se ativa sozinha. Se não, cole o código em **Já tem um código?**.
 

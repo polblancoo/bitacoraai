@@ -251,7 +251,7 @@ El botón **💰 Consumo** muestra tokens, costo y horas por IA y por tarea, con
 El programa es **AGPL-3.0-only y gratis**. La **licencia comercial** es para quien lo usa en una empresa y no quiere cumplir la AGPL. En **Configuración → 🏢 Licencia** (solo la primera persona registrada del servidor):
 
 1. Elegí si el servidor es **personal** o de **empresa**.
-2. **Comprar una licencia comercial** → elegí el plan, la red (**USDT en Tron o en Ethereum**) y tu email.
+2. **Comprar una licencia comercial** → elegí el plan, la red (**USDT en Solana o en Ethereum**) y tu email.
 3. Pagá **exactamente** el monto que muestra (los últimos decimales identifican tu pago) a la dirección indicada; el QR ya lo trae. Verificá el **contrato del token** con el enlace al explorador.
 4. La app revisa sola el pago. Cuando se confirma, te llega un mail con el código `TM-XXXX-XXXX-XXXX` y la licencia se activa sola. Si no, pegá el código en **¿Ya tenés un código?**.
 
