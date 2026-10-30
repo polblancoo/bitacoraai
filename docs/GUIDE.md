@@ -153,9 +153,11 @@ Today, to delegate a project: add the person with the **Admin** role (they can a
 
 An AI may hit something it cannot do alone: a blocked command, a permission, a decision. It then **asks you** and waits for your answer:
 
-1. The AI runs `tm-agent ask "…"`. A 🙋 comment appears on the task and a **request task** («🙋 Request from #12: …») is created and assigned to a person. The comment tells you who, and that you can **reply right there**.
-2. If the request contains a command in quotes or `backticks`, it shows in a box with **📋 Copy**: paste it in your terminal.
-3. Paste the output (or your answer) as a comment on the task. The AI reads it on its next poll (every 10 s) and carries on. Mark the request task as Done.
+1. The AI runs `tm-agent ask "…"`. A 🙋 comment appears on its task and a **request task** («🙋 Request from #12: …») is created and assigned to a person. The comment tells you which one.
+2. Open the request task: at the top is the **🙋 Request from an AI** panel with **each command on its own line and a 📋 Copy button**. Paste it in your terminal and run it.
+3. **Where does the output go?** In the **«Paste the output here»** box of the same panel, then **📤 Send output to the AI**. It is posted as a comment on that task and **reaches the AI automatically** (it also shows on its original task). Writing a normal comment on the request task does the same.
+4. If the request is a **decision or a permission** («may I delete X?»), use **✅ Authorize** or **❌ Reject** (with the reason in the box). For a command the AI has blocked, «authorize» is not enough: run it yourself and send the output.
+5. The AI reads it on its next poll (every 10 s) and carries on. Sending marks the request as Done.
 
 ![An AI's request: task created, command to copy](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
 

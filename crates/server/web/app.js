@@ -832,6 +832,33 @@ const openTask = guard(async (task) => {
   });
   comment.addEventListener("keydown", (e) => e.key === "Enter" && send());
 
+  // tarea de pedido de una IA («🙋 Pedido de #N: …»): comandos para copiar, dónde pegar la salida y botones de respuesta
+  const requestPanel = () => {
+    if (!/^🙋 Pedido de #\d+:/.test(cur().title) || !can("member")) return null;
+    const cmds = (cur().description.match(/COMANDOS PARA EJECUTAR[^\n]*\n[^\n]*\n\n([\s\S]*?)\n\n/) || [])[1]?.split("\n").filter(Boolean) || [];
+    const out = h("textarea", { rows: 5, maxLength: 3500, placeholder: "Pegá acá lo que mostró la terminal (la salida del comando)…" });
+    const reply = guard(async (body, done) => {
+      const c = await api("POST", `/api/tasks/${task.id}/comments`, { body });
+      if (!S.comments.some((x) => x.id === c.id)) S.comments.push(c);
+      renderComments();
+      if (done) { upsert(await api("PATCH", `/api/tasks/${task.id}`, { status: "done" })); render(); toast("Respuesta enviada a la IA; pedido marcado como Hecho"); }
+      else toast("Respuesta enviada a la IA");
+    });
+    return h("div", { class: "reqpanel" },
+      h("h3", {}, "🙋 Pedido de una IA"),
+      cmds.length > 0 && h("div", {}, h("b", {}, "1. Copiá y ejecutá en tu terminal:"),
+        cmds.map((cmd) => h("div", { class: "cmdbox" }, h("code", {}, cmd),
+          h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar")))),
+      h("div", {}, h("b", {}, cmds.length ? "2. Pegá la salida acá y enviala:" : "Respondé acá:"), out,
+        h("small", { class: "hint" }, "Se publica como comentario de esta tarea y le llega sola a la IA (también queda en su tarea original).")),
+      h("div", { class: "row" },
+        h("button", { class: "primary", title: "Publica la salida como comentario y marca el pedido como Hecho", onclick: () => out.value.trim() ? reply("📤 Salida:\n" + out.value.trim(), true).then(() => (out.value = "")) : toast("Pegá primero la salida", true) }, "📤 Enviar salida a la IA"),
+        h("span", { class: "spacer" }),
+        h("button", { title: "Le responde a la IA que sí: úsalo cuando el pedido es una decisión o un permiso", onclick: () => reply("✅ Autorizado: seguí.", true) }, "✅ Autorizar"),
+        h("button", { class: "danger", title: "Le responde a la IA que no; podés escribir el motivo arriba", onclick: () => reply("❌ No autorizado." + (out.value.trim() ? "\n" + out.value.trim() : ""), true).then(() => (out.value = "")) }, "❌ Rechazar")),
+      h("small", { class: "hint" }, "«Autorizar» es para decisiones (¿puedo borrar X?). Si la IA no puede ejecutar un comando porque está bloqueado, ejecutalo vos y enviá la salida."));
+  };
+
   const save = guard(async () => {
     await patchTask(task.id, {
       title: title.value, description: desc.value, priority: +prio.value, status: status.value,
@@ -855,6 +882,7 @@ const openTask = guard(async (task) => {
           const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("taskMax", on ? "1" : "0");
           e.currentTarget.textContent = on ? "⤡ Restaurar" : "⤢ Maximizar";
         } }, store.get("taskMax") === "1" ? "⤡ Restaurar" : "⤢ Maximizar")),
+      requestPanel(),
       h("label", {}, "Título", title),
       h("label", {}, "Descripción", desc),
       h("h3", {}, "Etiquetas"), labelBox, newLabel,

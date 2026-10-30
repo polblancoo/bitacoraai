@@ -481,20 +481,50 @@ async fn request_help(
         },
     };
     let title: String = format!("🙋 Pedido de #{task}: {}", q.lines().next().unwrap_or("").chars().take(80).collect::<String>());
+    let ai = member_name(&st, user.id).await;
+    let work_dir: String = sqlx::query_scalar("SELECT work_dir FROM projects WHERE id = ?").bind(t.project_id).fetch_one(&st.db).await.unwrap_or_default();
+    let cmds = backtick_cmds(q);
+    let cmd_block = if cmds.is_empty() {
+        String::new()
+    } else {
+        let dir = if work_dir.is_empty() { String::new() } else { format!(" (carpeta del proyecto: {work_dir})") };
+        format!("COMANDOS PARA EJECUTAR{dir}\nCopiá cada línea y pegala en tu terminal:\n\n{}\n\n", cmds.join("\n"))
+    };
+    let description = format!(
+        "La IA «{ai}» pidió ayuda en la tarea #{task} «{}».\n\nLO QUE PIDE\n{q}\n\n{cmd_block}CÓMO RESPONDER\n\
+         1. Ejecutá lo que pide (los comandos de arriba) en tu terminal.\n\
+         2. Pegá la salida en un comentario de ESTA tarea (abajo, en «Comentarios»). Le llega sola a la IA, que sigue.\n\
+         3. Si solo hay que decir sí o no, usá los botones ✅ Autorizar / ❌ Rechazar del panel.\n\
+         4. Cuando termines, marcá esta tarea como Hecha.",
+        t.title
+    );
     let Json(req) = create_task(
         State(st.clone()),
         AuthUser { id: user.id, bot: user.bot },
         Path(t.project_id),
-        Json(NewTask { title, description: format!("{q}\n\nPedido por una IA desde la tarea #{task} «{}». Respondé con un comentario en la tarea #{task} (la IA lo lee ahí) y marcá esta como Hecha.", t.title), priority: 3, assignee_id: assignee, ..Default::default() }),
+        Json(NewTask { title, description, priority: 3, assignee_id: assignee, ..Default::default() }),
     )
     .await?;
     let para = match assignee {
         Some(id) => format!("para {}", member_name(&st, id).await),
         None => "sin asignar".into(),
     };
-    let body = format!("🙋 {q}\n\n📌 Se creó la tarea #{} ({para}). Para responder, comentá acá, en este mensaje: la IA lo recibe y sigue.", req.id);
+    let body = format!("🙋 {q}\n\n📌 Se creó la tarea #{} ({para}) con los pasos. La salida o la respuesta se pega como comentario en esa tarea (o acá): la IA la recibe y sigue.", req.id);
     let Json(c) = add_comment(State(st.clone()), AuthUser { id: user.id, bot: user.bot }, Path(task), Json(NewComment { body })).await?;
     Ok(Json(HelpOut { comment_id: c.id, task_id: req.id, assignee_id: assignee }))
+}
+
+/// Comandos entre `backticks` de un pedido, uno por línea en la tarea de pedido.
+fn backtick_cmds(q: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for (i, part) in q.split('`').enumerate() {
+        let p = part.trim();
+        if i % 2 == 1 && p.len() >= 2 && !p.contains('\n') && !out.iter().any(|c| c == p) {
+            out.push(p.to_string());
+        }
+    }
+    out.truncate(8);
+    out
 }
 
 async fn member_name(st: &AppState, id: Id) -> String {
@@ -924,6 +954,26 @@ async fn add_comment(
     let row = sqlx::query(sqlx::AssertSqlSafe(format!("{COMMENT_SELECT} WHERE c.id = ?"))).bind(id).fetch_one(&st.db).await?;
     let c = comment_from_row(&row);
     st.emit(team, Event::CommentAdded(c.clone()));
+    // una respuesta en la tarea de pedido («🙋 Pedido de #N: …») se copia a la tarea N, que es la que la IA está leyendo
+    if !user.bot {
+        let title: Option<String> = sqlx::query_scalar("SELECT title FROM tasks WHERE id = ?").bind(task).fetch_optional(&st.db).await?;
+        let origin = title.as_deref().and_then(|t| t.strip_prefix("🙋 Pedido de #")).and_then(|t| t.split(':').next()).and_then(|n| n.parse::<Id>().ok());
+        if let Some(origin) = origin.filter(|o| *o != task) {
+            let same_team: Option<Id> = sqlx::query_scalar("SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = ? AND p.team_id = ?").bind(origin).bind(team).fetch_optional(&st.db).await?;
+            if same_team.is_some() {
+                let mid = sqlx::query("INSERT INTO comments (task_id, user_id, body, created_at) VALUES (?, ?, ?, ?)")
+                    .bind(origin)
+                    .bind(user.id)
+                    .bind(format!("↪ Respuesta en el pedido #{task}:\n{}", n.body.trim()))
+                    .bind(Utc::now())
+                    .execute(&st.db)
+                    .await?
+                    .last_insert_rowid();
+                let mrow = sqlx::query(sqlx::AssertSqlSafe(format!("{COMMENT_SELECT} WHERE c.id = ?"))).bind(mid).fetch_one(&st.db).await?;
+                st.emit(team, Event::CommentAdded(comment_from_row(&mrow)));
+            }
+        }
+    }
     // avisa al responsable y a quienes ya comentaron en la tarea (menos a quien escribe)
     let people: Vec<Id> = sqlx::query_scalar(
         "SELECT assignee_id FROM tasks WHERE id = ?1 AND assignee_id IS NOT NULL \

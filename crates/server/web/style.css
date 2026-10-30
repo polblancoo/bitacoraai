@@ -345,3 +345,8 @@ ol.guide pre { margin: 4px 0; }
 .modal.task-modal.max .comments { max-height: 55vh; font-size: 15px; line-height: 1.55; }
 .modal.task-modal.max .comment { padding: 12px 14px; }
 .modal.task-modal.max textarea { min-height: 140px; }
+
+.reqpanel { display: grid; gap: 10px; border: 1px solid var(--accent, #7aa2f7); border-radius: 12px; padding: 12px 14px; background: #7aa2f710; }
+.reqpanel h3 { margin: 0; }
+.reqpanel textarea { width: 100%; }
+.reqpanel .cmdbox code { user-select: all; }

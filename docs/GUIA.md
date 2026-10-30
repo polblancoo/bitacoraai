@@ -153,9 +153,11 @@ Hoy, para delegar un proyecto: sumá a la persona con rol **Admin** (puede asign
 
 Una IA puede toparse con algo que no puede hacer sola: un comando bloqueado, un permiso, una decisión. Entonces **te lo pide** y espera tu respuesta:
 
-1. La IA corre `tm-agent ask "…"`. En la tarea aparece un comentario con 🙋, y se **crea una tarea de pedido** («🙋 Pedido de #12: …») asignada a una persona. El comentario te dice cuál y que podés **responder ahí mismo**.
-2. Si el pedido trae un comando entre comillas o `backticks`, aparece en una caja con **📋 Copiar**: lo pegás en tu terminal.
-3. Pegás la salida (o tu respuesta) como comentario en la tarea. La IA lo lee en su siguiente consulta (cada 10 s) y sigue. Marcá la tarea de pedido como Hecha.
+1. La IA corre `tm-agent ask "…"`. En su tarea aparece un comentario con 🙋 y se **crea una tarea de pedido** («🙋 Pedido de #12: …») asignada a una persona. El comentario te dice cuál es.
+2. Abrí la tarea de pedido: arriba está el panel **🙋 Pedido de una IA** con **cada comando en su propia línea y un botón 📋 Copiar**. Lo pegás en tu terminal y lo ejecutás.
+3. **¿Dónde va la salida?** En el recuadro **«Pegá la salida acá»** del mismo panel, y **📤 Enviar salida a la IA**. Se publica como comentario de esa tarea y **le llega sola a la IA** (también aparece en su tarea original). Escribir un comentario común en la tarea de pedido hace lo mismo.
+4. Si el pedido es una **decisión o un permiso** («¿puedo borrar X?»), usá **✅ Autorizar** o **❌ Rechazar** (con el motivo en el recuadro). Para un comando que la IA tiene bloqueado, «autorizar» no alcanza: ejecutalo vos y enviá la salida.
+5. La IA lo lee en su siguiente consulta (cada 10 s) y sigue. Al enviar, el pedido pasa solo a Hecha.
 
 ![Pedido de una IA: tarea creada, comando para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
 

@@ -153,9 +153,11 @@ Hoje, para delegar um projeto: adicione a pessoa com o papel **Admin** (pode atr
 
 Uma IA pode esbarrar em algo que não faz sozinha: um comando bloqueado, uma permissão, uma decisão. Então ela **pede a você** e espera a resposta:
 
-1. A IA executa `tm-agent ask "…"`. Na tarefa aparece um comentário com 🙋 e é **criada uma tarefa de pedido** («🙋 Pedido de #12: …») atribuída a uma pessoa. O comentário diz quem e que você pode **responder ali mesmo**.
-2. Se o pedido traz um comando entre aspas ou `backticks`, aparece numa caixa com **📋 Copiar**: cole no seu terminal.
-3. Cole a saída (ou sua resposta) como comentário na tarefa. A IA lê na próxima consulta (a cada 10 s) e segue. Marque a tarefa de pedido como Concluída.
+1. A IA executa `tm-agent ask "…"`. Na tarefa dela aparece um comentário com 🙋 e é **criada uma tarefa de pedido** («🙋 Pedido de #12: …») atribuída a uma pessoa. O comentário diz qual.
+2. Abra a tarefa de pedido: no topo está o painel **🙋 Pedido de uma IA** com **cada comando na sua própria linha e um botão 📋 Copiar**. Cole no seu terminal e execute.
+3. **Onde vai a saída?** Na caixa **«Cole a saída aqui»** do mesmo painel, e **📤 Enviar saída à IA**. É publicada como comentário dessa tarefa e **chega sozinha à IA** (também aparece na tarefa original dela). Escrever um comentário comum na tarefa de pedido faz o mesmo.
+4. Se o pedido é uma **decisão ou permissão** («posso apagar X?»), use **✅ Autorizar** ou **❌ Rejeitar** (com o motivo na caixa). Para um comando que a IA tem bloqueado, «autorizar» não basta: execute você e envie a saída.
+5. A IA lê na próxima consulta (a cada 10 s) e segue. Ao enviar, o pedido passa sozinho para Concluída.
 
 ![Pedido de uma IA: tarefa criada, comando para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
 
