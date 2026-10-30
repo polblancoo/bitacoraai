@@ -111,6 +111,8 @@ The command also receives `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_UR
 
 **Asking a human.** Inside a task the AI can run `tm-agent ask "question"`: it raises a 🙋 alarm for the team's owners and admins (in the app and by Telegram) and waits for the answer as a comment.
 
+When the AI asks, the server also **creates a request task** for a person (the task's creator if they have the **Executor** permission; otherwise the executor with the fewest open tasks; with no executors, an admin). The comment says which task and that you can answer right there; commands in the request show with a **📋 Copy** button. See the [guide, chapter 10](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIDE.md#10-when-an-ai-needs-you-to-do-something).
+
 ## How it behaves
 
 - It only takes tasks **assigned to its AI** and in **To do**. Tasks of people or other AIs are ignored.

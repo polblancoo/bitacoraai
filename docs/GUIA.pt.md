@@ -16,6 +16,10 @@ O Rust TUI Manager é um **painel de comando**: um lugar onde você vê e dirige
 6. [Montar e atribuir tarefas](#6-montar-e-atribuir-tarefas)
 7. [Acompanhar o andamento](#7-acompanhar-o-andamento)
 8. [Delegar a um líder](#8-delegar-a-um-líder)
+9. [Dirigir vários projetos ao mesmo tempo](#9-dirigir-vários-projetos-ao-mesmo-tempo)
+10. [Quando uma IA precisa que você faça algo](#10-quando-uma-ia-precisa-que-você-faça-algo)
+11. [Idioma, tooltips e este manual](#11-idioma-tooltips-e-este-manual)
+12. [Configurar o email do servidor](#12-configurar-o-email-do-servidor)
 
 ---
 
@@ -128,7 +132,91 @@ Além disso, o **Google Calendar** (suas tarefas com data aparecem na sua agenda
 
 Hoje, para delegar um projeto: adicione a pessoa com o papel **Admin** (pode atribuir tarefas, adicionar gente e gerar convites) e atribua a ela as tarefas principais. Ela monta a sua parte e traz a sua gente.
 
-> 🚧 **Em breve**: **líder por projeto** (com alcance só nesse projeto), **escopo configurável por IA** (em quais projetos mexe, se pode convidar outras IAs), **relatórios de andamento** e um **painel de portfólio** com todos os seus projetos de uma vez. Veja o [roteiro](https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md).
+> 🚧 **Em breve**: **líder por projeto** (com alcance só nesse projeto), **escopo configurável por IA** (em quais projetos mexe, se pode convidar outras IAs) e **relatórios de andamento** com gráficos. Veja o [roteiro](https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md).
+
+## 9. Dirigir vários projetos ao mesmo tempo
+
+**📊 Portfólio** é o primeiro botão da lista de *Projetos*. Mostra todos os projetos da equipe em uma só tela:
+
+- **Em cima**: projetos, andamento geral, tarefas em andamento, atrasadas e projetos em risco.
+- **Um cartão por projeto**: barra de andamento, quem tem tarefas abertas (as IAs com 🤖), última atividade, próximo vencimento e quantas ações as IAs fizeram em 24 h.
+- **Estado**: 🟢 em dia · 🔴 com tarefas atrasadas · 🟡 sem movimento há 7 dias · ✅ concluído · ⚪ sem tarefas.
+- **Embaixo**: o que as IAs fizeram por último. Um clique no cartão abre o projeto, e tudo se atualiza ao vivo.
+
+![Portfólio com todos os projetos](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png)
+
+**Tarefas numeradas.** Cada tarefa mostra seu número (`#12`) no cartão e no detalhe, para citá-la sem ambiguidade em mensagens e comentários.
+
+**Ordem manual.** Arraste uma tarefa dentro da coluna para mudar a ordem em que é feita; a ordem que você deixa vale mais que a prioridade. Também dá para escolher o responsável ao criá-la.
+
+## 10. Quando uma IA precisa que você faça algo
+
+Uma IA pode esbarrar em algo que não faz sozinha: um comando bloqueado, uma permissão, uma decisão. Então ela **pede a você** e espera a resposta:
+
+1. A IA executa `tm-agent ask "…"`. Na tarefa aparece um comentário com 🙋 e é **criada uma tarefa de pedido** («🙋 Pedido de #12: …») atribuída a uma pessoa. O comentário diz quem e que você pode **responder ali mesmo**.
+2. Se o pedido traz um comando entre aspas ou `backticks`, aparece numa caixa com **📋 Copiar**: cole no seu terminal.
+3. Cole a saída (ou sua resposta) como comentário na tarefa. A IA lê na próxima consulta (a cada 10 s) e segue. Marque a tarefa de pedido como Concluída.
+
+![Pedido de uma IA: tarefa criada, comando para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
+
+**Para quem vai?** Para os membros com a permissão **Executor** (janela da equipe → caixa *Executor* ao lado de cada pessoa; só um admin altera, e as IAs não podem ser executoras):
+
+1. quem criou a tarefa, se for executor;
+2. senão (por exemplo, outra IA a criou), o executor com menos tarefas abertas;
+3. sem executores, um admin da equipe.
+
+**Comandos proibidos.** Na ficha de cada IA, **🚫 Comandos proibidos** (um por linha, ex. `Bash(rm:*)`). A IA não pode executá-los: se precisar, pede a você como acima.
+
+## 11. Idioma, tooltips e este manual
+
+- **Idioma**: *Configurações → Preferências → Idioma* (espanhol, inglês ou português). Por padrão segue o do navegador.
+- **Tooltips**: passe o cursor sobre um botão para ver o que faz.
+- **Este manual** fica dentro do app: botão **📖 Manual** (embaixo à esquerda, ou *Configurações → Ajuda*). Tem busca e um índice por temas com links.
+
+![O manual dentro do app, com busca](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-13-manual.png)
+
+## 12. Configurar o email do servidor
+
+Para o app enviar **emails** (códigos de verificação, atribuições, menções, lembretes) o **servidor** precisa de uma conta de email de saída. Quem administra o servidor configura uma só vez; os usuários só verificam o email em *Configurações → Meu email*.
+
+**Qual arquivo editar?** Se você usa o serviço do systemd (`tm-server.service`), crie **`~/.config/tm-server/mail.env`** (permissões `600`, nunca dentro do repositório) com estas quatro variáveis:
+
+```
+TM_SMTP_URL=smtps://smtp.gmail.com:465
+TM_SMTP_USER=suaconta@gmail.com
+TM_SMTP_PASSWORD=a-senha-de-app
+TM_SMTP_FROM=Quadro de comando <suaconta@gmail.com>
+```
+
+e em `~/.config/systemd/user/tm-server.service` adicione, junto com os outros `EnvironmentFile`:
+
+```
+EnvironmentFile=-%h/.config/tm-server/mail.env
+```
+
+Depois: `systemctl --user daemon-reload && systemctl --user restart tm-server`. Se você inicia o `tm-server` à mão ou com Docker, defina as mesmas variáveis no ambiente (`export …` ou `-e …`).
+
+**Conforme o seu provedor** mudam `TM_SMTP_URL`, o usuário e a senha (confira os dados na documentação do provedor):
+
+| Provedor | `TM_SMTP_URL` | `TM_SMTP_USER` | `TM_SMTP_PASSWORD` |
+|---|---|---|---|
+| Gmail | `smtps://smtp.gmail.com:465` | seu endereço completo | senha de app (exige verificação em 2 etapas): https://myaccount.google.com/apppasswords |
+| Outlook / Microsoft 365 | `smtp://smtp.office365.com:587?tls=required` | seu endereço completo | sua senha ou senha de app; no Microsoft 365 o administrador deve habilitar o *SMTP autenticado* |
+| Yahoo | `smtps://smtp.mail.yahoo.com:465` | seu endereço completo | senha de app |
+| Zoho | `smtps://smtp.zoho.com:465` | seu endereço completo | sua senha ou senha de app |
+| Brevo | `smtp://smtp-relay.brevo.com:587?tls=required` | seu login da Brevo | chave SMTP |
+| SendGrid | `smtps://smtp.sendgrid.net:465` | `apikey` | sua API key |
+| Mailgun | `smtps://smtp.mailgun.org:465` | `postmaster@seu-dominio` | senha SMTP do domínio |
+| Amazon SES | `smtps://email-smtp.REGIAO.amazonaws.com:465` | usuário SMTP do SES | senha SMTP do SES |
+| Servidor próprio (Postfix…) | `smtp://localhost:25` | — | — |
+
+- `smtps://` usa a porta 465 (TLS direto); `smtp://…:587?tls=required` usa STARTTLS.
+- Coloque usuário e senha em `TM_SMTP_USER` e `TM_SMTP_PASSWORD` (não dentro da URL) e não precisa escapar caracteres especiais.
+- `TM_SMTP_FROM` é o remetente; a maioria dos provedores exige que seja um endereço seu ou de um domínio seu verificado.
+
+**Testar**: *Configurações → Meu email*, digite seu endereço e o código de 6 dígitos deve chegar. Se não chegar, veja o log do servidor (`journalctl --user -u tm-server -n 50`): uma senha rejeitada ou uma porta bloqueada aparece ali.
+
+> Gmail e outros serviços gratuitos limitam os envios (Gmail, uns 500 por dia) e reescrevem o remetente. Serve para começar; com muitos usuários, use um serviço de envio com domínio próprio.
 
 ---
 

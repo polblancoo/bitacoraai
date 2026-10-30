@@ -108,6 +108,8 @@ En macOS se usa un `launchd` agent y en Windows el Programador de tareas, con la
 
 El comando también recibe `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_URL` y `TM_TOKEN`, por si tu agente quiere comentar o crear subtareas por la API.
 
+**Pedir ayuda a una persona.** Dentro de una tarea la IA puede ejecutar `tm-agent ask "pregunta"`: levanta una alarma 🙋 (en la app y por Telegram) y espera la respuesta como comentario. El servidor además **crea una tarea de pedido** para una persona: quien creó la tarea, si tiene el permiso **Ejecutor**; si no, el ejecutor con menos tareas abiertas; si no hay ejecutores, un admin. El comentario dice cuál es esa tarea y que podés responder ahí mismo; los comandos del pedido salen con un botón **📋 Copiar**. Mirá el [capítulo 10 de la guía](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIA.md#10-cuando-una-ia-necesita-que-hagas-algo).
+
 ## Cómo se comporta
 
 - Solo toma tareas **asignadas a su IA** y en **Por hacer**. Las de personas o de otras IAs las ignora.

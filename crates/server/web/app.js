@@ -32,6 +32,52 @@ const myRole = () => S.members.find((m) => m.id === S.user?.id)?.role || "viewer
 const can = (min) => RANK[myRole()] >= RANK[min];
 
 // ---------- utilidades ----------
+const TIPS = {
+ "Salir": "Cierra tu sesión en este dispositivo",
+ "Cerrar": "Cierra esta ventana",
+ "Cancelar": "Descarta los cambios y cierra",
+ "Guardar": "Guarda los cambios",
+ "Borrar": "Elimina esta tarea; no se puede deshacer",
+ "Mapa mental": "Abre el mapa mental de esta tarea",
+ "+ Nueva tarea": "Crea una tarea en esta columna",
+ "Entrar": "Inicia sesión con tu usuario y contraseña",
+ "Crear cuenta": "Registra un usuario nuevo en este servidor",
+ "Hoy": "Vuelve al mes actual",
+ "Actualizar": "Vuelve a cargar los datos",
+ "Copiar": "Copia al portapapeles",
+ "Revocar": "Anula este código: ya nadie podrá usarlo",
+ "Quitar": "Quita este dato de tu cuenta",
+ "Mi email": "Configura el email donde te llegan los avisos",
+ "Marcar como leído y cerrar": "Marca todas las novedades como leídas",
+ "✎ Editar datos": "Cambia el nombre, la descripción y el color del equipo",
+ "➕ Agregar / invitar": "Agrega miembros o genera un código de invitación",
+ "Transferir la propiedad": "Pasa el equipo a otro miembro; vos quedás como admin",
+ "Eliminar el equipo": "Borra el equipo con todos sus proyectos y tareas",
+ "Nuevo token": "Genera un token nuevo; el anterior deja de funcionar",
+ "Revocar token": "Desactiva el acceso de esta IA hasta que le generes otro token",
+ "Copiar token": "Copia el token de la IA (se muestra una sola vez)",
+ "Copiar comando": "Copia el comando para lanzar tm-agent con este token",
+ "Copiar configuración": "Copia la configuración MCP para el cliente de IA",
+ "Ver instructivo": "Explica paso a paso cómo conectar una IA",
+ "Administrar": "Miembros, roles, ejecutores e invitaciones",
+ "Unirme": "Entra a otro equipo con un código de invitación",
+ "Nuevo proyecto": "Crea un proyecto con su carpeta y repositorio",
+ "Duplicar": "Copia el proyecto como plantilla (tareas, etiquetas y dependencias)",
+ "CSV": "Descarga las tareas para abrir en una planilla",
+ "JSON": "Descarga las tareas en formato JSON",
+ "Ver atajos": "Lista de atajos de teclado con buscador",
+ "Escribir": "Manda un mensaje a todo el equipo",
+ "Vincular": "Conecta tu cuenta con Telegram para recibir avisos",
+ "Desvincular": "Quita Telegram de tu cuenta",
+ "Cerrar todas": "Cierra tu sesión en todos los dispositivos",
+ "Configurar": "Configura el email para los avisos",
+ "Entendido": "Cierra la ayuda",
+ "Listo": "Cierra esta ventana",
+ "Descargar": "Descarga el archivo adjunto",
+ "Crear": "Crea un equipo nuevo",
+ "‹": "Mes anterior",
+ "›": "Mes siguiente"
+};
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -44,6 +90,8 @@ function h(tag, attrs = {}, ...kids) {
     else el.setAttribute(k, v);
   }
   for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(typeof kid === "string" ? tr(kid) : kid);
+  // tooltip automático para los botones que no traen uno propio
+  if (tag === "button" && !el.title) { const tip = TIPS[kids.flat().find((k) => typeof k === "string")?.trim()]; if (tip) el.title = tr(tip); }
   return el;
 }
 
@@ -948,6 +996,7 @@ function appView() {
         h("div", { class: "nav" }, (S.bots || []).map((b) => h("button", { class: b.active ? "" : "revoked", onclick: () => botModal(b), title: b.active ? "Token activo" : "Token revocado" }, "🤖 " + b.username, b.model && h("small", { class: "inl" }, " · " + b.model))),
           !(S.bots || []).length && h("small", { class: "hint" }, can("admin") ? "Sumá asistentes de código con «+»" : "Sin IAs en este equipo"))),
       h("button", { class: "cfg-btn", onclick: openSettings, title: "Configuración (,)" }, "⚙  Configuración"),
+      h("button", { class: "cfg-btn", onclick: () => openManual(), title: "Manual con buscador e índice por temas" }, "📖  Manual"),
       h("div", { class: "me" }, h("span", { class: "live" + (S.online ? " on" : ""), title: S.online ? "en vivo" : "desconectado" }),
         S.user?.username, h("span", { class: "spacer" }),
         h("button", { class: "ghost bell" + (S.unread ? " has" : ""), title: "Bandeja de novedades (Ctrl+T n)", onclick: () => loadInbox(false) }, S.unread ? `🔔 ${S.unread}` : "🔔"),
@@ -1083,7 +1132,7 @@ const VIEWS = [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gant
 const CFG_HELP = {
   user: ["Usuario", "Es tu nombre en la app. Tus compañeros te buscan por él cuando un admin te agrega a un equipo.", null],
   email: ["Email para avisos", "Tocá «Configurar», escribí tu email y poné el código de 6 dígitos que te llega. Solo los emails verificados reciben avisos: asignaciones, menciones, recordatorios y mensajes del equipo.",
-    "Necesita TM_SMTP_URL (por ejemplo smtps://usuario:clave@host:465) y TM_SMTP_FROM; con cuenta SMTP que requiera login, también TM_SMTP_USER y TM_SMTP_PASSWORD. Sin eso el servidor no manda emails y acá no se puede verificar."],
+    "El servidor necesita una cuenta de correo saliente (Gmail, Outlook, Brevo, SendGrid, Mailgun, SES o uno propio). Creá el archivo ~/.config/tm-server/mail.env (permisos 600) con TM_SMTP_URL, TM_SMTP_USER, TM_SMTP_PASSWORD y TM_SMTP_FROM, agregá EnvironmentFile=-%h/.config/tm-server/mail.env al servicio de tm-server y reinicialo. Sin eso el servidor no manda emails y acá no se puede verificar. Los datos de cada proveedor están en el manual."],
   telegram: ["Telegram", "Tocá «Vincular», abrí el bot que se muestra y mandale /start CÓDIGO. Después recibís las novedades en Telegram y podés usar /tareas, /hecho N (marca la tarea N como hecha) y /stop (desvincula).",
     "Creá un bot con @BotFather en Telegram y arrancá tm-server con TM_TELEGRAM_TOKEN=<token>. No necesita URL pública (usa long polling). Sin el token, esta fila dice «el servidor no tiene el bot configurado»."],
   inbox: ["Bandeja de novedades", "Reúne lo que te pasó: asignaciones, comentarios, menciones (@usuario), recordatorios y mensajes. Se marcan como leídas al cerrarla. También abre con la campana 🔔 o Ctrl+T n.",
@@ -1104,6 +1153,7 @@ const CFG_HELP = {
   view: ["Vista inicial", "Qué vista se abre primero en este dispositivo: tablero, calendario, Gantt, pizarra o actividad. Se cambia en cualquier momento con las teclas 1 a 5.", null],
   server: ["Servidor", "Es la dirección donde corre tm-server (por ejemplo https://tareas.miempresa.com). En la web propia del servidor no se cambia; en la app de escritorio o la TUI la escribís una vez y volvés a iniciar sesión.",
     "tm-server escucha en TM_ADDR (0.0.0.0:7878 por defecto). Fuera de tu red, ponelo detrás de HTTPS: TM_TLS_CERT y TM_TLS_KEY, o un proxy con TM_TRUSTED_PROXY=1. La web integrada se desactiva con TM_WEB=0."],
+  manual: ["Manual", "Guía completa dentro de la app: buscá una palabra o elegí un tema del índice. Los enlaces te llevan directo a cada parte.", null],
   shortcuts: ["Atajos de teclado", "Muestra todos los atajos, con buscador. También se abre con la tecla ?.", null],
 };
 const cfgHelp = (key) => {
@@ -1114,7 +1164,8 @@ const cfgHelp = (key) => {
     h("div", { class: "modal" },
       h("h3", {}, title),
       h("h4", {}, "Si sos usuario"), h("p", {}, user),
-      admin && [h("h4", {}, "Si administrás el servidor"), h("p", {}, admin)],
+      admin && [h("h4", {}, "Si administrás el servidor"), h("p", {}, admin),
+        key === "email" && h("div", { class: "row" }, h("button", { onclick: () => { close(); openManual({ es: "12-configurar-el-correo-del-servidor", en: "12-set-up-the-servers-email", pt: "12-configurar-o-email-do-servidor" }[tr.lang]); }, title: "Abre el manual en el tema del correo del servidor" }, "📖 Ver ejemplos por proveedor en el manual"))],
       h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { class: "primary", onclick: close }, "Entendido")))));
 };
 
@@ -1194,7 +1245,8 @@ const openSettings = guard(async () => {
             const url = server.value.trim().replace(/\/$/, ""); if (!/^https?:\/\//.test(url)) throw new Error("la dirección debe empezar con http:// o https://");
             S.server = url; store.set("server", url); toast("Servidor guardado: volvé a iniciar sesión"); close(); logout();
           }) }, "Guardar servidor y reiniciar sesión"))),
-      sec("Ayuda", line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos"))),
+      sec("Ayuda", line(["Manual con buscador e índice por temas", "manual"], h("button", { onclick: go(() => openManual()) }, "Abrir el manual")),
+        line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos"))),
       h("div", { class: "row" }, h("button", { class: "primary", onclick: close }, "Listo")))));
 });
 
@@ -1209,6 +1261,118 @@ const SHORTCUTS = [
   ["Arrastrar tarjeta", "Cambiar de estado (Tablero)"], ["Arrastrar barra", "Mover fechas (Gantt)"],
   ["Doble clic en la pizarra", "Nueva nota en ese lugar"], ["↗ en un elemento", "Conectar dos elementos (Pizarra)"],
 ];
+// ---------- manual dentro de la app: índice por temas, buscador y enlaces ----------
+const mdSlug = (t) => t.toLowerCase().replace(/[`*_]/g, "").replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-");
+// nodos de texto crudos: el manual ya viene en el idioma elegido, no pasa por tr()
+const mdEl = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; for (const k of kids.flat()) if (k != null) e.append(k); return e; };
+const mdText = (t) => document.createTextNode(t);
+function mdInline(src, jump) {
+  const out = [], re = /!\[([^\]]*)\]\(([^)\s]+)\)|\[([^\]]+)\]\(([^)\s]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*\s][^*]*)\*/g;
+  let last = 0, m;
+  while ((m = re.exec(src))) {
+    if (m.index > last) out.push(mdText(src.slice(last, m.index)));
+    if (m[2]) {
+      const g = /\/docs\/screenshots\/([\w.-]+)$/.exec(m[2]);
+      if (g) { const i = mdEl("img"); i.src = `/manual/img/${g[1]}`; i.alt = m[1]; i.loading = "lazy"; out.push(i); }
+    } else if (m[4]) {
+      const a = mdEl("a", "", ...mdInline(m[3], jump));
+      if (m[4].startsWith("#")) { a.href = m[4]; a.onclick = (e) => { e.preventDefault(); jump(m[4].slice(1)); }; }
+      else if (/^https?:\/\//.test(m[4])) { a.href = m[4]; a.target = "_blank"; a.rel = "noopener noreferrer"; }
+      else out.push(...mdInline(m[3], jump));
+      if (a.href) out.push(a);
+    } else if (m[5]) out.push(mdEl("code", "", mdText(m[5])));
+    else if (m[6]) out.push(mdEl("b", "", ...mdInline(m[6], jump)));
+    else out.push(mdEl("i", "", ...mdInline(m[7], jump)));
+    last = re.lastIndex;
+  }
+  if (last < src.length) out.push(mdText(src.slice(last)));
+  return out;
+}
+// divide el markdown en secciones (una por encabezado) y arma el DOM de cada una
+function mdParse(md, jump) {
+  const lines = md.split("\n"), secs = [], seen = {};
+  let cur = { level: 0, title: "", id: "", raw: [], node: mdEl("section") };
+  const push = () => { cur.text = cur.raw.join("\n"); secs.push(cur); };
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const hd = /^(#{1,4})\s+(.*)$/.exec(l);
+    if (hd) {
+      push();
+      let id = mdSlug(hd[2]); if (seen[id]) id += "-" + (++seen[id]); else seen[id] = 1;
+      const n = mdEl("section"); n.id = "man-" + id;
+      n.append(mdEl("h" + (hd[1].length + 1), "", ...mdInline(hd[2], jump)));
+      cur = { level: hd[1].length, title: hd[2].replace(/[`*]/g, ""), id, raw: [hd[2]], node: n };
+      continue;
+    }
+    cur.raw.push(l);
+    if (/^```/.test(l)) {
+      const code = []; while (++i < lines.length && !/^```/.test(lines[i])) code.push(lines[i]);
+      cur.raw.push(...code); cur.node.append(mdEl("pre", "", mdEl("code", "", mdText(code.join("\n"))))); continue;
+    }
+    if (/^\s*$/.test(l) || /^<\/?p[ >]/.test(l)) continue;
+    if (/^---+\s*$/.test(l)) { cur.node.append(mdEl("hr")); continue; }
+    if (/^>/.test(l)) {
+      const q = [l.replace(/^>\s?/, "")]; while (i + 1 < lines.length && /^>/.test(lines[i + 1])) q.push(lines[++i].replace(/^>\s?/, ""));
+      cur.raw.push(...q); cur.node.append(mdEl("blockquote", "", ...mdInline(q.join(" "), jump))); continue;
+    }
+    if (/^\|/.test(l) && /^\|[\s:|-]+\|?\s*$/.test(lines[i + 1] || "")) {
+      const cells = (r) => r.replace(/^\||\|\s*$/g, "").split("|").map((c) => c.trim());
+      const head = cells(l); i++; const rows = [];
+      while (i + 1 < lines.length && /^\|/.test(lines[i + 1])) rows.push(cells(lines[++i]));
+      cur.raw.push(...head, ...rows.flat());
+      cur.node.append(mdEl("div", "md-table", mdEl("table", "", mdEl("thead", "", mdEl("tr", "", head.map((c) => mdEl("th", "", ...mdInline(c, jump))))),
+        mdEl("tbody", "", rows.map((r) => mdEl("tr", "", r.map((c) => mdEl("td", "", ...mdInline(c, jump)))))))));
+      continue;
+    }
+    const li = /^(\s*)([-*]|\d+\.)\s+(.*)$/.exec(l);
+    if (li) {
+      const ordered = /\d/.test(li[2]), list = mdEl(ordered ? "ol" : "ul");
+      let m = li;
+      for (;;) {
+        const item = mdEl("li", "", ...mdInline(m[3], jump)); cur.raw.push(m[3]);
+        while (i + 1 < lines.length && /^\s{2,}\S/.test(lines[i + 1]) && !/^\s*([-*]|\d+\.)\s/.test(lines[i + 1])) { const t = lines[++i].trim(); cur.raw.push(t); item.append(mdText(" "), ...mdInline(t, jump)); }
+        list.append(item);
+        const nx = /^(\s*)([-*]|\d+\.)\s+(.*)$/.exec(lines[i + 1] || "");
+        if (!nx || /\d/.test(nx[2]) !== ordered) break;
+        m = nx; i++;
+      }
+      cur.node.append(list); continue;
+    }
+    const para = [l]; while (i + 1 < lines.length && lines[i + 1].trim() && !/^(#{1,4}\s|```|>|\||---|\s*([-*]|\d+\.)\s|<)/.test(lines[i + 1])) para.push(lines[++i]);
+    cur.raw.push(...para.slice(1)); cur.node.append(mdEl("p", "", ...mdInline(para.join(" "), jump)));
+  }
+  push();
+  return secs.filter((x) => x.node.childNodes.length);
+}
+
+const openManual = guard(async (topic) => {
+  document.getElementById("manual")?.remove();
+  const lang = ["es", "en", "pt"].includes(tr.lang) ? tr.lang : "en";
+  const res = await fetch(`/manual/${lang}.md`); if (!res.ok) throw new Error("No pude cargar el manual");
+  const content = mdEl("div", "man-body"), toc = mdEl("nav", "man-toc"), count = mdEl("small", "man-count");
+  const jump = (id) => { search.value = ""; draw(); document.getElementById("man-" + id)?.scrollIntoView({ block: "start" }); };
+  const secs = mdParse(await res.text(), jump);
+  const search = h("input", { type: "search", placeholder: "Buscar en el manual…", "aria-label": "Buscar en el manual", autocomplete: "off" });
+  const draw = () => {
+    const q = search.value.trim().toLowerCase(), words = q.split(/\s+/).filter(Boolean);
+    const hit = words.length ? secs.filter((x) => words.every((w) => (x.title + " " + x.text).toLowerCase().includes(w))) : secs;
+    content.replaceChildren(...(hit.length ? hit.map((x) => x.node) : [mdEl("p", "", mdText(tr("Sin resultados")))]));
+    count.textContent = words.length ? `${hit.length} ${tr("resultados")}` : "";
+    toc.replaceChildren(...secs.filter((x) => x.level && x.level <= 3).filter((x) => !words.length || hit.includes(x)).map((x) => {
+      const a = mdEl("a", "t" + x.level, mdText(x.title)); a.href = "#" + x.id;
+      a.onclick = (e) => { e.preventDefault(); document.getElementById("man-" + x.id)?.scrollIntoView({ block: "start" }); }; return a;
+    }));
+  };
+  search.addEventListener("input", draw);
+  const close = () => document.getElementById("manual")?.remove();
+  const box = h("div", { class: "overlay", id: "manual", onclick: (e) => e.target === e.currentTarget && close() },
+    h("div", { class: "modal manual", onkeydown: (e) => e.key === "Escape" && (e.stopPropagation(), close()) },
+      h("div", { class: "man-head" }, h("h3", {}, "📖 Manual"), search, count, h("span", { class: "spacer" }), h("button", { onclick: close, title: "Cerrar el manual (Esc)" }, "Cerrar")),
+      h("div", { class: "man-main" }, toc, content)));
+  document.body.append(box); draw(); search.focus();
+  if (typeof topic === "string" && topic) document.getElementById("man-" + topic)?.scrollIntoView();
+});
+
 function helpModal() {
   document.getElementById("help-modal")?.remove();
   const q = h("input", { placeholder: "Buscar un atajo o función…", autofocus: true });

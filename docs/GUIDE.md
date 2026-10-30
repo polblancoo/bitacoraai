@@ -16,6 +16,10 @@ Rust TUI Manager is a **command board**: one place where you see and direct seve
 6. [Build and assign tasks](#6-build-and-assign-tasks)
 7. [Follow progress](#7-follow-progress)
 8. [Delegate to a lead](#8-delegate-to-a-lead)
+9. [Run several projects at once](#9-run-several-projects-at-once)
+10. [When an AI needs you to do something](#10-when-an-ai-needs-you-to-do-something)
+11. [Language, tooltips and this manual](#11-language-tooltips-and-this-manual)
+12. [Set up the server's email](#12-set-up-the-servers-email)
 
 ---
 
@@ -128,7 +132,91 @@ In addition, **Google Calendar** (your tasks with a date appear in your calendar
 
 Today, to delegate a project: add the person with the **Admin** role (they can assign tasks, add people and generate invitations) and assign them the main tasks. They build their part and bring in their people.
 
-> 🚧 **Coming soon**: **lead per project** (scoped to that project only), **configurable scope per AI** (which projects it touches, whether it may invite other AIs), **progress reports** and a **portfolio panel** with all your projects at once. See the [roadmap](https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md).
+> 🚧 **Coming soon**: **lead per project** (scoped to that project only), **configurable scope per AI** (which projects it touches, whether it may invite other AIs) and **progress reports** with charts. See the [roadmap](https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md).
+
+## 9. Run several projects at once
+
+**📊 Portfolio** is the first button in the *Projects* list. It shows every project of the team on one screen:
+
+- **Top**: projects, overall progress, tasks in progress, overdue and projects at risk.
+- **One card per project**: progress bar, who has open tasks (AIs marked 🤖), last activity, next due date and how many actions the AIs took in 24 h.
+- **Status**: 🟢 on track · 🔴 overdue tasks · 🟡 no movement for 7 days · ✅ finished · ⚪ no tasks.
+- **Bottom**: the latest things the AIs did. Click a card to open the project; everything updates live.
+
+![Portfolio with all projects](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png)
+
+**Numbered tasks.** Every task shows its number (`#12`) on the card and in the detail, so you can refer to it unambiguously in messages and comments.
+
+**Manual order.** Drag a task inside its column to change the order it gets done; your order wins over priority. You can also pick the assignee when creating it.
+
+## 10. When an AI needs you to do something
+
+An AI may hit something it cannot do alone: a blocked command, a permission, a decision. It then **asks you** and waits for your answer:
+
+1. The AI runs `tm-agent ask "…"`. A 🙋 comment appears on the task and a **request task** («🙋 Request from #12: …») is created and assigned to a person. The comment tells you who, and that you can **reply right there**.
+2. If the request contains a command in quotes or `backticks`, it shows in a box with **📋 Copy**: paste it in your terminal.
+3. Paste the output (or your answer) as a comment on the task. The AI reads it on its next poll (every 10 s) and carries on. Mark the request task as Done.
+
+![An AI's request: task created, command to copy](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
+
+**Who gets it?** Members with the **Executor** permission (team window → *Executor* checkbox next to each person; only an admin changes it, and AIs cannot be executors):
+
+1. whoever created the task, if they are an executor;
+2. otherwise (e.g. another AI created it), the executor with the fewest open tasks;
+3. with no executors, a team admin.
+
+**Forbidden commands.** On each AI's card, **🚫 Forbidden commands** (one per line, e.g. `Bash(rm:*)`). The AI cannot run them: if it needs one, it asks you as above.
+
+## 11. Language, tooltips and this manual
+
+- **Language**: *Settings → Preferences → Language* (Spanish, English or Portuguese). By default it follows your browser.
+- **Tooltips**: hover over a button to see what it does.
+- **This manual** lives inside the app: **📖 Manual** button (bottom left, or *Settings → Help*). It has search and a topic index with links.
+
+![The manual inside the app, with search](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-13-manual.png)
+
+## 12. Set up the server's email
+
+For the app to send **emails** (verification codes, assignments, mentions, reminders) the **server** needs an outgoing mail account. Whoever runs the server sets it up once; users just verify their email from *Settings → My email*.
+
+**Which file do I edit?** If you use the systemd service (`tm-server.service`), create **`~/.config/tm-server/mail.env`** (permissions `600`, never inside the repository) with these four variables:
+
+```
+TM_SMTP_URL=smtps://smtp.gmail.com:465
+TM_SMTP_USER=youraccount@gmail.com
+TM_SMTP_PASSWORD=the-app-password
+TM_SMTP_FROM=Command board <youraccount@gmail.com>
+```
+
+and in `~/.config/systemd/user/tm-server.service` add, next to the other `EnvironmentFile` lines:
+
+```
+EnvironmentFile=-%h/.config/tm-server/mail.env
+```
+
+Then: `systemctl --user daemon-reload && systemctl --user restart tm-server`. If you start `tm-server` by hand or with Docker, define the same variables in the environment (`export …` or `-e …`).
+
+**Depending on your provider**, `TM_SMTP_URL`, the user and the password change (check the details in your provider's documentation):
+
+| Provider | `TM_SMTP_URL` | `TM_SMTP_USER` | `TM_SMTP_PASSWORD` |
+|---|---|---|---|
+| Gmail | `smtps://smtp.gmail.com:465` | your full address | app password (2-step verification required): https://myaccount.google.com/apppasswords |
+| Outlook / Microsoft 365 | `smtp://smtp.office365.com:587?tls=required` | your full address | your password or an app password; in Microsoft 365 the admin must enable *authenticated SMTP* |
+| Yahoo | `smtps://smtp.mail.yahoo.com:465` | your full address | app password |
+| Zoho | `smtps://smtp.zoho.com:465` | your full address | your password or an app password |
+| Brevo | `smtp://smtp-relay.brevo.com:587?tls=required` | your Brevo login | SMTP key |
+| SendGrid | `smtps://smtp.sendgrid.net:465` | `apikey` | your API key |
+| Mailgun | `smtps://smtp.mailgun.org:465` | `postmaster@your-domain` | the domain's SMTP password |
+| Amazon SES | `smtps://email-smtp.REGION.amazonaws.com:465` | SES SMTP user | SES SMTP password |
+| Own server (Postfix…) | `smtp://localhost:25` | — | — |
+
+- `smtps://` uses port 465 (direct TLS); `smtp://…:587?tls=required` uses STARTTLS.
+- Put the user and password in `TM_SMTP_USER` and `TM_SMTP_PASSWORD` (not inside the URL) and you do not need to escape special characters.
+- `TM_SMTP_FROM` is the sender; most providers require it to be your own address or a verified domain of yours.
+
+**Test it**: *Settings → My email*, type your address and the 6-digit code should arrive. If it does not, check the server log (`journalctl --user -u tm-server -n 50`): a rejected password or a blocked port shows up there.
+
+> Gmail and other free services limit sending (Gmail, about 500 per day) and rewrite the sender. Fine to start; with many users, use a sending service with your own domain.
 
 ---
 

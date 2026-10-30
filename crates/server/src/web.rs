@@ -15,11 +15,21 @@ const CANVAS_JS: &str = include_str!("../web/canvas.js");
 const STYLE: &str = include_str!("../web/style.css");
 const MANIFEST: &str = include_str!("../web/manifest.webmanifest");
 const SW: &str = include_str!("../web/sw.js");
+const MANUAL_ES: &str = include_str!("../web/manual/es.md");
+const MANUAL_EN: &str = include_str!("../web/manual/en.md");
+const MANUAL_PT: &str = include_str!("../web/manual/pt.md");
 const ICON_192: &[u8] = include_bytes!("../web/icon-192.png");
 const ICON_512: &[u8] = include_bytes!("../web/icon-512.png");
 
 fn bytes(mime: &'static str, body: &'static [u8]) -> Response {
     ([(header::CONTENT_TYPE, mime)], body).into_response()
+}
+
+async fn manual_img(axum::extract::Path(name): axum::extract::Path<String>) -> Response {
+    match crate::manual_img::IMGS.iter().find(|(n, _)| *n == name) {
+        Some((_, b)) => ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "public, max-age=86400")], *b).into_response(),
+        None => axum::http::StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 fn asset(mime: &'static str, body: &'static str) -> Response {
@@ -35,6 +45,10 @@ pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
         .route("/", get(|| async { asset("text/html; charset=utf-8", INDEX) }))
         .route("/app.js", get(|| async { asset("text/javascript; charset=utf-8", APP_JS) }))
+        .route("/manual/es.md", get(|| async { asset("text/markdown; charset=utf-8", MANUAL_ES) }))
+        .route("/manual/en.md", get(|| async { asset("text/markdown; charset=utf-8", MANUAL_EN) }))
+        .route("/manual/pt.md", get(|| async { asset("text/markdown; charset=utf-8", MANUAL_PT) }))
+        .route("/manual/img/{name}", get(manual_img))
         .route("/i18n.js", get(|| async { asset("text/javascript; charset=utf-8", I18N_JS) }))
         .route("/canvas.js", get(|| async { asset("text/javascript; charset=utf-8", CANVAS_JS) }))
         .route("/style.css", get(|| async { asset("text/css; charset=utf-8", STYLE) }))

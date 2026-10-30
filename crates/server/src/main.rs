@@ -1,5 +1,6 @@
 mod auth;
 mod bots;
+mod manual_img;
 mod error;
 mod canvas;
 mod limits;

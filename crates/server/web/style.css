@@ -312,3 +312,28 @@ ol.guide pre { margin: 4px 0; }
 .cmdbox { display: flex; gap: 8px; align-items: center; margin-top: 6px; background: rgba(0,0,0,.25); border-radius: 6px; padding: 6px 8px; }
 .cmdbox code { flex: 1; overflow-x: auto; white-space: pre; font-size: .85em; }
 .member .exec { font-size: .8em; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+
+/* manual */
+.modal.manual { width: min(1100px, 96vw); height: 92vh; max-height: 92vh; grid-template-rows: auto 1fr; overflow: hidden; }
+.man-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.man-head h3 { font-size: 18px; margin: 0; }
+.man-head input { flex: 1; min-width: 160px; max-width: 360px; }
+.man-main { display: grid; grid-template-columns: 250px 1fr; gap: 18px; min-height: 0; }
+.man-toc { overflow: auto; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--line); padding-right: 10px; font-size: 13px; }
+.man-toc a { color: var(--dim); text-decoration: none; padding: 3px 6px; border-radius: 6px; }
+.man-toc a:hover { background: var(--card2, #ffffff10); color: var(--fg); }
+.man-toc a.t1 { color: var(--fg); font-weight: 700; margin-top: 8px; }
+.man-toc a.t2 { font-weight: 600; }
+.man-toc a.t3 { padding-left: 18px; font-size: 12px; }
+.man-body { overflow: auto; padding-right: 8px; line-height: 1.55; font-size: 14px; }
+.man-body h2 { font-size: 22px; margin: 18px 0 8px; } .man-body h3 { font-size: 18px; margin: 18px 0 8px; } .man-body h4, .man-body h5 { font-size: 15px; margin: 14px 0 6px; }
+.man-body p, .man-body ul, .man-body ol, .man-body pre, .man-body blockquote, .man-body .md-table { margin: 8px 0; }
+.man-body ul, .man-body ol { padding-left: 22px; }
+.man-body img { max-width: 100%; border: 1px solid var(--line); border-radius: 10px; margin: 6px 0; display: block; }
+.man-body pre { background: #0004; padding: 10px 12px; border-radius: 8px; overflow: auto; font-size: 12.5px; }
+.man-body code { background: #ffffff14; padding: 1px 5px; border-radius: 4px; font-size: .92em; } .man-body pre code { background: none; padding: 0; }
+.man-body blockquote { border-left: 3px solid var(--line); padding: 2px 12px; color: var(--dim); }
+.man-body a { color: var(--accent, #7aa2f7); }
+.man-body table { border-collapse: collapse; width: 100%; font-size: 13px; } .man-body th, .man-body td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; }
+.man-body .md-table { overflow-x: auto; }
+@media (max-width: 760px) { .man-main { grid-template-columns: 1fr; } .man-toc { max-height: 22vh; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 8px; } }
