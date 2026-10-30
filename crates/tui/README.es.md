@@ -2,7 +2,7 @@
 
 # rust-tui-manager
 
-> **0.6.1**: el cliente de terminal ahora está en **español, inglés y portugués** (el idioma sale de `client.json` o de `$LANG`). Sitio y descargas: https://polblancoo.github.io/rust_tuiManager/
+> **0.6.2**: el cliente de terminal ahora está en **español, inglés y portugués** (el idioma sale de `client.json` o de `$LANG`). Sitio y descargas: https://polblancoo.github.io/rust_tuiManager/
 
 > 🎛️ **Tablero de comando para tus proyectos**: dirigí varios proyectos a la vez —una fábrica de apps, una planilla, un onboarding, lo que sea— con **personas e IAs en el mismo tablero**. Cada proyecto sabe dónde vive su trabajo (carpeta y repo). Self-hosted.
 

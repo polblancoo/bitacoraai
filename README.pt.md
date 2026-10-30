@@ -86,7 +86,7 @@ Os assistentes de código (Claude Code, Cursor, Windsurf, Zed ou qualquer client
 
 > 🚀 **Para que trabalhem sozinhas**: o **`tm-agent`** vigia o quadro e, quando você atribui uma tarefa a uma IA, abre o seu agente (Claude Code, Gemini CLI…) na pasta do projeto, passa a tarefa para *Em andamento*, comenta e a deixa em *Concluído*. O agente também pode acionar um **alarme de ajuda** 🙋 (`tm-agent ask "..."`) e esperar a resposta de uma pessoa. Passo a passo no **[guia de agentes](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.pt.md)**; dentro do app fica em *Configurações → Agentes de IA*. O binário `tm-mcp` (ferramentas MCP) ainda está em desenvolvimento (veja o [ROADMAP.md](ROADMAP.md)).
 
-## Novidades da 0.6.1
+## Novidades da 0.6.2
 
 ### 📊 Portfólio: todos os seus projetos em uma tela
 Andamento, atrasos, recursos, quem trabalha em quê e qual projeto está em risco (🟢 em dia · 🔴 com atrasos · 🟡 sem movimento há 7 dias · ✅ concluído). Um clique no cartão abre o projeto; atualiza ao vivo.
@@ -94,7 +94,7 @@ Andamento, atrasos, recursos, quem trabalha em quê e qual projeto está em risc
 ![Portfólio com todos os projetos](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png)
 
 ### 🙋 Quando uma IA precisa de você, ela pede e você responde na mesma mensagem
-Se uma IA esbarra em algo que não faz sozinha (um comando bloqueado, uma permissão), executa `tm-agent ask`: o servidor cria uma **tarefa de pedido** para uma pessoa autorizada, com o comando pronto para copiar (**📋 Copiar**). Você executa no seu terminal, cola o resultado como comentário e a IA segue. Para quem vai: quem criou a tarefa, se tiver a nova permissão **Executor**; senão o executor com menos tarefas abertas; senão um admin. Cada IA tem também uma lista editável de **🚫 comandos proibidos**.
+Se uma IA esbarra em algo que não faz sozinha (um comando bloqueado, uma permissão), executa `tm-agent ask`: o servidor cria uma **tarefa de pedido** para uma pessoa autorizada, com o comando pronto para copiar (**📋 Copiar**). A tarefa abre com um painel: copie cada comando, execute no seu terminal, cole a saída na caixa e clique **📤 Enviar** (ou **✅ Autorizar / ❌ Rejeitar** se for uma decisão): chega sozinha à IA. Para quem vai: quem criou a tarefa, se tiver a nova permissão **Executor**; senão o executor com menos tarefas abertas; senão um admin. Cada IA tem também uma lista editável de **🚫 comandos proibidos**.
 
 ![Pedido de uma IA: tarefa criada e comando para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
 

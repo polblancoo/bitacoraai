@@ -39,7 +39,7 @@ Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier client
 
 ![Ficha de la IA y token con la configuración MCP y de tm-agent lista para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-03-token.png)
 
-## Novedades de la 0.6.1
+## Novedades de la 0.6.2
 
 ### 📊 Portafolio: todos tus proyectos en una pantalla
 Avance, vencidas, recursos, quién trabaja en qué y qué proyecto está en riesgo (🟢 al día · 🔴 con vencidas · 🟡 sin movimiento en 7 días · ✅ terminado). Un clic en una tarjeta abre el proyecto; se actualiza en vivo.
@@ -47,7 +47,7 @@ Avance, vencidas, recursos, quién trabaja en qué y qué proyecto está en ries
 ![Portafolio con todos los proyectos](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png)
 
 ### 🙋 Cuando una IA te necesita, te lo pide y le contestás en el mismo mensaje
-Si una IA se topa con algo que no puede hacer sola (un comando bloqueado, un permiso), corre `tm-agent ask`: el servidor crea una **tarea de pedido** para una persona autorizada, con el comando listo para copiar (**📋 Copiar**). Lo ejecutás en tu terminal, pegás el resultado como comentario y la IA sigue. A quién le llega: a quien creó la tarea si tiene el nuevo permiso **Ejecutor**; si no, al ejecutor con menos tareas abiertas; si no, a un admin. Cada IA tiene además una lista editable de **🚫 comandos prohibidos**.
+Si una IA se topa con algo que no puede hacer sola (un comando bloqueado, un permiso), corre `tm-agent ask`: el servidor crea una **tarea de pedido** para una persona autorizada, con el comando listo para copiar (**📋 Copiar**). La tarea abre con un panel: copiás cada comando, lo ejecutás en tu terminal, pegás la salida en el recuadro y apretás **📤 Enviar** (o **✅ Autorizar / ❌ Rechazar** si es una decisión): le llega sola a la IA. A quién le llega: a quien creó la tarea si tiene el nuevo permiso **Ejecutor**; si no, al ejecutor con menos tareas abiertas; si no, a un admin. Cada IA tiene además una lista editable de **🚫 comandos prohibidos**.
 
 ![Pedido de una IA: tarea creada y comando para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
 

@@ -39,7 +39,7 @@ Coding assistants (Claude Code, Cursor, Windsurf, Zed or any MCP client) can **j
 
 ![AI sheet and token with ready-to-copy MCP and tm-agent configuration](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-03-token.png)
 
-## What's new in 0.6.1
+## What's new in 0.6.2
 
 ### 📊 Portfolio: all your projects on one screen
 Progress, overdue work, resources, who works on what and which project is at risk (🟢 on track · 🔴 overdue · 🟡 stalled for 7 days · ✅ finished). Click a card to open the project; it updates live.
@@ -47,7 +47,7 @@ Progress, overdue work, resources, who works on what and which project is at ris
 ![Portfolio with all projects](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png)
 
 ### 🙋 When an AI needs you, it asks, and you answer in the same message
-If an AI hits something it cannot do alone (a blocked command, a permission), it runs `tm-agent ask`: the server creates a **request task** for an authorized person, with the command ready to copy (**📋 Copy**). You run it in your terminal, paste the result as a comment and the AI carries on. Who gets it: the task's creator if they have the new **Executor** permission, otherwise the executor with the fewest open tasks, otherwise an admin. Each AI also has an editable list of **🚫 forbidden commands**.
+If an AI hits something it cannot do alone (a blocked command, a permission), it runs `tm-agent ask`: the server creates a **request task** for an authorized person, with the command ready to copy (**📋 Copy**). The task opens with a panel: copy each command, run it in your terminal, paste the output in the box and press **📤 Send** (or **✅ Authorize / ❌ Reject** for a decision): it reaches the AI on its own. Who gets it: the task's creator if they have the new **Executor** permission, otherwise the executor with the fewest open tasks, otherwise an admin. Each AI also has an editable list of **🚫 forbidden commands**.
 
 ![An AI's request: task created and command to copy](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
 
