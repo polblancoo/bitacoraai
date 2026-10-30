@@ -39,6 +39,30 @@ Os assistentes de código (Claude Code, Cursor, Windsurf, Zed ou qualquer client
 
 ![Ficha da IA e token com a configuração de MCP e tm-agent pronta para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-03-token.png)
 
+## Novidades da 0.6.1
+
+### 📊 Portfólio: todos os seus projetos em uma tela
+Andamento, atrasos, recursos, quem trabalha em quê e qual projeto está em risco (🟢 em dia · 🔴 com atrasos · 🟡 sem movimento há 7 dias · ✅ concluído). Um clique no cartão abre o projeto; atualiza ao vivo.
+
+![Portfólio com todos os projetos](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png)
+
+### 🙋 Quando uma IA precisa de você, ela pede e você responde na mesma mensagem
+Se uma IA esbarra em algo que não faz sozinha (um comando bloqueado, uma permissão), executa `tm-agent ask`: o servidor cria uma **tarefa de pedido** para uma pessoa autorizada, com o comando pronto para copiar (**📋 Copiar**). Você executa no seu terminal, cola o resultado como comentário e a IA segue. Para quem vai: quem criou a tarefa, se tiver a nova permissão **Executor**; senão o executor com menos tarefas abertas; senão um admin. Cada IA tem também uma lista editável de **🚫 comandos proibidos**.
+
+![Pedido de uma IA: tarefa criada e comando para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
+
+### 📖 Manual dentro do app, tooltips e três idiomas
+Um manual com **busca e índice por temas** (botão **📖 Manual**), um tooltip em cada botão e toda a interface em **espanhol, inglês e português** (Configurações → Preferências → Idioma). O detalhe da tarefa pode ser **maximizado** para ler comentários longos.
+
+![O manual dentro do app, com busca](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-13-manual.png)
+
+### Também novo
+- Tarefas numeradas (`#12`) e **ordem manual com arrastar e soltar**.
+- **Terminal (TUI)** em três idiomas.
+- **Email do servidor**: guia para Gmail, Outlook, Brevo, SendGrid, Mailgun, SES ou um servidor próprio.
+- CI em Linux, Windows e macOS. Downloads: **Linux disponível**, **Windows e macOS em breve**.
+- Um site: **https://polblancoo.github.io/rust_tuiManager/**
+
 ## Novidades da 0.5
 
 <table>

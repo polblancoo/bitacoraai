@@ -849,8 +849,12 @@ const openTask = guard(async (task) => {
   });
 
   const modal = h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
-    h("div", { class: "modal" },
-      h("h3", {}, "Tarea ", h("span", { class: "tid" }, "#" + task.id)),
+    h("div", { class: "modal task-modal" + (store.get("taskMax") === "1" ? " max" : "") },
+      h("h3", { class: "task-head" }, "Tarea ", h("span", { class: "tid" }, "#" + task.id), h("span", { class: "spacer" }),
+        h("button", { class: "ghost max-btn", title: "Maximizar o restaurar la ventana para leer los comentarios más cómodo", onclick: (e) => {
+          const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("taskMax", on ? "1" : "0");
+          e.currentTarget.textContent = on ? "⤡ Restaurar" : "⤢ Maximizar";
+        } }, store.get("taskMax") === "1" ? "⤡ Restaurar" : "⤢ Maximizar")),
       h("label", {}, "Título", title),
       h("label", {}, "Descripción", desc),
       h("h3", {}, "Etiquetas"), labelBox, newLabel,

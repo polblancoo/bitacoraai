@@ -39,6 +39,30 @@ Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier client
 
 ![Ficha de la IA y token con la configuración MCP y de tm-agent lista para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-03-token.png)
 
+## Novedades de la 0.6.1
+
+### 📊 Portafolio: todos tus proyectos en una pantalla
+Avance, vencidas, recursos, quién trabaja en qué y qué proyecto está en riesgo (🟢 al día · 🔴 con vencidas · 🟡 sin movimiento en 7 días · ✅ terminado). Un clic en una tarjeta abre el proyecto; se actualiza en vivo.
+
+![Portafolio con todos los proyectos](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png)
+
+### 🙋 Cuando una IA te necesita, te lo pide y le contestás en el mismo mensaje
+Si una IA se topa con algo que no puede hacer sola (un comando bloqueado, un permiso), corre `tm-agent ask`: el servidor crea una **tarea de pedido** para una persona autorizada, con el comando listo para copiar (**📋 Copiar**). Lo ejecutás en tu terminal, pegás el resultado como comentario y la IA sigue. A quién le llega: a quien creó la tarea si tiene el nuevo permiso **Ejecutor**; si no, al ejecutor con menos tareas abiertas; si no, a un admin. Cada IA tiene además una lista editable de **🚫 comandos prohibidos**.
+
+![Pedido de una IA: tarea creada y comando para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
+
+### 📖 Manual dentro de la app, tooltips y tres idiomas
+Un manual con **buscador e índice por temas** (botón **📖 Manual**), un tooltip en cada botón y toda la interfaz en **español, inglés y portugués** (Configuración → Preferencias → Idioma). El detalle de la tarea se puede **maximizar** para leer comentarios largos.
+
+![El manual dentro de la app, con buscador](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-13-manual.png)
+
+### También nuevo
+- Tareas numeradas (`#12`) y **orden manual con arrastrar y soltar**.
+- **Terminal (TUI)** en tres idiomas.
+- **Correo del servidor**: guía para Gmail, Outlook, Brevo, SendGrid, Mailgun, SES o un servidor propio.
+- CI en Linux, Windows y macOS. Descargas: **Linux disponible**, **Windows y macOS próximamente**.
+- Un sitio web: **https://polblancoo.github.io/rust_tuiManager/**
+
 ## Novedades de la 0.5
 
 <table>

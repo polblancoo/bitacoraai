@@ -337,3 +337,11 @@ ol.guide pre { margin: 4px 0; }
 .man-body table { border-collapse: collapse; width: 100%; font-size: 13px; } .man-body th, .man-body td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; }
 .man-body .md-table { overflow-x: auto; }
 @media (max-width: 760px) { .man-main { grid-template-columns: 1fr; } .man-toc { max-height: 22vh; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 8px; } }
+
+/* detalle de tarea maximizable */
+.task-head { display: flex; align-items: center; gap: 8px; }
+.task-head .max-btn { font-size: 12px; padding: 4px 10px; }
+.modal.task-modal.max { width: 98vw; max-width: 1400px; height: 96vh; max-height: 96vh; }
+.modal.task-modal.max .comments { max-height: 55vh; font-size: 15px; line-height: 1.55; }
+.modal.task-modal.max .comment { padding: 12px 14px; }
+.modal.task-modal.max textarea { min-height: 140px; }

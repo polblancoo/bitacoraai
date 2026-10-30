@@ -2,6 +2,8 @@
 
 # rust-tui-manager
 
+> **0.6.1**: the terminal client is now available in **Spanish, English and Portuguese** (the language comes from `client.json` or `$LANG`). Site and downloads: https://polblancoo.github.io/rust_tuiManager/
+
 > 🎛️ **A command board for your projects**: run several projects at once —an app factory, a spreadsheet, an onboarding, anything— with **people and AIs on the same board**. Every project knows where its work lives (folder and repo). Self-hosted.
 
 Terminal client (ratatui) of the collaborative task manager [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). It needs a running [`rust-tui-manager-server`](https://crates.io/crates/rust-tui-manager-server).

@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rust TUI Manager · tablero de comando</title>
+<meta name="description" content="Un tablero de comando autoalojado: dirigí varios proyectos a la vez con personas e IAs en el mismo tablero. Web, escritorio, terminal y agentes.">
+<meta property="og:title" content="Rust TUI Manager">
+<meta property="og:description" content="Dirigí varios proyectos a la vez con personas e IAs en el mismo tablero. Autoalojado, en Rust.">
+<meta property="og:image" content="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png">
+<link rel="icon" href="logo/logo-512.png">
+<style>
+:root{--bg:#0d0e17;--bg2:#13141f;--card:#181a28;--line:#2a2d44;--fg:#e6e9f7;--dim:#9aa0c3;--acc:#7aa2f7;--acc2:#bb9af7;--ok:#9ece6a;--warn:#e0af68;--glow:#7aa2f755}
+@media (prefers-color-scheme:light){:root:not([data-theme=dark]){--bg:#f6f7fc;--bg2:#eceefa;--card:#fff;--line:#d9dcf0;--fg:#1c1e33;--dim:#585d82;--acc:#3b5bdb;--acc2:#7048e8;--ok:#2b8a3e;--warn:#b45309;--glow:#3b5bdb33}}
+:root[data-theme=light]{--bg:#f6f7fc;--bg2:#eceefa;--card:#fff;--line:#d9dcf0;--fg:#1c1e33;--dim:#585d82;--acc:#3b5bdb;--acc2:#7048e8;--ok:#2b8a3e;--warn:#b45309;--glow:#3b5bdb33}
+*{box-sizing:border-box;margin:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--acc)}
+img{max-width:100%;display:block}
+.wrap{width:min(1120px,100% - 32px);margin-inline:auto}
+header{position:sticky;top:0;z-index:20;backdrop-filter:blur(12px);background:color-mix(in srgb,var(--bg) 80%,transparent);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;gap:18px;height:62px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;color:var(--fg);text-decoration:none;letter-spacing:-.01em}
+.brand img{width:30px;height:30px;border-radius:8px}
+.nav nav{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.nav nav a{color:var(--dim);text-decoration:none;padding:6px 10px;border-radius:8px;font-size:14px}
+.nav nav a:hover{color:var(--fg);background:var(--bg2)}
+select,.btn-theme{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:13px;cursor:pointer}
+.hero{padding:72px 0 40px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:-20% -10% auto;height:520px;background:radial-gradient(60% 60% at 30% 20%,var(--glow),transparent 70%),radial-gradient(40% 50% at 80% 10%,#bb9af733,transparent 70%);pointer-events:none}
+.hero .wrap{position:relative;display:grid;gap:34px;text-align:center;justify-items:center}
+.pill{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 14px;font-size:13px;color:var(--dim)}
+.pill b{color:var(--ok)}
+h1{font-size:clamp(34px,6vw,64px);line-height:1.08;letter-spacing:-.03em;max-width:15ch}
+h1 span{background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{font-size:clamp(17px,2.2vw,21px);color:var(--dim);max-width:62ch}
+.cta{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:12px;font-weight:700;text-decoration:none;border:1px solid var(--line);color:var(--fg);background:var(--card);transition:transform .15s,border-color .15s}
+.btn:hover{transform:translateY(-2px);border-color:var(--acc)}
+.btn.primary{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:0;box-shadow:0 10px 30px -10px var(--acc)}
+.shot{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--card);box-shadow:0 30px 80px -30px #000a,0 0 0 1px #ffffff08}
+.shot img{width:100%;height:auto}
+.hero .shot{width:min(1000px,100%)}
+section{padding:70px 0;scroll-margin-top:62px}
+section.alt{background:var(--bg2);border-block:1px solid var(--line)}
+h2{font-size:clamp(26px,4vw,40px);letter-spacing:-.02em;line-height:1.15;margin-bottom:10px}
+.sub{color:var(--dim);max-width:64ch;margin-bottom:36px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px}
+.card .ic{font-size:26px;margin-bottom:8px}
+.card h3{font-size:17px;margin-bottom:6px}
+.card p{color:var(--dim);font-size:15px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.tabs button{background:var(--card);color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:7px 16px;font:inherit;font-size:14px;cursor:pointer}
+.tabs button.on{color:#fff;background:linear-gradient(135deg,var(--acc),var(--acc2));border-color:transparent}
+.cap{color:var(--dim);margin-top:12px;text-align:center;min-height:3em}
+.two{display:grid;gap:34px;grid-template-columns:1fr 1fr;align-items:center}
+@media(max-width:820px){.two{grid-template-columns:1fr}}
+.steps{list-style:none;padding:0;display:grid;gap:12px;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:36px 1fr;gap:12px;align-items:start;color:var(--dim)}
+.steps li::before{content:counter(s);display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;font-weight:800;font-size:14px}
+.steps b{color:var(--fg)}
+.dl{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.os{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;display:grid;gap:10px;align-content:start}
+.os h3{display:flex;align-items:center;gap:10px}
+.os.soon{opacity:.6}
+.os .tag{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:2px 10px;color:var(--warn)}
+.os a.f{display:flex;justify-content:space-between;gap:10px;text-decoration:none;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px}
+.os a.f:hover{border-color:var(--acc)}
+.os a.f small{color:var(--dim)}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.cmd{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 8px 8px 12px;font-size:13.5px;overflow:hidden}
+.cmd code{flex:1;overflow-x:auto;white-space:nowrap}
+.cmd button{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+th,td{text-align:left;padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:600;font-size:13px}
+.tbl{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow-x:auto;padding:6px 8px}
+footer{padding:40px 0;color:var(--dim);font-size:14px;border-top:1px solid var(--line)}
+footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
+.docs{display:flex;gap:10px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header><div class="wrap nav">
+  <a class="brand" href="#top"><img src="logo/logo-512.png" alt=""> Rust TUI Manager</a>
+  <nav>
+    <a href="#features" data-i="nav_features">Funciones</a>
+    <a href="#screens" data-i="nav_screens">Capturas</a>
+    <a href="#ai" data-i="nav_ai">IAs</a>
+    <a href="#download" data-i="nav_download">Descargar</a>
+    <a href="#packages" data-i="nav_packages">Paquetes</a>
+    <a href="#docs" data-i="nav_docs">Documentación</a>
+  </nav>
+  <select id="lang" aria-label="Idioma / Language"><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option></select>
+  <button class="btn-theme" id="theme" title="Tema claro / oscuro" aria-label="Tema">◐</button>
+</div></header>
+
+<main id="top">
+<div class="hero"><div class="wrap">
+  <span class="pill"><b>●</b> <span data-i="pill">Autoalojado · Rust · código abierto (MIT)</span></span>
+  <h1><span data-i="h1a">Un tablero de comando</span> <span data-i="h1b" style="-webkit-text-fill-color:var(--fg);color:var(--fg)">para tus proyectos</span></h1>
+  <p class="lead" data-i="lead">Dirigí varios proyectos a la vez —una app, una planilla, un onboarding, lo que sea— con <b>personas e IAs en el mismo tablero</b>. Cada proyecto sabe dónde vive su trabajo (carpeta y repositorio). Vos fijás las reglas; las IAs trabajan y te piden ayuda cuando la necesitan.</p>
+  <div class="cta">
+    <a class="btn primary" href="#download" data-i="cta_dl">⬇ Descargar</a>
+    <a class="btn" href="https://github.com/polblancoo/Rust_tuiManager" data-i="cta_gh">★ Ver en GitHub</a>
+    <a class="btn" href="#docs" data-i="cta_docs">📖 Documentación</a>
+  </div>
+  <div class="shot"><img src="screenshots/guia-11-portafolio.png" alt="Portafolio con todos los proyectos" id="heroimg" width="1300" height="900"></div>
+</div></div>
+
+<section id="features"><div class="wrap">
+  <h2 data-i="f_h">Todo lo que necesitás para dirigir</h2>
+  <p class="sub" data-i="f_s">No sabe de apps: sabe de <b>tareas, responsables y avance</b>. Por eso sirve igual para software, finanzas, marketing u operaciones.</p>
+  <div class="grid">
+    <div class="card"><div class="ic">📊</div><h3 data-i="c1h">Portafolio</h3><p data-i="c1p">Todos los proyectos en una pantalla: avance, vencidas, recursos, quién trabaja en qué y qué proyecto está en riesgo.</p></div>
+    <div class="card"><div class="ic">🤖</div><h3 data-i="c2h">IAs como miembros</h3><p data-i="c2p">Claude Code, Gemini o cualquier agente: cada IA tiene su usuario, token y rol, toma tareas y las completa sola con <code>tm-agent</code>.</p></div>
+    <div class="card"><div class="ic">🙋</div><h3 data-i="c3h">Te piden ayuda</h3><p data-i="c3p">Si una IA se topa con un comando bloqueado, crea una tarea para el humano autorizado, con el comando listo para copiar.</p></div>
+    <div class="card"><div class="ic">🗂️</div><h3 data-i="c4h">Vistas para cada estilo</h3><p data-i="c4p">Tablero con arrastrar y soltar, calendario, Gantt, pizarra, mapa mental y actividad en vivo.</p></div>
+    <div class="card"><div class="ic">👥</div><h3 data-i="c5h">Equipos y roles</h3><p data-i="c5p">Dueño, admin, miembro y lector. Invitaciones con código, ejecutores autorizados y permisos por IA.</p></div>
+    <div class="card"><div class="ic">🔔</div><h3 data-i="c6h">Avisos donde estés</h3><p data-i="c6p">Bandeja en la app, email, Telegram y Google Calendar. Las tareas con fecha aparecen en tu calendario.</p></div>
+    <div class="card"><div class="ic">🌍</div><h3 data-i="c7h">Español, inglés y portugués</h3><p data-i="c7p">Interfaz web, escritorio y terminal en tres idiomas, con tooltips y un manual con buscador dentro de la app.</p></div>
+    <div class="card"><div class="ic">🔒</div><h3 data-i="c8h">Tuyo, en tu servidor</h3><p data-i="c8p">Un solo binario y una base SQLite. Sin nube de terceros: tus datos y tus claves no salen de tu máquina.</p></div>
+  </div>
+</div></section>
+
+<section id="screens" class="alt"><div class="wrap">
+  <h2 data-i="s_h">Así se ve</h2>
+  <p class="sub" data-i="s_s">La misma cuenta en la web, la app de escritorio y la terminal.</p>
+  <div class="tabs" id="tabs"></div>
+  <div class="shot"><img id="shotimg" src="" alt="" width="1300" height="900"></div>
+  <p class="cap" id="cap"></p>
+</div></section>
+
+<section id="ai"><div class="wrap two">
+  <div>
+    <h2 data-i="a_h">Las IAs trabajan. Vos decidís.</h2>
+    <p class="sub" data-i="a_s">Una IA solo actúa cuando algo la despierta. <code>tm-agent</code> corre en la máquina del proyecto, toma las tareas que le asignes y deja todo registrado.</p>
+    <ol class="steps">
+      <li><span data-i="a1"><b>Le asignás una tarea</b> y pasa sola a «En curso».</span></li>
+      <li><span data-i="a2"><b>Trabaja dentro de la carpeta del proyecto</b>, con la lista de comandos permitidos y prohibidos que definiste.</span></li>
+      <li><span data-i="a3"><b>Si necesita algo, te lo pide</b>: se crea una tarea para el ejecutor autorizado, con el comando para copiar y pegar.</span></li>
+      <li><span data-i="a4"><b>Le contestás en el mismo mensaje</b> y sigue. Al terminar deja un resumen y la tarea en «Hecho».</span></li>
+    </ol>
+  </div>
+  <div class="shot"><img src="screenshots/guia-12-pedido.png" alt="Pedido de una IA con el comando para copiar" loading="lazy" width="1300" height="900"></div>
+</div></section>
+
+<section id="download" class="alt"><div class="wrap">
+  <h2 data-i="d_h">Descargar</h2>
+  <p class="sub"><span data-i="d_s">Última versión</span>: <b id="ver">…</b>. <span data-i="d_s2">Elegí tu sistema.</span></p>
+  <div class="dl">
+    <div class="os">
+      <h3>🐧 Linux <span class="tag" style="color:var(--ok)" data-i="avail">disponible</span></h3>
+      <a class="f" id="dl-appimage" href="https://github.com/polblancoo/Rust_tuiManager/releases/latest"><span data-i="d_app">App de escritorio (AppImage)</span><small>x86_64</small></a>
+      <a class="f" id="dl-deb" href="https://github.com/polblancoo/Rust_tuiManager/releases/latest"><span>.deb · Debian, Ubuntu</span><small>x86_64</small></a>
+      <a class="f" id="dl-rpm" href="https://github.com/polblancoo/Rust_tuiManager/releases/latest"><span>.rpm · Fedora, openSUSE</span><small>x86_64</small></a>
+      <a class="f" id="dl-server" href="https://github.com/polblancoo/Rust_tuiManager/releases/latest"><span data-i="d_srv">Servidor <code>tm-server</code> (tar.gz)</span><small>x86_64</small></a>
+      <a class="f" id="dl-tui" href="https://github.com/polblancoo/Rust_tuiManager/releases/latest"><span data-i="d_tui">Terminal (TUI) (tar.gz)</span><small>x86_64</small></a>
+      <a class="f" id="dl-agent" href="https://github.com/polblancoo/Rust_tuiManager/releases/latest"><span data-i="d_agt">Agente <code>tm-agent</code> (tar.gz)</span><small>x86_64</small></a>
+      <a class="f" id="dl-sums" href="https://github.com/polblancoo/Rust_tuiManager/releases/latest"><span>SHA256SUMS</span><small data-i="d_ver">verificá la descarga</small></a>
+    </div>
+    <div class="os soon"><h3>🪟 Windows <span class="tag" data-i="soon">próximamente</span></h3><p style="color:var(--dim)" data-i="d_win">El instalador para Windows está en preparación. Mientras tanto podés compilarlo con <code>cargo install</code> (ver Paquetes).</p></div>
+    <div class="os soon"><h3>🍎 macOS <span class="tag" data-i="soon">próximamente</span></h3><p style="color:var(--dim)" data-i="d_mac">El instalador para macOS está en preparación. Mientras tanto podés compilarlo con <code>cargo install</code> (ver Paquetes).</p></div>
+  </div>
+</div></section>
+
+<section id="packages"><div class="wrap">
+  <h2 data-i="p_h">Paquetes en crates.io</h2>
+  <p class="sub" data-i="p_s">Con Rust instalado, cada pieza se instala con un comando.</p>
+  <div class="tbl"><table>
+    <thead><tr><th data-i="p_c1">Paquete</th><th data-i="p_c2">Para qué sirve</th><th data-i="p_c3">Instalar</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://crates.io/crates/rust-tui-manager-server">rust-tui-manager-server</a></td><td data-i="p_srv">El servidor <code>tm-server</code> con la web integrada.</td><td><div class="cmd"><code>cargo install rust-tui-manager-server</code><button data-copy>⧉</button></div></td></tr>
+      <tr><td><a href="https://crates.io/crates/rust-tui-manager">rust-tui-manager</a></td><td data-i="p_tui">Cliente de terminal (ratatui).</td><td><div class="cmd"><code>cargo install rust-tui-manager</code><button data-copy>⧉</button></div></td></tr>
+      <tr><td><a href="https://crates.io/crates/rust-tui-manager-agent">rust-tui-manager-agent</a></td><td data-i="p_agt">El agente <code>tm-agent</code>: que una IA trabaje sola.</td><td><div class="cmd"><code>cargo install rust-tui-manager-agent</code><button data-copy>⧉</button></div></td></tr>
+      <tr><td><a href="https://crates.io/crates/rust-tui-manager-core">rust-tui-manager-core</a></td><td data-i="p_core">Tipos y modelos compartidos (para quien integre).</td><td><div class="cmd"><code>cargo add rust-tui-manager-core</code><button data-copy>⧉</button></div></td></tr>
+    </tbody>
+  </table></div>
+  <h3 style="margin:34px 0 10px" data-i="q_h">Arranque rápido</h3>
+  <div class="cmd"><code>cargo install rust-tui-manager-server && tm-server</code><button data-copy>⧉</button></div>
+  <p class="sub" style="margin-top:12px" data-i="q_s">Abrí <code>http://127.0.0.1:7878</code>, creá tu cuenta y tu equipo. En diez minutos tenés el primer proyecto.</p>
+</div></section>
+
+<section id="docs" class="alt"><div class="wrap">
+  <h2 data-i="x_h">Documentación</h2>
+  <p class="sub" data-i="x_s">Guías paso a paso con capturas, en tres idiomas. El manual también está dentro de la app, con buscador.</p>
+  <div class="docs">
+    <a class="btn" id="d-guide" href="https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIA.md" data-i="x_guide">📘 Guía: tu primer proyecto</a>
+    <a class="btn" id="d-agents" href="https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.md" data-i="x_agents">🤖 Instructivo de agentes</a>
+    <a class="btn" href="https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md" data-i="x_road">🗺 Hoja de ruta</a>
+    <a class="btn" href="https://github.com/polblancoo/Rust_tuiManager/issues" data-i="x_issues">💬 Issues</a>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <span>© Rust TUI Manager · MIT</span>
+  <span><a href="https://github.com/polblancoo/Rust_tuiManager">GitHub</a> · <a href="https://crates.io/crates/rust-tui-manager-server">crates.io</a></span>
+</div></footer>
+
+<script>
+const T={
+es:{nav_features:"Funciones",nav_screens:"Capturas",nav_ai:"IAs",nav_download:"Descargar",nav_packages:"Paquetes",nav_docs:"Documentación",pill:"Autoalojado · Rust · código abierto (MIT)",h1a:"Un tablero de comando",h1b:"para tus proyectos",lead:"Dirigí varios proyectos a la vez —una app, una planilla, un onboarding, lo que sea— con <b>personas e IAs en el mismo tablero</b>. Cada proyecto sabe dónde vive su trabajo (carpeta y repositorio). Vos fijás las reglas; las IAs trabajan y te piden ayuda cuando la necesitan.",cta_dl:"⬇ Descargar",cta_gh:"★ Ver en GitHub",cta_docs:"📖 Documentación",f_h:"Todo lo que necesitás para dirigir",f_s:"No sabe de apps: sabe de <b>tareas, responsables y avance</b>. Por eso sirve igual para software, finanzas, marketing u operaciones.",c1h:"Portafolio",c1p:"Todos los proyectos en una pantalla: avance, vencidas, recursos, quién trabaja en qué y qué proyecto está en riesgo.",c2h:"IAs como miembros",c2p:"Claude Code, Gemini o cualquier agente: cada IA tiene su usuario, token y rol, toma tareas y las completa sola con <code>tm-agent</code>.",c3h:"Te piden ayuda",c3p:"Si una IA se topa con un comando bloqueado, crea una tarea para el humano autorizado, con el comando listo para copiar.",c4h:"Vistas para cada estilo",c4p:"Tablero con arrastrar y soltar, calendario, Gantt, pizarra, mapa mental y actividad en vivo.",c5h:"Equipos y roles",c5p:"Dueño, admin, miembro y lector. Invitaciones con código, ejecutores autorizados y permisos por IA.",c6h:"Avisos donde estés",c6p:"Bandeja en la app, email, Telegram y Google Calendar. Las tareas con fecha aparecen en tu calendario.",c7h:"Español, inglés y portugués",c7p:"Interfaz web, escritorio y terminal en tres idiomas, con tooltips y un manual con buscador dentro de la app.",c8h:"Tuyo, en tu servidor",c8p:"Un solo binario y una base SQLite. Sin nube de terceros: tus datos y tus claves no salen de tu máquina.",s_h:"Así se ve",s_s:"La misma cuenta en la web, la app de escritorio y la terminal.",a_h:"Las IAs trabajan. Vos decidís.",a_s:"Una IA solo actúa cuando algo la despierta. <code>tm-agent</code> corre en la máquina del proyecto, toma las tareas que le asignes y deja todo registrado.",a1:"<b>Le asignás una tarea</b> y pasa sola a «En curso».",a2:"<b>Trabaja dentro de la carpeta del proyecto</b>, con la lista de comandos permitidos y prohibidos que definiste.",a3:"<b>Si necesita algo, te lo pide</b>: se crea una tarea para el ejecutor autorizado, con el comando para copiar y pegar.",a4:"<b>Le contestás en el mismo mensaje</b> y sigue. Al terminar deja un resumen y la tarea en «Hecho».",d_h:"Descargar",d_s:"Última versión",d_s2:"Elegí tu sistema.",avail:"disponible",soon:"próximamente",d_app:"App de escritorio (AppImage)",d_srv:"Servidor <code>tm-server</code> (tar.gz)",d_tui:"Terminal (TUI) (tar.gz)",d_agt:"Agente <code>tm-agent</code> (tar.gz)",d_ver:"verificá la descarga",d_win:"El instalador para Windows está en preparación. Mientras tanto podés compilarlo con <code>cargo install</code> (ver Paquetes).",d_mac:"El instalador para macOS está en preparación. Mientras tanto podés compilarlo con <code>cargo install</code> (ver Paquetes).",p_h:"Paquetes en crates.io",p_s:"Con Rust instalado, cada pieza se instala con un comando.",p_c1:"Paquete",p_c2:"Para qué sirve",p_c3:"Instalar",p_srv:"El servidor <code>tm-server</code> con la web integrada.",p_tui:"Cliente de terminal (ratatui).",p_agt:"El agente <code>tm-agent</code>: que una IA trabaje sola.",p_core:"Tipos y modelos compartidos (para quien integre).",q_h:"Arranque rápido",q_s:"Abrí <code>http://127.0.0.1:7878</code>, creá tu cuenta y tu equipo. En diez minutos tenés el primer proyecto.",x_h:"Documentación",x_s:"Guías paso a paso con capturas, en tres idiomas. El manual también está dentro de la app, con buscador.",x_guide:"📘 Guía: tu primer proyecto",x_agents:"🤖 Instructivo de agentes",x_road:"🗺 Hoja de ruta",x_issues:"💬 Issues"},
+en:{nav_features:"Features",nav_screens:"Screenshots",nav_ai:"AIs",nav_download:"Download",nav_packages:"Packages",nav_docs:"Docs",pill:"Self-hosted · Rust · open source (MIT)",h1a:"A command board",h1b:"for your projects",lead:"Run several projects at once —an app, a spreadsheet, an onboarding, anything— with <b>people and AIs on the same board</b>. Every project knows where its work lives (folder and repository). You set the rules; the AIs work and ask for help when they need it.",cta_dl:"⬇ Download",cta_gh:"★ View on GitHub",cta_docs:"📖 Documentation",f_h:"Everything you need to steer",f_s:"It knows nothing about apps: it knows <b>tasks, owners and progress</b>. That is why it works the same for software, finance, marketing or operations.",c1h:"Portfolio",c1p:"Every project on one screen: progress, overdue work, resources, who works on what and which project is at risk.",c2h:"AIs as members",c2p:"Claude Code, Gemini or any agent: each AI has its own user, token and role, picks up tasks and finishes them on its own with <code>tm-agent</code>.",c3h:"They ask you for help",c3p:"When an AI hits a blocked command it creates a task for the authorized human, with the command ready to copy.",c4h:"Views for every style",c4p:"Drag-and-drop board, calendar, Gantt, whiteboard, mind map and live activity.",c5h:"Teams and roles",c5p:"Owner, admin, member and viewer. Invitation codes, authorized executors and per-AI permissions.",c6h:"Alerts wherever you are",c6p:"In-app inbox, email, Telegram and Google Calendar. Tasks with a date show up in your calendar.",c7h:"Spanish, English and Portuguese",c7p:"Web, desktop and terminal in three languages, with tooltips and a searchable manual inside the app.",c8h:"Yours, on your server",c8p:"One binary and a SQLite database. No third-party cloud: your data and your keys never leave your machine.",s_h:"What it looks like",s_s:"The same account on the web, the desktop app and the terminal.",a_h:"AIs work. You decide.",a_s:"An AI only acts when something wakes it up. <code>tm-agent</code> runs on the project machine, picks up the tasks you assign and records everything.",a1:"<b>You assign a task</b> and it moves to «Doing» by itself.",a2:"<b>It works inside the project folder</b>, with the allowed and forbidden command lists you defined.",a3:"<b>If it needs something, it asks you</b>: a task is created for the authorized executor, with the command to copy and paste.",a4:"<b>You answer in the same message</b> and it carries on. When done it leaves a summary and the task in «Done».",d_h:"Download",d_s:"Latest version",d_s2:"Pick your system.",avail:"available",soon:"coming soon",d_app:"Desktop app (AppImage)",d_srv:"Server <code>tm-server</code> (tar.gz)",d_tui:"Terminal (TUI) (tar.gz)",d_agt:"Agent <code>tm-agent</code> (tar.gz)",d_ver:"verify your download",d_win:"The Windows installer is in the works. Meanwhile you can build it with <code>cargo install</code> (see Packages).",d_mac:"The macOS installer is in the works. Meanwhile you can build it with <code>cargo install</code> (see Packages).",p_h:"Packages on crates.io",p_s:"With Rust installed, each piece installs with one command.",p_c1:"Package",p_c2:"What it is for",p_c3:"Install",p_srv:"The <code>tm-server</code> server with the built-in web app.",p_tui:"Terminal client (ratatui).",p_agt:"The <code>tm-agent</code> agent: let an AI work on its own.",p_core:"Shared types and models (for integrators).",q_h:"Quick start",q_s:"Open <code>http://127.0.0.1:7878</code>, create your account and your team. In ten minutes you have your first project.",x_h:"Documentation",x_s:"Step-by-step guides with screenshots, in three languages. The manual is also inside the app, with search.",x_guide:"📘 Guide: your first project",x_agents:"🤖 Agents guide",x_road:"🗺 Roadmap",x_issues:"💬 Issues"},
+pt:{nav_features:"Funções",nav_screens:"Capturas",nav_ai:"IAs",nav_download:"Baixar",nav_packages:"Pacotes",nav_docs:"Documentação",pill:"Auto-hospedado · Rust · código aberto (MIT)",h1a:"Um quadro de comando",h1b:"para seus projetos",lead:"Dirija vários projetos ao mesmo tempo —um app, uma planilha, um onboarding, o que for— com <b>pessoas e IAs no mesmo quadro</b>. Cada projeto sabe onde vive o seu trabalho (pasta e repositório). Você define as regras; as IAs trabalham e pedem ajuda quando precisam.",cta_dl:"⬇ Baixar",cta_gh:"★ Ver no GitHub",cta_docs:"📖 Documentação",f_h:"Tudo o que você precisa para dirigir",f_s:"Ele não entende de apps: entende de <b>tarefas, responsáveis e andamento</b>. Por isso serve igual para software, finanças, marketing ou operações.",c1h:"Portfólio",c1p:"Todos os projetos em uma tela: andamento, atrasos, recursos, quem trabalha em quê e qual projeto está em risco.",c2h:"IAs como membros",c2p:"Claude Code, Gemini ou qualquer agente: cada IA tem seu usuário, token e papel, pega tarefas e as conclui sozinha com o <code>tm-agent</code>.",c3h:"Elas pedem ajuda",c3p:"Se uma IA esbarra num comando bloqueado, cria uma tarefa para o humano autorizado, com o comando pronto para copiar.",c4h:"Visões para cada estilo",c4p:"Quadro com arrastar e soltar, calendário, Gantt, lousa, mapa mental e atividade ao vivo.",c5h:"Equipes e papéis",c5p:"Dono, admin, membro e leitor. Convites com código, executores autorizados e permissões por IA.",c6h:"Avisos onde você estiver",c6p:"Caixa no app, email, Telegram e Google Calendar. Tarefas com data aparecem no seu calendário.",c7h:"Espanhol, inglês e português",c7p:"Interface web, desktop e terminal em três idiomas, com tooltips e um manual com busca dentro do app.",c8h:"Seu, no seu servidor",c8p:"Um só binário e um banco SQLite. Sem nuvem de terceiros: seus dados e suas chaves não saem da sua máquina.",s_h:"Como fica",s_s:"A mesma conta na web, no app desktop e no terminal.",a_h:"As IAs trabalham. Você decide.",a_s:"Uma IA só age quando algo a desperta. O <code>tm-agent</code> roda na máquina do projeto, pega as tarefas que você atribuir e registra tudo.",a1:"<b>Você atribui uma tarefa</b> e ela passa sozinha para «Em andamento».",a2:"<b>Trabalha dentro da pasta do projeto</b>, com as listas de comandos permitidos e proibidos que você definiu.",a3:"<b>Se precisa de algo, pede a você</b>: é criada uma tarefa para o executor autorizado, com o comando para copiar e colar.",a4:"<b>Você responde na mesma mensagem</b> e ela segue. Ao terminar deixa um resumo e a tarefa em «Concluída».",d_h:"Baixar",d_s:"Última versão",d_s2:"Escolha seu sistema.",avail:"disponível",soon:"em breve",d_app:"App desktop (AppImage)",d_srv:"Servidor <code>tm-server</code> (tar.gz)",d_tui:"Terminal (TUI) (tar.gz)",d_agt:"Agente <code>tm-agent</code> (tar.gz)",d_ver:"verifique o download",d_win:"O instalador para Windows está em preparação. Enquanto isso você pode compilar com <code>cargo install</code> (veja Pacotes).",d_mac:"O instalador para macOS está em preparação. Enquanto isso você pode compilar com <code>cargo install</code> (veja Pacotes).",p_h:"Pacotes no crates.io",p_s:"Com Rust instalado, cada peça se instala com um comando.",p_c1:"Pacote",p_c2:"Para que serve",p_c3:"Instalar",p_srv:"O servidor <code>tm-server</code> com o app web integrado.",p_tui:"Cliente de terminal (ratatui).",p_agt:"O agente <code>tm-agent</code>: deixe uma IA trabalhar sozinha.",p_core:"Tipos e modelos compartilhados (para quem integra).",q_h:"Início rápido",q_s:"Abra <code>http://127.0.0.1:7878</code>, crie sua conta e sua equipe. Em dez minutos você tem o primeiro projeto.",x_h:"Documentação",x_s:"Guias passo a passo com capturas, em três idiomas. O manual também fica dentro do app, com busca.",x_guide:"📘 Guia: seu primeiro projeto",x_agents:"🤖 Guia de agentes",x_road:"🗺 Roteiro",x_issues:"💬 Issues"}};
+const SHOTS=[
+ ["guia-11-portafolio.png",{es:"Portafolio",en:"Portfolio",pt:"Portfólio"},{es:"Todos los proyectos del equipo en una pantalla, con avance, estado y lo último que hicieron las IAs.",en:"Every team project on one screen, with progress, status and the latest AI activity.",pt:"Todos os projetos da equipe em uma tela, com andamento, estado e o que as IAs fizeram por último."}],
+ ["web-board.png",{es:"Tablero",en:"Board",pt:"Quadro"},{es:"Tareas por columna, con arrastrar y soltar y orden manual.",en:"Tasks by column, with drag and drop and manual ordering.",pt:"Tarefas por coluna, com arrastar e soltar e ordem manual."}],
+ ["web-gantt.png",{es:"Gantt",en:"Gantt",pt:"Gantt"},{es:"El cronograma del proyecto con dependencias.",en:"The project timeline with dependencies.",pt:"O cronograma do projeto com dependências."}],
+ ["guia-12-pedido.png",{es:"Pedido de una IA",en:"AI request",pt:"Pedido de uma IA"},{es:"La IA pide ayuda: tarea creada, comando listo para copiar y respuesta en el mismo mensaje.",en:"The AI asks for help: task created, command ready to copy and answer in the same message.",pt:"A IA pede ajuda: tarefa criada, comando pronto para copiar e resposta na mesma mensagem."}],
+ ["guia-13-manual.png",{es:"Manual",en:"Manual",pt:"Manual"},{es:"El manual dentro de la app, con buscador e índice por temas.",en:"The manual inside the app, with search and a topic index.",pt:"O manual dentro do app, com busca e índice por temas."}],
+ ["web-mindmap.png",{es:"Mapa mental",en:"Mind map",pt:"Mapa mental"},{es:"Cada tarea puede abrirse como mapa mental.",en:"Any task can open as a mind map.",pt:"Qualquer tarefa pode abrir como mapa mental."}],
+ ["desktop-board.png",{es:"Escritorio",en:"Desktop",pt:"Desktop"},{es:"La app de escritorio, con la misma cuenta.",en:"The desktop app, with the same account.",pt:"O app desktop, com a mesma conta."}],
+ ["tui-board.png",{es:"Terminal",en:"Terminal",pt:"Terminal"},{es:"El cliente de terminal (ratatui), para quien vive en la consola.",en:"The terminal client (ratatui), for those who live in the console.",pt:"O cliente de terminal (ratatui), para quem vive no console."}]];
+const REPO="polblancoo/Rust_tuiManager";
+let lang=(()=>{try{const s=localStorage.getItem("site-lang");if(T[s])return s}catch{}const n=(navigator.language||"es").slice(0,2);return T[n]?n:"en"})();
+let cur=0;
+function drawShots(){const tabs=document.getElementById("tabs");tabs.replaceChildren(...SHOTS.map((s,i)=>{const b=document.createElement("button");b.textContent=s[1][lang];b.className=i===cur?"on":"";b.onclick=()=>{cur=i;drawShots()};return b}));const s=SHOTS[cur];const im=document.getElementById("shotimg");im.src="screenshots/"+s[0];im.alt=s[1][lang];document.getElementById("cap").textContent=s[2][lang]}
+function apply(){const d=T[lang];document.documentElement.lang=lang;document.querySelectorAll("[data-i]").forEach(e=>{const v=d[e.dataset.i];if(v!=null)e.innerHTML=v});document.getElementById("lang").value=lang;
+ const g={es:["GUIA.md","AGENTES.md"],en:["GUIDE.md","AGENTS.md"],pt:["GUIA.pt.md","AGENTES.pt.md"]}[lang];const base="https://github.com/"+REPO+"/blob/main/docs/";document.getElementById("d-guide").href=base+g[0];document.getElementById("d-agents").href=base+g[1];drawShots()}
+document.getElementById("lang").onchange=e=>{lang=e.target.value;try{localStorage.setItem("site-lang",lang)}catch{}apply()};
+document.getElementById("theme").onclick=()=>{const r=document.documentElement;const dark=getComputedStyle(r).getPropertyValue("--bg").trim()==="#0d0e17";r.dataset.theme=dark?"light":"dark";try{localStorage.setItem("site-theme",r.dataset.theme)}catch{}};
+try{const t=localStorage.getItem("site-theme");if(t)document.documentElement.dataset.theme=t}catch{}
+document.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{navigator.clipboard?.writeText(b.previousElementSibling.textContent).then(()=>{const o=b.textContent;b.textContent="✓";setTimeout(()=>b.textContent=o,1200)})});
+apply();
+// enlaces de descarga: salen del último release publicado en GitHub
+fetch("https://api.github.com/repos/"+REPO+"/releases/latest").then(r=>r.ok?r.json():Promise.reject()).then(rel=>{
+ document.getElementById("ver").textContent=rel.tag_name;
+ const pick=(re)=>rel.assets.find(a=>re.test(a.name));
+ const map={appimage:/\.AppImage$/,deb:/\.deb$/,rpm:/\.rpm$/,server:/^tm-server-linux/,tui:/^rust-tui-manager-linux/,agent:/^tm-agent-linux/,sums:/^SHA256SUMS$/};
+ for(const [k,re] of Object.entries(map)){const a=pick(re);const el=document.getElementById("dl-"+k);if(a&&el)el.href=a.browser_download_url}
+}).catch(()=>{document.getElementById("ver").textContent="GitHub Releases"});
+</script>
+</body>
+</html>

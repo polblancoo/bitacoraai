@@ -2,6 +2,8 @@
 
 # rust-tui-manager-agent (`tm-agent`)
 
+> **0.6.1**: quando uma IA pede ajuda (`tm-agent ask`), o servidor cria uma tarefa de pedido para uma pessoa autorizada (permissão **Executor**) e o comando aparece com botão Copiar na web. Site e downloads: https://polblancoo.github.io/rust_tuiManager/
+
 Põe uma IA para trabalhar quando uma tarefa é atribuída a ela no [painel de comando Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager): vigia o servidor, abre um agente na **pasta de trabalho do projeto**, comenta e move a tarefa para **Em andamento** e **Concluído**.
 
 Guia completo: [docs/AGENTES.pt.md](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.pt.md).

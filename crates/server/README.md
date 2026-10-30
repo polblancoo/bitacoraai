@@ -39,6 +39,30 @@ Coding assistants (Claude Code, Cursor, Windsurf, Zed or any MCP client) can **j
 
 ![AI sheet and token with ready-to-copy MCP and tm-agent configuration](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-03-token.png)
 
+## What's new in 0.6.1
+
+### 📊 Portfolio: all your projects on one screen
+Progress, overdue work, resources, who works on what and which project is at risk (🟢 on track · 🔴 overdue · 🟡 stalled for 7 days · ✅ finished). Click a card to open the project; it updates live.
+
+![Portfolio with all projects](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png)
+
+### 🙋 When an AI needs you, it asks, and you answer in the same message
+If an AI hits something it cannot do alone (a blocked command, a permission), it runs `tm-agent ask`: the server creates a **request task** for an authorized person, with the command ready to copy (**📋 Copy**). You run it in your terminal, paste the result as a comment and the AI carries on. Who gets it: the task's creator if they have the new **Executor** permission, otherwise the executor with the fewest open tasks, otherwise an admin. Each AI also has an editable list of **🚫 forbidden commands**.
+
+![An AI's request: task created and command to copy](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
+
+### 📖 Manual inside the app, tooltips and three languages
+A manual with **search and a topic index** (button **📖 Manual**), a tooltip on every button, and the whole interface in **Spanish, English and Portuguese** (Settings → Preferences → Language). The task detail can be **maximized** to read long comments.
+
+![The manual inside the app, with search](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-13-manual.png)
+
+### Also new
+- Numbered tasks (`#12`) and **manual ordering by drag and drop**.
+- **Terminal (TUI)** in three languages.
+- **Server email**: guide for Gmail, Outlook, Brevo, SendGrid, Mailgun, SES or your own server.
+- CI on Linux, Windows and macOS. Downloads: **Linux available**, **Windows and macOS coming soon**.
+- A website: **https://polblancoo.github.io/rust_tuiManager/**
+
 ## What's new in 0.5
 
 <table>

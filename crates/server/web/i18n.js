@@ -8,6 +8,9 @@
   if (!LANGS[lang]) { const n = (navigator.language || "en").slice(0, 2).toLowerCase(); lang = LANGS[n] ? n : "en"; }
   const D = {
     en: {
+ "⤢ Maximizar": "⤢ Maximize",
+ "⤡ Restaurar": "⤡ Restore",
+ "Maximizar o restaurar la ventana para leer los comentarios más cómodo": "Maximize or restore the window to read comments more comfortably",
  "El servidor necesita una cuenta de correo saliente (Gmail, Outlook, Brevo, SendGrid, Mailgun, SES o uno propio). Creá el archivo ~/.config/tm-server/mail.env (permisos 600) con TM_SMTP_URL, TM_SMTP_USER, TM_SMTP_PASSWORD y TM_SMTP_FROM, agregá EnvironmentFile=-%h/.config/tm-server/mail.env al servicio de tm-server y reinicialo. Sin eso el servidor no manda emails y acá no se puede verificar. Los datos de cada proveedor están en el manual.": "The server needs an outgoing mail account (Gmail, Outlook, Brevo, SendGrid, Mailgun, SES or your own). Create the file ~/.config/tm-server/mail.env (permissions 600) with TM_SMTP_URL, TM_SMTP_USER, TM_SMTP_PASSWORD and TM_SMTP_FROM, add EnvironmentFile=-%h/.config/tm-server/mail.env to the tm-server service and restart it. Without it the server cannot send emails and verification is impossible here. Each provider's settings are in the manual.",
  "📖 Ver ejemplos por proveedor en el manual": "📖 See examples for each provider in the manual",
  "Abre el manual en el tema del correo del servidor": "Opens the manual at the server email topic",
@@ -453,6 +456,9 @@
  " personas": " people"
 },
     pt: {
+ "⤢ Maximizar": "⤢ Maximizar",
+ "⤡ Restaurar": "⤡ Restaurar",
+ "Maximizar o restaurar la ventana para leer los comentarios más cómodo": "Maximizar ou restaurar a janela para ler os comentários com mais conforto",
  "El servidor necesita una cuenta de correo saliente (Gmail, Outlook, Brevo, SendGrid, Mailgun, SES o uno propio). Creá el archivo ~/.config/tm-server/mail.env (permisos 600) con TM_SMTP_URL, TM_SMTP_USER, TM_SMTP_PASSWORD y TM_SMTP_FROM, agregá EnvironmentFile=-%h/.config/tm-server/mail.env al servicio de tm-server y reinicialo. Sin eso el servidor no manda emails y acá no se puede verificar. Los datos de cada proveedor están en el manual.": "O servidor precisa de uma conta de email de saída (Gmail, Outlook, Brevo, SendGrid, Mailgun, SES ou um próprio). Crie o arquivo ~/.config/tm-server/mail.env (permissões 600) com TM_SMTP_URL, TM_SMTP_USER, TM_SMTP_PASSWORD e TM_SMTP_FROM, adicione EnvironmentFile=-%h/.config/tm-server/mail.env ao serviço do tm-server e reinicie-o. Sem isso o servidor não envia emails e aqui não dá para verificar. Os dados de cada provedor estão no manual.",
  "📖 Ver ejemplos por proveedor en el manual": "📖 Ver exemplos de cada provedor no manual",
  "Abre el manual en el tema del correo del servidor": "Abre o manual no tema do email do servidor",
