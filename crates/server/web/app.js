@@ -194,7 +194,7 @@ async function boot(first) {
   S.teams = await api("GET", "/api/teams");
   await selectTeam(S.teams.find((t) => t.id === S.team?.id) || S.teams[0] || null);
   connectWs();
-  if (first) loadInbox(true);
+  if (first) { loadInbox(true); loadLicense(); }
 }
 
 // ---------- bandeja y perfil ----------
@@ -1075,6 +1075,7 @@ function render(keepFocus) {
   const root = document.getElementById("app");
   const focused = keepFocus && document.activeElement?.tagName === "INPUT";
   root.replaceChildren(S.token ? appView() : loginView());
+  if (S.token) { const b = licenseBanner(); if (b) root.prepend(b); }
   if (focused) { const i = root.querySelector(".top input"); i?.focus(); i?.setSelectionRange(S.query.length, S.query.length); }
 }
 
@@ -1289,6 +1290,8 @@ const openSettings = guard(async () => {
         S.project && can("member") && line(["Usar como plantilla (copia tareas, etiquetas y dependencias)", "duplicate"], h("button", { onclick: go(duplicateProject) }, "Duplicar")),
         S.project && line(["Exportar las tareas", "export"], h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
           h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
+      sec("Licencia",
+        line("Uso gratis (AGPL-3.0) o licencia comercial para empresas", h("button", { onclick: go(openLicense) }, "🏢 Licencia")),),
       sec("Preferencias",
         line("Idioma / Language", h("select", { onchange: (e) => tr.set(e.target.value) },
           Object.entries(tr.langs).map(([k, n]) => h("option", { value: k, selected: tr.lang === k }, n)))),
@@ -1792,3 +1795,102 @@ function budgetBox(task, titleEl, descEl) {
       h("div", { class: "row" }, inp, h("button", { title: "Calcula cuántos tokens podría gastar la IA en esta tarea, según el historial del proyecto", onclick: est }, "🧮 Estimar"), h("button", { class: "primary", onclick: save }, "Guardar tope"))),
     basis, spent);
 }
+
+// ---------- licencia comercial ----------
+// El aviso nunca bloquea nada: el programa es AGPL-3.0 y gratis; la licencia comercial es para quien no quiere cumplir la AGPL.
+async function loadLicense() {
+  S.lic = await api("GET", "/api/license").catch(() => null);
+  render();
+}
+
+function licenseBanner() {
+  const l = S.lic;
+  const until = +store.get("lic_dismiss") || 0;
+  if (!l || !l.banner || Date.now() < until) return null;
+  return h("div", { class: "lic-banner" },
+    h("span", {}, l.tipo === "empresa" ? "🏢 Uso en una empresa: seguís con la licencia AGPL-3.0 (publicando tus cambios) o comprás una licencia comercial." : `🏢 Este servidor ya supera el uso gratuito (${l.free.humans} personas y ${l.free.ais} IAs): seguís con la licencia AGPL-3.0 o comprás una licencia comercial.`),
+    h("span", { class: "spacer" }),
+    h("button", { class: "primary", onclick: openLicense }, "Ver planes"),
+    h("button", { class: "ghost", title: "No volver a mostrar durante 7 días", onclick: () => { store.set("lic_dismiss", String(Date.now() + 7 * 864e5)); render(); } }, "Recordarme en 7 días"));
+}
+
+const openLicense = guard(async () => {
+  document.getElementById("lic-modal")?.remove();
+  const close = () => { clearInterval(S.licPoll); document.getElementById("lic-modal")?.remove(); };
+  const l = await api("GET", "/api/license");
+  S.lic = l;
+  const body = h("div", { class: "lic-body" });
+  const link = (href, text) => (/^https:\/\//.test(href || "") ? h("a", { href, target: "_blank", rel: "noopener noreferrer" }, text) : h("span", {}, text));
+  const mono = (text, msg) => h("div", { class: "row" }, h("code", { class: "lic-mono" }, text), h("button", { onclick: () => copy(text, msg) }, "Copiar"));
+  const head = () => {
+    const kids = [h("p", {}, `Hoy: ${l.humans} personas · ${l.ais} IAs · ${l.projects} proyectos · ${l.teams} equipos. Uso gratuito sin aviso: hasta ${l.free.humans} personas y ${l.free.ais} IAs.`)];
+    kids.push(l.licensed
+      ? h("p", { class: "lic-ok" }, `✅ Licencia comercial «${l.license.plan}» vigente hasta ${String(l.license.hasta).slice(0, 10)}.`)
+      : h("p", { class: "hint" }, "Rust TUI Manager es software libre (AGPL-3.0-only) y puede usarse gratis cumpliendo esa licencia. La licencia comercial es para quien no quiere cumplirla (por ejemplo, no publicar sus modificaciones)."));
+    if (l.message) kids.push(h("p", { class: "hint" }, l.message));
+    return kids;
+  };
+  const settings = () => {
+    if (!l.admin) return [h("small", { class: "hint" }, "Solo la primera persona registrada del servidor puede comprar o cambiar estas opciones.")];
+    const tipo = h("select", { onchange: guard(async (e) => { await api("PUT", "/api/license/settings", { tipo: e.target.value }); toast("Guardado"); loadLicense(); }) },
+      h("option", { value: "", disabled: true, selected: !l.tipo }, "Elegí…"), h("option", { value: "personal", selected: l.tipo === "personal" }, "Personal"), h("option", { value: "empresa", selected: l.tipo === "empresa" }, "Empresa"));
+    const tel = h("input", { type: "checkbox", checked: l.telemetry, disabled: l.telemetry_forced_off, onchange: guard(async (e) => { await api("PUT", "/api/license/settings", { telemetry: e.target.checked }); toast("Guardado"); }) });
+    return [h("label", {}, "Este servidor se usa de forma…", tipo),
+      h("label", { class: "row" }, tel, h("span", {}, "Avisar una vez por día que esta instalación existe (para estadísticas y para saber quién ya tiene licencia)")),
+      h("small", { class: "hint" }, "Se envía: un código al azar guardado en tu base, la versión, el sistema operativo y cuántas personas, IAs, proyectos y equipos hay. Nunca nombres, correos, tareas ni contenido; la IP no se guarda (solo se usa para saber el país). También se apaga con TM_TELEMETRY=0." + (l.telemetry_forced_off ? " (Ahora está apagado por TM_TELEMETRY.)" : ""))];
+  };
+  const showOrder = (o, email) => {
+    clearInterval(S.licPoll);
+    const qr = h("div", { class: "lic-qr" });
+    if (o.qr_svg) qr.innerHTML = o.qr_svg;
+    const state = h("p", { class: "hint" }, "⏳ Esperando el pago… (se revisa solo cada pocos segundos)");
+    body.replaceChildren(
+      h("h4", {}, `Pagá exactamente ${o.monto} ${o.cripto} en la red ${o.red === "tron" ? "Tron (TRC-20)" : "Ethereum (ERC-20)"}`),
+      h("p", { class: "hint" }, "Los últimos decimales identifican tu pago: mandá el monto exacto, sin redondear. Si el monto no coincide no se reconoce solo."),
+      h("div", { class: "lic-pay" }, qr, h("div", {},
+        h("label", {}, "Monto", mono(o.monto, "Monto copiado")),
+        h("label", {}, "Dirección de pago", mono(o.direccion, "Dirección copiada"), link(o.explorador_direccion, "Ver la dirección en el explorador")),
+        h("label", {}, `Contrato del token ${o.cripto} (verificá que sea el oficial)`, mono(o.contrato, "Contrato copiado"), link(o.explorador_token, "Ver el contrato en el explorador")))),
+      h("small", { class: "hint" }, `El pedido vale hasta ${String(o.vence).slice(0, 16).replace("T", " ")} UTC. Al confirmarse el pago te llega un mail a ${email} con tu código y la licencia se activa sola.`),
+      state, h("button", { onclick: openLicense }, "← Volver"));
+    store.set("lic_order", JSON.stringify({ id: o.id, token: o.token, email }));
+    const check = async () => {
+      try {
+        const r = await api("GET", `/api/license/order/${o.id}?token=${encodeURIComponent(o.token)}`);
+        if (r.estado === "pagado") { clearInterval(S.licPoll); store.set("lic_order", null); toast("¡Pago recibido! Licencia activada"); openLicense(); loadLicense(); }
+        else if (r.estado === "vencido") { clearInterval(S.licPoll); state.textContent = "El pedido venció. Si ya pagaste, escribinos con el hash de la transacción."; }
+      } catch (e) { state.textContent = "No pude consultar el pago: " + e.message; }
+    };
+    S.licPoll = setInterval(check, 15000);
+  };
+  const buy = async () => {
+    const pl = await api("GET", "/api/license/plans");
+    if (!pl.planes.length || !pl.metodos.length) { body.replaceChildren(h("p", {}, "Todavía no hay planes o formas de pago disponibles. Probá más tarde."), h("button", { onclick: openLicense }, "← Volver")); return; }
+    const email = h("input", { type: "email", placeholder: "tu@email.com (acá te llega el código)", maxLength: 120 });
+    const plan = h("select", {}, pl.planes.map((p) => h("option", { value: p.plan }, `${p.nombre}: hasta ${p.max_usuarios} personas · USD ${p.precio_usd} por ${p.dias >= 365 ? "año" : p.dias + " días"}`)));
+    const met = h("select", {}, pl.metodos.map((m, i) => h("option", { value: i }, `${m.cripto} en ${m.red === "tron" ? "Tron (TRC-20)" : "Ethereum (ERC-20)"}`)));
+    const cont = h("small", { class: "hint" });
+    const upd = () => { const m = pl.metodos[+met.value]; cont.replaceChildren("Contrato del token: ", h("code", {}, m.contrato), " ", link(m.explorador_token, "ver en el explorador")); };
+    met.onchange = upd; upd();
+    body.replaceChildren(h("h4", {}, "Comprar una licencia comercial"),
+      h("label", {}, "Plan", plan), h("label", {}, "Pagar con", met), cont, h("label", {}, "Email", email),
+      h("small", { class: "hint" }, "El email se usa solo para mandarte el código y el comprobante."),
+      h("div", { class: "row" }, h("button", { class: "primary", onclick: guard(async () => {
+        const m = pl.metodos[+met.value];
+        const o = await api("POST", "/api/license/order", { plan: plan.value, email: email.value, cripto: m.cripto, red: m.red });
+        showOrder(o, email.value.trim());
+      }) }, "Generar el pago"), h("button", { onclick: openLicense }, "← Volver")));
+  };
+  const code = h("input", { placeholder: "TM-XXXX-XXXX-XXXX", maxLength: 40 });
+  const act = guard(async () => { await api("POST", "/api/license/activate", { codigo: code.value }); toast("Licencia activada"); openLicense(); loadLicense(); });
+  const main = () => body.replaceChildren(...[...head(), ...settings(),
+    l.admin && h("div", { class: "row" }, h("button", { class: "primary", onclick: guard(buy) }, l.licensed ? "Renovar o cambiar de plan" : "Comprar una licencia comercial")),
+    l.admin && h("label", {}, "¿Ya tenés un código?", h("div", { class: "row" }, code, h("button", { onclick: act }, "Activar")))].filter(Boolean));
+  main();
+  document.body.append(h("div", { class: "overlay", id: "lic-modal", onmousedown: (e) => e.target.id === "lic-modal" && close() },
+    h("div", { class: "modal lic-modal" }, h("h3", {}, "🏢 Licencia", h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: close }, "✕")), body)));
+  const saved = (() => { try { return JSON.parse(store.get("lic_order") || "null"); } catch { return null; } })();
+  if (saved && l.admin && !l.licensed) {
+    body.append(h("button", { onclick: guard(async () => { const r = await api("GET", `/api/license/order/${saved.id}?token=${encodeURIComponent(saved.token)}`); toast(r.estado === "pendiente" ? "Pedido pendiente: generá uno nuevo si hace falta" : "Estado del pedido: " + r.estado); }) }, "Ver mi último pedido"));
+  }
+});

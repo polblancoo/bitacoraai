@@ -116,6 +116,7 @@ The SQLite database is created automatically (with `0600` permissions) and the s
 | `TM_CORS_ORIGINS` | Tauri and localhost | Extra allowed origins, comma-separated |
 | `TM_TLS_CERT` / `TM_TLS_KEY` | — | PEM certificate and key for direct HTTPS |
 | `TM_TRUSTED_PROXY` | — | `1` behind your own reverse proxy (uses `X-Forwarded-For`) |
+| `TM_TELEMETRY` | — | `0` turns off the daily install ping (see the main README) |
 | `TM_WEB` | `1` | `0` turns off the web client the server serves at `/` |
 | `TM_SMTP_URL` / `TM_SMTP_FROM` | — | Enable email notices (optional): `smtps://host:465`, `Tasks <notices@example.com>` |
 | `TM_REMINDER_SECS` | `300` | How often due dates are checked for reminders, in seconds |

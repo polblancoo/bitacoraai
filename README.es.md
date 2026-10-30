@@ -110,6 +110,14 @@ Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier client
 
 > 🚀 **Que trabajen solas**: **`tm-agent`** vigila el tablero y, cuando le asignás una tarea a una IA, abre tu agente (Claude Code, Gemini CLI…) en la carpeta del proyecto, la pasa a *En curso*, la comenta y la deja en *Hecho*. El agente también puede levantar una **alarma de asistencia** 🙋 (`tm-agent ask "..."`) y esperar la respuesta de una persona. Paso a paso en el **[instructivo de agentes](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.md)**; dentro de la app está en *Configuración → Agentes de IA*. El binario `tm-mcp` (herramientas MCP) sigue en desarrollo (ver [ROADMAP.md](ROADMAP.md)).
 
+## Novedades de la 0.7.0
+
+### 🏢 Licencia comercial y aviso de instalación
+Rust TUI Manager sigue siendo **AGPL-3.0-only y gratis**. Si lo usás en una empresa y no querés cumplir la AGPL (por ejemplo, no publicar tus cambios), hay una **licencia comercial anual**: **Configuración → 🏢 Licencia**. Pagás en **USDT por Tron o Ethereum** con un QR; la app te muestra el monto exacto (los últimos decimales identifican tu pago), la dirección y el **contrato del token** con enlace al explorador. Cuando la red confirma el pago, te llega un mail con tu código y la licencia se activa sola.
+
+- **Cartel suave**: cuando el servidor pasa de 3 personas o 2 IAs (o si declarás que es de empresa) aparece una barra arriba. Se puede descartar 7 días y **nunca bloquea nada**.
+- **Aviso de instalación (telemetría)**: una vez por día el servidor avisa que existe. Envía un código al azar guardado en tu base, la versión, el sistema operativo y **cuántas** personas, IAs, proyectos y equipos hay. **Nunca** nombres, correos, tareas ni contenido; la IP no se guarda (solo se usa para saber el país). Se apaga con `TM_TELEMETRY=0` o desde la ventana Licencia.
+
 ## Novedades de la 0.6.3
 
 ### 💻 Terminal en el navegador y vista Terminales
@@ -234,6 +242,7 @@ El cliente gráfico necesita las dependencias de Tauri (en Linux: `webkit2gtk-4.
 | `TM_CORS_ORIGINS` | Tauri y localhost | Orígenes extra permitidos, separados por coma |
 | `TM_TLS_CERT` / `TM_TLS_KEY` | — | Certificado y clave PEM para servir HTTPS directamente |
 | `TM_TRUSTED_PROXY` | — | `1` si corre detrás de un proxy inverso propio (usa `X-Forwarded-For` para el rate limit) |
+| `TM_TELEMETRY` | — | `0` apaga el aviso diario de instalación (ver «Licencia comercial y aviso de instalación») |
 
 Para los avisos por correo (opcionales; sin esto solo funciona la bandeja):
 

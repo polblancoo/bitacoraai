@@ -23,6 +23,7 @@ Rust TUI Manager is a **command board**: one place where you see and direct seve
 13. [Allow commands from the task](#13-allow-commands-from-the-task)
 14. [Terminal in the browser](#14-terminal-in-the-browser)
 15. [Usage and quotas](#15-usage-and-quotas)
+16. [Commercial license and install ping](#16-commercial-license-and-install-ping)
 
 ---
 
@@ -246,6 +247,19 @@ Each session leaves a 📝 comment and a `.tm/terminal-tarea-N.md` note in the p
 
 ![Usage](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-15-consumo.png)
 ![Token cap](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-17-tokens.png)
+
+## 16. Commercial license and install ping
+
+The program is **AGPL-3.0-only and free**. The **commercial license** is for those who use it in a company and don't want to comply with the AGPL. In **Settings → 🏢 License** (first registered person on the server only):
+
+1. Choose whether the server is **personal** or **company**.
+2. **Buy a commercial license** → pick the plan, the network (**USDT on Tron or Ethereum**) and your email.
+3. Pay **exactly** the amount shown (the last decimals identify your payment) to the given address; the QR carries it. Check the **token contract** with the explorer link.
+4. The app checks the payment by itself. When confirmed you get an email with the code `TM-XXXX-XXXX-XXXX` and the license activates itself. Otherwise paste the code under **Already have a code?**.
+
+The **bar** on top appears with more than 3 people or 2 AIs, or if you declare it a company; it can be dismissed for 7 days and never blocks anything.
+
+**Install ping.** Once a day the server sends a random code, the version, the operating system and how many people, AIs, projects and teams there are. Never names, emails, tasks or content; the IP is not stored. Turn it off with `TM_TELEMETRY=0` or from the License window.
 
 ---
 

@@ -116,6 +116,7 @@ La base SQLite se crea sola (con permisos `0600`) y el esquema se migra al arran
 | `TM_CORS_ORIGINS` | Tauri y localhost | Orígenes extra permitidos, separados por coma |
 | `TM_TLS_CERT` / `TM_TLS_KEY` | — | Certificado y clave PEM para HTTPS directo |
 | `TM_TRUSTED_PROXY` | — | `1` detrás de un proxy inverso propio (usa `X-Forwarded-For`) |
+| `TM_TELEMETRY` | — | `0` apaga el aviso diario de instalación (ver el README principal) |
 | `TM_WEB` | `1` | `0` desactiva el cliente web que el servidor sirve en `/` |
 | `TM_SMTP_URL` / `TM_SMTP_FROM` | — | Habilitan los avisos por email (opcional): `smtps://host:465`, `Tareas <avisos@ejemplo.com>` |
 | `TM_REMINDER_SECS` | `300` | Cada cuántos segundos se revisan los vencimientos para los recordatorios |

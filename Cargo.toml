@@ -4,7 +4,7 @@ members = ["crates/core", "crates/server", "crates/tui", "crates/agent", "apps/d
 default-members = ["crates/core", "crates/server", "crates/tui", "crates/agent"]
 
 [workspace.package]
-version = "0.6.3"
+version = "0.7.0"
 edition = "2021"
 authors = ["Pablo Blanco <CrewHelmSupport@gmail.com>"]
 license = "AGPL-3.0-only"

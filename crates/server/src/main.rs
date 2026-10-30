@@ -3,6 +3,7 @@ mod bots;
 mod manual_img;
 mod error;
 mod canvas;
+mod license;
 mod limits;
 mod notify;
 mod extras;
@@ -194,8 +195,9 @@ async fn main() -> anyhow::Result<()> {
     telegram::spawn_poller(state.clone());
     extras::spawn_reminders(state.clone());
     google::spawn_sync(state.clone());
+    license::spawn_ping(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

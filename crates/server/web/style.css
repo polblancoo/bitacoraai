@@ -397,3 +397,8 @@ ol.guide pre { margin: 4px 0; }
 .qbar.warn i{background:#f5a524}.qbar.over i{background:#e5484d}
 .pf-usage{margin:6px 0}
 .budget-box{margin:8px 0}
+
+.lic-banner{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 14px;background:#3b3354;border-bottom:1px solid var(--line);font-size:13px}
+.lic-modal{width:min(680px,95vw)}.lic-body{display:grid;gap:10px}.lic-ok{color:#9ece6a}
+.lic-mono{word-break:break-all;font-size:12px;flex:1}.lic-pay{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.lic-qr{background:#fff;padding:8px;border-radius:8px;width:236px;height:236px}.lic-qr svg{width:100%;height:100%}

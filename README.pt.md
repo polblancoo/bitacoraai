@@ -110,6 +110,14 @@ Os assistentes de código (Claude Code, Cursor, Windsurf, Zed ou qualquer client
 
 > 🚀 **Para que trabalhem sozinhas**: o **`tm-agent`** vigia o quadro e, quando você atribui uma tarefa a uma IA, abre o seu agente (Claude Code, Gemini CLI…) na pasta do projeto, passa a tarefa para *Em andamento*, comenta e a deixa em *Concluído*. O agente também pode acionar um **alarme de ajuda** 🙋 (`tm-agent ask "..."`) e esperar a resposta de uma pessoa. Passo a passo no **[guia de agentes](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.pt.md)**; dentro do app fica em *Configurações → Agentes de IA*. O binário `tm-mcp` (ferramentas MCP) ainda está em desenvolvimento (veja o [ROADMAP.md](ROADMAP.md)).
 
+## Novidades da 0.7.0
+
+### 🏢 Licença comercial e aviso de instalação
+O Rust TUI Manager continua **AGPL-3.0-only e grátis**. Se você o usa numa empresa e não quer cumprir a AGPL (por exemplo, não publicar suas alterações), existe uma **licença comercial anual**: **Configurações → 🏢 Licença**. Você paga em **USDT na Tron ou Ethereum** com um QR; o app mostra o valor exato (as últimas casas decimais identificam seu pagamento), o endereço e o **contrato do token** com link para o explorador. Quando a rede confirma o pagamento, você recebe um e-mail com o código e a licença se ativa sozinha.
+
+- **Aviso suave**: quando o servidor passa de 3 pessoas ou 2 IAs (ou você declara que é de empresa) aparece uma barra no topo. Pode ser dispensada por 7 dias e **nunca bloqueia nada**.
+- **Aviso de instalação (telemetria)**: uma vez por dia o servidor avisa que existe. Envia um código aleatório guardado no seu banco, a versão, o sistema operacional e **quantas** pessoas, IAs, projetos e equipes existem. **Nunca** nomes, e-mails, tarefas nem conteúdo; o IP não é guardado (só serve para saber o país). Desligue com `TM_TELEMETRY=0` ou pela janela Licença.
+
 ## Novidades da 0.6.3
 
 ### 💻 Terminal no navegador e vista Terminais
@@ -234,6 +242,7 @@ O cliente gráfico precisa das dependências do Tauri (no Linux: `webkit2gtk-4.1
 | `TM_CORS_ORIGINS` | Tauri e localhost | Origens extras permitidas, separadas por vírgula |
 | `TM_TLS_CERT` / `TM_TLS_KEY` | — | Certificado e chave PEM para servir HTTPS diretamente |
 | `TM_TRUSTED_PROXY` | — | `1` se roda atrás de um proxy reverso próprio (usa `X-Forwarded-For` para o limite de requisições) |
+| `TM_TELEMETRY` | — | `0` desliga o aviso diário de instalação (veja «Licença comercial e aviso de instalação») |
 
 Para avisos por e-mail (opcionais; sem isso só funciona a caixa de entrada):
 

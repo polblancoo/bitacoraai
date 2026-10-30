@@ -21,6 +21,7 @@ O Rust TUI Manager é um **painel de comando**: um lugar onde você vê e dirige
 13. [Permitir comandos pela tarefa](#13-permitir-comandos-pela-tarefa)
 14. [Terminal no navegador](#14-terminal-no-navegador)
 15. [Consumo e cotas](#15-consumo-e-cotas)
+16. [Licença comercial e aviso de instalação](#16-licenca-comercial-e-aviso-de-instalacao)
 
 ---
 
@@ -244,6 +245,19 @@ Cada sessão deixa um comentário 📝 e uma nota `.tm/terminal-tarea-N.md` na p
 
 ![Consumo](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-15-consumo.png)
 ![Teto de tokens](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-17-tokens.png)
+
+## 16. Licença comercial e aviso de instalação
+
+O programa é **AGPL-3.0-only e grátis**. A **licença comercial** é para quem o usa numa empresa e não quer cumprir a AGPL. Em **Configurações → 🏢 Licença** (só a primeira pessoa registrada no servidor):
+
+1. Escolha se o servidor é **pessoal** ou de **empresa**.
+2. **Comprar uma licença comercial** → escolha o plano, a rede (**USDT na Tron ou na Ethereum**) e seu e-mail.
+3. Pague **exatamente** o valor mostrado (as últimas casas decimais identificam seu pagamento) ao endereço indicado; o QR já o traz. Verifique o **contrato do token** com o link do explorador.
+4. O app verifica o pagamento sozinho. Quando confirmado, chega um e-mail com o código `TM-XXXX-XXXX-XXXX` e a licença se ativa sozinha. Se não, cole o código em **Já tem um código?**.
+
+O **aviso** no topo aparece com mais de 3 pessoas ou 2 IAs, ou se você declarar que é de empresa; pode ser dispensado por 7 dias e nunca bloqueia nada.
+
+**Aviso de instalação.** Uma vez por dia o servidor envia um código aleatório, a versão, o sistema operacional e quantas pessoas, IAs, projetos e equipes existem. Nunca nomes, e-mails, tarefas nem conteúdo; o IP não é guardado. Desligue com `TM_TELEMETRY=0` ou pela janela Licença.
 
 ---
 

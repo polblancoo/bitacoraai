@@ -110,6 +110,14 @@ Coding assistants (Claude Code, Cursor, Windsurf, Zed or any [MCP](https://model
 
 > 🚀 **Let them work on their own**: **`tm-agent`** watches the board and, when you assign a task to an AI, opens your agent (Claude Code, Gemini CLI…) in the project's folder, moves the task to *In progress*, comments on it and leaves it in *Done*. An agent can also raise a 🙋 **help alarm** (`tm-agent ask "..."`) and wait for a human answer. Step by step in the **[agents guide](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTS.md)**; inside the app it is under *Settings → AI agents*. The `tm-mcp` binary (MCP tools) is still in development (see [ROADMAP.md](ROADMAP.md)).
 
+## What's new in 0.7.0
+
+### 🏢 Commercial license and install ping
+Rust TUI Manager is still **AGPL-3.0-only and free**. If you use it in a company and don't want to comply with the AGPL (for example, not publishing your changes), there is a **yearly commercial license**: **Settings → 🏢 License**. You pay in **USDT on Tron or Ethereum** with a QR; the app shows the exact amount (the last decimals identify your payment), the address and the **token contract** with an explorer link. When the network confirms the payment you get an email with your code and the license activates itself.
+
+- **Soft notice**: when the server goes past 3 people or 2 AIs (or you declare it a company server) a bar appears on top. It can be dismissed for 7 days and **never blocks anything**.
+- **Install ping (telemetry)**: once a day the server reports that it exists. It sends a random code stored in your database, the version, the operating system and **how many** people, AIs, projects and teams there are. **Never** names, emails, tasks or content; the IP is not stored (it is only used to find the country). Turn it off with `TM_TELEMETRY=0` or from the License window.
+
 ## What's new in 0.6.3
 
 ### 💻 Terminal in the browser and Terminals view
@@ -234,6 +242,7 @@ The desktop client needs the Tauri dependencies (on Linux: `webkit2gtk-4.1`, `li
 | `TM_CORS_ORIGINS` | Tauri and localhost | Extra allowed origins, comma-separated |
 | `TM_TLS_CERT` / `TM_TLS_KEY` | — | PEM certificate and key to serve HTTPS directly |
 | `TM_TRUSTED_PROXY` | — | `1` if it runs behind your own reverse proxy (uses `X-Forwarded-For` for rate limiting) |
+| `TM_TELEMETRY` | — | `0` turns off the daily install ping (see «Commercial license and install ping») |
 
 For email notices (optional; without this only the inbox works):
 

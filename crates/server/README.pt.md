@@ -116,6 +116,7 @@ O banco SQLite é criado sozinho (com permissões `0600`) e o esquema é migrado
 | `TM_CORS_ORIGINS` | Tauri e localhost | Origens extras permitidas, separadas por vírgula |
 | `TM_TLS_CERT` / `TM_TLS_KEY` | — | Certificado e chave PEM para HTTPS direto |
 | `TM_TRUSTED_PROXY` | — | `1` atrás de um proxy reverso próprio (usa `X-Forwarded-For`) |
+| `TM_TELEMETRY` | — | `0` desliga o aviso diário de instalação (veja o README principal) |
 | `TM_WEB` | `1` | `0` desativa o cliente web que o servidor serve em `/` |
 | `TM_SMTP_URL` / `TM_SMTP_FROM` | — | Habilitam os avisos por e-mail (opcional): `smtps://host:465`, `Tarefas <avisos@exemplo.com>` |
 | `TM_REMINDER_SECS` | `300` | De quantos em quantos segundos os vencimentos são verificados para os lembretes |
