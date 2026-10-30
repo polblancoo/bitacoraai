@@ -1,0 +1,13 @@
+# Comandos que la IA puede ejecutar sin pedir permiso (una regla por línea).
+# Formato de Claude Code: Bash(comando:*)  — el * deja pasar cualquier argumento.
+Bash(ls:*)
+Bash(cat:*)
+Bash(git status:*)
+Bash(git diff:*)
+Bash(git log:*)
+Bash(cargo check:*)
+Bash(cargo build:*)
+Bash(cargo test:*)
+Bash(node --check:*)
+# Para poder pedirte ayuda desde adentro de una tarea:
+Bash(tm-agent ask:*)

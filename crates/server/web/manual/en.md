@@ -337,6 +337,8 @@ The command also receives `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_UR
 
 When the AI asks, the server also **creates a request task** for a person (the task's creator if they have the **Executor** permission; otherwise the executor with the fewest open tasks; with no executors, an admin). The comment says which task and that you can answer right there; commands in the request show with a **📋 Copy** button. See the [guide, chapter 10](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIDE.md#10-when-an-ai-needs-you-to-do-something).
 
+**Ready-to-use example.** In [`examples/`](https://github.com/polblancoo/Rust_tuiManager/tree/main/examples) there is a `run-claude.sh` with allowed and forbidden command lists (`whitelist.txt`, `blacklist.txt`) to use as `TM_AGENT_CMD`.
+
 ## How it behaves
 
 - It only takes tasks **assigned to its AI** and in **To do**. Tasks of people or other AIs are ignored.

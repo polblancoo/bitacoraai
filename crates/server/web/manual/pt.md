@@ -337,6 +337,8 @@ O comando também recebe `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_URL
 
 Quando a IA pergunta, o servidor também **cria uma tarefa de pedido** para uma pessoa (quem criou a tarefa, se tiver a permissão **Executor**; senão o executor com menos tarefas abertas; sem executores, um admin). O comentário diz qual tarefa e que você pode responder ali mesmo; os comandos do pedido aparecem com um botão **📋 Copiar**. Veja o [guia, capítulo 10](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIA.pt.md#10-quando-uma-ia-precisa-que-você-faça-algo).
 
+**Exemplo pronto para usar.** Em [`examples/`](https://github.com/polblancoo/Rust_tuiManager/tree/main/examples) há um `run-claude.sh` com listas de comandos permitidos e proibidos (`whitelist.txt`, `blacklist.txt`) para usar como `TM_AGENT_CMD`.
+
 ## Como se comporta
 
 - Só pega tarefas **atribuídas à sua IA** e em **A fazer**. As de pessoas ou de outras IAs, ignora.

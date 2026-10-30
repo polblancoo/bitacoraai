@@ -1,0 +1,7 @@
+# Comandos que la IA nunca puede ejecutar (una regla por línea).
+# Se suman a los "🚫 Comandos prohibidos" que editás en la ficha de la IA, en la app.
+Bash(git push:*)
+Bash(git commit:*)
+Bash(sudo:*)
+Bash(rm -rf:*)
+Bash(systemctl:*)
