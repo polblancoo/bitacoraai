@@ -193,3 +193,25 @@ CREATE TABLE IF NOT EXISTS task_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_task_runs_project ON task_runs(project_id, started_at);
 CREATE INDEX IF NOT EXISTS idx_task_runs_task ON task_runs(task_id);
+
+CREATE TABLE IF NOT EXISTS schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    priority INTEGER NOT NULL DEFAULT 1,
+    assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    freq TEXT NOT NULL,
+    weekday INTEGER NOT NULL DEFAULT 0,
+    monthday INTEGER NOT NULL DEFAULT 1,
+    at_minute INTEGER NOT NULL DEFAULT 540,
+    tz_offset INTEGER NOT NULL DEFAULT 0,
+    skip_if_open INTEGER NOT NULL DEFAULT 1,
+    active INTEGER NOT NULL DEFAULT 1,
+    next_run TEXT NOT NULL,
+    last_run TEXT,
+    last_task_id INTEGER,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS schedules_due ON schedules (active, next_run);

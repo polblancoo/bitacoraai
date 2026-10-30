@@ -13,6 +13,7 @@ mod telegram;
 mod web;
 mod profile;
 mod routes;
+mod schedule;
 mod term;
 mod usage;
 mod ws;
@@ -196,8 +197,9 @@ async fn main() -> anyhow::Result<()> {
     extras::spawn_reminders(state.clone());
     google::spawn_sync(state.clone());
     license::spawn_ping(state.clone());
+    schedule::spawn_schedules(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(schedule::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

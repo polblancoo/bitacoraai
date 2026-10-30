@@ -161,7 +161,7 @@ pub(crate) async fn hydrate_deps(st: &AppState, tasks: &mut [Task], scope: &'sta
 /// Reglas de asignación: un líder (admin o dueño) asigna a cualquiera; un miembro solo puede
 /// tomar una tarea libre o soltar la suya.
 /// `bot_create`: una IA que crea la tarea puede dejarla asignada a otra persona del equipo.
-async fn check_assign(st: &AppState, team: Id, actor: Id, role: Role, current: Option<Id>, new: Option<Id>, bot_create: bool) -> Result<()> {
+pub(crate) async fn check_assign(st: &AppState, team: Id, actor: Id, role: Role, current: Option<Id>, new: Option<Id>, bot_create: bool) -> Result<()> {
     if new == current {
         return Ok(());
     }
@@ -186,7 +186,7 @@ async fn check_assign(st: &AppState, team: Id, actor: Id, role: Role, current: O
     }
 }
 
-async fn notify_assigned(st: &AppState, team: Id, actor: Id, t: &Task) {
+pub(crate) async fn notify_assigned(st: &AppState, team: Id, actor: Id, t: &Task) {
     let Some(to) = t.assignee_id else { return };
     if to == actor {
         return;

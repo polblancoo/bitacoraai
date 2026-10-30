@@ -1054,6 +1054,7 @@ function appView() {
       h("div", { class: "top" },
         h("h1", {}, S.terms ? "🖥️ Terminales" : S.portfolio ? "📊 Portafolio" : S.project ? S.project.name : S.team ? "Sin proyectos" : "Creá un equipo para empezar"),
         h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
+        S.project && !S.portfolio && !S.terms && h("button", { onclick: openSchedules, title: "Tareas que se crean solas a una hora fija: cada día, semana o mes" }, "⏰ Programadas"),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
         S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
@@ -1895,4 +1896,57 @@ const openLicense = guard(async () => {
   if (saved && l.admin && !l.licensed) {
     body.append(h("button", { onclick: guard(async () => { const r = await api("GET", `/api/license/order/${saved.id}?token=${encodeURIComponent(saved.token)}`); toast(r.estado === "pendiente" ? "Pedido pendiente: generá uno nuevo si hace falta" : "Estado del pedido: " + r.estado); }) }, "Ver mi último pedido"));
   }
+});
+
+// ---------- tareas programadas ----------
+// A una hora fija (cada día, semana o mes) el servidor crea una tarea ya asignada. Distinto de «Repetición»,
+// que crea la siguiente cuando se completa la anterior.
+const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+const hhmm = (min) => String(Math.floor(min / 60)).padStart(2, "0") + ":" + String(min % 60).padStart(2, "0");
+const schedText = (s) => s.freq === "daily" ? `Cada día a las ${hhmm(s.at_minute)}`
+  : s.freq === "weekly" ? `Cada ${DIAS[s.weekday].toLowerCase()} a las ${hhmm(s.at_minute)}`
+  : `Cada mes, el día ${s.monthday}, a las ${hhmm(s.at_minute)}`;
+
+const openSchedules = guard(async () => {
+  if (!S.project) return;
+  closeModal();
+  const list = await api("GET", `/api/projects/${S.project.id}/schedules`);
+  const assignable = can("admin") ? S.members.filter((m) => RANK[m.role] >= 1) : S.members.filter((m) => m.id === S.user?.id && can("member"));
+  const reload = () => openSchedules();
+  const body = (s, over = {}) => ({ title: s.title, description: s.description, priority: s.priority, assignee_id: s.assignee_id, freq: s.freq, weekday: s.weekday, monthday: s.monthday, at_minute: s.at_minute, tz_offset: s.tz_offset, skip_if_open: s.skip_if_open, active: s.active, ...over });
+  const rows = list.map((s) => h("div", { class: "sched-row" + (s.active ? "" : " off") },
+    h("div", {}, h("b", {}, s.title), s.assignee && h("small", { class: "inl" }, " · 👤 " + s.assignee)),
+    h("small", { class: "hint" }, schedText(s) + (s.skip_if_open ? " · si la anterior sigue abierta, no crea otra" : "")),
+    h("small", { class: "hint" }, s.active ? "Próxima: " + new Date(s.next_run).toLocaleString() : "En pausa"),
+    can("member") && h("div", { class: "row" },
+      h("button", { title: "Crea la tarea ahora, sin esperar ni mover el próximo horario", onclick: guard(async () => { const r = await api("POST", `/api/schedules/${s.id}/run`); toast(r.task_id ? "Tarea creada" : "No se creó la tarea"); reload(); }) }, "▶ Ejecutar ahora"),
+      h("button", { onclick: guard(async () => { await api("PUT", `/api/schedules/${s.id}`, body(s, { active: !s.active })); reload(); }) }, s.active ? "⏸ Pausar" : "▶ Activar"),
+      h("button", { class: "danger", onclick: guard(async () => { if (!confirm("¿Borrar la tarea programada?")) return; await api("DELETE", `/api/schedules/${s.id}`); reload(); }) }, "🗑 Borrar"))));
+  const title = h("input", { placeholder: "Título de la tarea (ej. Chequear resultados)", maxLength: 200 });
+  const desc = h("textarea", { placeholder: "Descripción: qué tiene que hacer (opcional)", rows: 3 });
+  const who = h("select", {}, h("option", { value: "" }, "Sin asignar"), assignable.map((m) => h("option", { value: m.id }, m.id === S.user?.id && !can("admin") ? `Yo (${m.username})` : label(m.username))));
+  const freq = h("select", { onchange: () => sync() }, [["daily", "Cada día"], ["weekly", "Cada semana"], ["monthly", "Cada mes"]].map(([v, l]) => h("option", { value: v }, l)));
+  const wd = h("select", {}, DIAS.map((d, i) => h("option", { value: i }, d)));
+  const md = h("input", { type: "number", min: 1, max: 31, value: 1, style: "max-width:90px" });
+  const at = h("input", { type: "time", value: "09:00", style: "max-width:130px" });
+  const skip = h("input", { type: "checkbox", checked: true });
+  const wdL = h("label", {}, "Día de la semana", wd), mdL = h("label", {}, "Día del mes (si el mes es más corto, el último día)", md);
+  const sync = () => { wdL.style.display = freq.value === "weekly" ? "" : "none"; mdL.style.display = freq.value === "monthly" ? "" : "none"; };
+  sync();
+  const add = guard(async () => {
+    const [H, M] = (at.value || "09:00").split(":").map(Number);
+    await api("POST", `/api/projects/${S.project.id}/schedules`, { title: title.value, description: desc.value, assignee_id: who.value ? +who.value : null, freq: freq.value, weekday: +wd.value, monthday: +md.value || 1, at_minute: H * 60 + M, tz_offset: -new Date().getTimezoneOffset(), skip_if_open: skip.checked });
+    toast("Tarea programada"); reload();
+  });
+  document.body.append(h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
+    h("div", { class: "modal usage-modal" },
+      h("h3", {}, "⏰ Tareas programadas · " + S.project.name, h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: closeModal }, "✕")),
+      h("p", { class: "hint" }, "A la hora indicada el servidor crea la tarea ya asignada (por ejemplo, para que una IA chequee resultados cada lunes). La hora es la de tu zona horaria."),
+      rows.length ? h("div", { class: "sched-list" }, rows) : h("small", { class: "hint" }, "Todavía no hay tareas programadas en este proyecto."),
+      can("member") && h("h4", {}, "Programar una tarea nueva"),
+      can("member") && title, can("member") && desc,
+      can("member") && h("label", {}, "Responsable", who),
+      can("member") && h("div", { class: "row" }, h("label", {}, "Frecuencia", freq), wdL, mdL, h("label", {}, "Hora", at)),
+      can("member") && h("label", { class: "row" }, skip, h("span", {}, "Si la tarea anterior sigue abierta, no crear otra")),
+      can("member") && h("div", { class: "row" }, h("button", { class: "primary", onclick: add }, "Programar")))));
 });
