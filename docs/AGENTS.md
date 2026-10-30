@@ -105,6 +105,8 @@ On macOS use a `launchd` agent and on Windows the Task Scheduler, with the same 
 | `TM_AGENT_MAX` | Tasks in parallel | `1` |
 | `TM_AGENT_DIR` | Fallback folder if the project has none (or it does not exist here) | — |
 | `TM_AGENT_ONCE=1` | Process what is pending and exit (useful for testing) | — |
+| `TM_AGENT_TERMINAL=1` | Opens web terminals (PTY) in the project folder, connecting out to the server | — |
+| `TM_AGENT_MAX_USD` | Per-run dollar cap, read by your script (e.g. `--max-budget-usd`) | — |
 | `TM_ASK_TIMEOUT` | Seconds `tm-agent ask` waits for a human answer | `900` |
 
 The command also receives `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_URL` and `TM_TOKEN`, in case your agent wants to comment or create subtasks through the API.

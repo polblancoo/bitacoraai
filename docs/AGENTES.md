@@ -105,6 +105,8 @@ En macOS se usa un `launchd` agent y en Windows el Programador de tareas, con la
 | `TM_AGENT_MAX` | Tareas en paralelo | `1` |
 | `TM_AGENT_DIR` | Carpeta de respaldo si el proyecto no tiene una (o no existe acá) | — |
 | `TM_AGENT_ONCE=1` | Procesa lo pendiente y sale (útil para probar) | — |
+| `TM_AGENT_TERMINAL=1` | Abre terminales web (PTY) en la carpeta del proyecto, conectando hacia el servidor | — |
+| `TM_AGENT_MAX_USD` | Tope en dólares por ejecución, lo lee tu script (ej. `--max-budget-usd`) | — |
 
 El comando también recibe `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_URL` y `TM_TOKEN`, por si tu agente quiere comentar o crear subtareas por la API.
 

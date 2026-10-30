@@ -10,6 +10,30 @@ Run **several projects at once from a single place**, with **people and AI agent
 
 ![Command board: projects, AIs and the team's tasks](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-01-tablero.png)
 
+### Why it is different
+
+What we have not seen together in any other tool (check, and tell us if you find one):
+
+- 🤖 **AIs as team members**, with a role, a list of forbidden commands and permissions that a person grants from the task itself (`/permitir cargo build`).
+- 🙋 **Help requests from the AI** that arrive as a task for the right person.
+- 💻 **SSH terminal inside the task** (key-based), and what was done is written down so the AI can pick up from there. *(0.6.3)*
+- 📊 **Portfolio of several projects**, with the AI's cost and hours.
+- 🏠 **Self-hosted**: your data and keys stay on your server.
+
+### Who it is for
+
+- 🏢 **A company with its own AI and collaborative work.** Your people and your AIs share one board. The board, its data, the history and your keys stay on **your** server, and the AI runs on **your** machines; only what the model needs to read goes to the provider you chose. Each AI has a role, lists of allowed and forbidden commands, and a history of who did what.
+- 🌍 **An AI the whole team uses: hired, or your own model on the server.** Either **you contract a model (Claude, Gemini, Codex…)** and install it **once on the server** with `tm-agent`, or **you run an open model on your own server** (for example with Ollama or llama.cpp, through any tool that takes a prompt and works on files; `tm-agent` launches whatever command you give it, though we have not tested local models yet). Everyone on the team uses it just by assigning it tasks, and nobody needs their own account. With a contracted model you pay the provider once (your subscription or API key); with your own model **nothing leaves your infrastructure**. **You stay in control:** `TM_AGENT_MAX` limits how many tasks it runs at the same time and the rest wait in line; each AI has its own role and lists of allowed and forbidden commands; it asks for permission when it needs it, and any owner or admin grants it from the task. Mix several models and change them whenever you want, since the board depends on no vendor. Tokens, cost and hours per project (with quotas) show what the shared AI costs each project. It also works with an AI that someone else runs on their own server: it connects over HTTPS with a token you **revoke in one click**, limited by role; *honest note:* the command lists are applied by the agent where the AI runs, so on machines you do not control combine them with the role and with reviewing each task.
+- 👥 **Several people supervising several AIs.** Help requests reach the right person, anyone authorized grants a command from the task itself, and everything stays written down.
+
+### More advantages
+
+- 📦 **One binary + SQLite**: installed in minutes, backed up by copying one file. No per-seat licenses.
+- 🔔 Real-time updates and notices by web, Telegram and email. Three languages, tooltips and a built-in manual.
+- 💻 **Terminal in the browser** *(0.6.3)*, owners only. Two ways in: **through the agent** (`TM_AGENT_TERMINAL=1`: the connection leaves the project's machine, so no keys, no open ports, works behind NAT; Windows not tested yet) or **by SSH with a key** (with a button that installs the key using your password once, without storing it). Every session is noted in the task and in `.tm/terminal-*.md` inside the project folder, so the AI picks up where you left off.
+- 🖥️ **Terminals view** *(0.6.3)*: up to 8 panes at once, and the state of each AI (working, needs you, finished) beside them.
+- 📊 Tokens, cost and hours per project and AI, with **quotas** per team, project and task, and an estimate when you create the task.
+
 **A project can be anything you need:**
 
 | Example | What it looks like |
@@ -85,6 +109,27 @@ Coding assistants (Claude Code, Cursor, Windsurf, Zed or any [MCP](https://model
 - **A command board**: you assign work to your agents from the web, the desktop app or the terminal, and watch live what each one is doing.
 
 > 🚀 **Let them work on their own**: **`tm-agent`** watches the board and, when you assign a task to an AI, opens your agent (Claude Code, Gemini CLI…) in the project's folder, moves the task to *In progress*, comments on it and leaves it in *Done*. An agent can also raise a 🙋 **help alarm** (`tm-agent ask "..."`) and wait for a human answer. Step by step in the **[agents guide](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTS.md)**; inside the app it is under *Settings → AI agents*. The `tm-mcp` binary (MCP tools) is still in development (see [ROADMAP.md](ROADMAP.md)).
+
+## What's new in 0.6.3
+
+### 💻 Terminal in the browser and Terminals view
+A **💻 Terminal** button on every task (owners only) opens a console in the project folder. Two ways: **through the agent** (`TM_AGENT_TERMINAL=1`, the connection starts from the project machine: no keys, no open ports) or **SSH with a key** (the app generates the key and pins the host fingerprint). Each session leaves a `.tm/terminal-tarea-N.md` note the AI reads when it resumes. The **🖥️ Terminals** view shows up to 8 panes and each AI's state.
+
+![Terminals view](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-14-terminales.png)
+
+### 💰 Usage and quotas
+Tokens, cost and hours per task, project, team and AI, with **quotas** checked before every run and a token **estimate** (🧮) to set the task cap.
+
+![Usage](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-15-consumo.png)
+![Token cap on the task](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-17-tokens.png)
+
+### ✅ Allow commands from the task
+When an AI asks for a command, **✅ Allow command…** explains what it does and authorizes it **once** or **always** (or with `/permitir` in a comment).
+
+![Allow command](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-16-permitir.png)
+
+### License
+From 0.6.3 the project is **AGPL-3.0-only** (earlier versions stay MIT). It bundles xterm.js (MIT).
 
 ## What's new in 0.6.2
 
@@ -249,4 +294,4 @@ legacy/          previous local manager (0.1.x)
 
 ## License
 
-MIT
+**AGPL-3.0-only.** Free to use and to self-host. If you offer a modified version as a service, you must publish your changes under the same license. A commercial license without that obligation is available: ask in [the issues](https://github.com/polblancoo/Rust_tuiManager/issues). Versions published up to 0.6.2 remain under MIT.

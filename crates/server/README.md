@@ -4,6 +4,16 @@
 
 > 🎛️ **A command board for your projects**: run several projects at once —an app factory, a spreadsheet, an onboarding, anything— with **people and AIs on the same board**. Every project knows where its work lives (folder and repo). Self-hosted.
 
+### Why it is different
+
+What we have not seen together in any other tool (check, and tell us if you find one):
+
+- 🤖 **AIs as team members**, with a role, a list of forbidden commands and permissions that a person grants from the task itself (`/permitir cargo build`).
+- 🙋 **Help requests from the AI** that arrive as a task for the right person.
+- 💻 **SSH terminal inside the task** (key-based), and what was done is written down so the AI can pick up from there. *(0.6.3)*
+- 📊 **Portfolio of several projects**, with the AI's cost and hours. *(cost and hours: coming in 0.6.3)*
+- 🏠 **Self-hosted**: your data and keys stay on your server.
+
 Multi-user server (axum + SQLite + WebSocket) of the collaborative task manager [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). The clients are [`rust-tui-manager`](https://crates.io/crates/rust-tui-manager) (terminal) and the Tauri app in the repository.
 
 Clients: the TUI, the desktop graphical app and the **web app this very server serves at `/`** (can be turned off with `TM_WEB=0`).
@@ -163,4 +173,4 @@ Each user connects their account from Settings → Google Calendar and their dat
 
 ## License
 
-MIT
+**AGPL-3.0-only.** Free to use and to self-host. If you offer a modified version as a service, you must publish your changes under the same license. A commercial license without that obligation is available: ask in [the issues](https://github.com/polblancoo/Rust_tuiManager/issues). Versions published up to 0.6.2 remain under MIT.

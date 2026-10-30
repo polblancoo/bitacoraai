@@ -105,6 +105,8 @@ No macOS usa-se um agente `launchd` e no Windows o Agendador de Tarefas, com as 
 | `TM_AGENT_MAX` | Tarefas em paralelo | `1` |
 | `TM_AGENT_DIR` | Pasta de reserva se o projeto não tiver uma (ou não existir aqui) | — |
 | `TM_AGENT_ONCE=1` | Processa o pendente e sai (útil para testar) | — |
+| `TM_AGENT_TERMINAL=1` | Abre terminais web (PTY) na pasta do projeto, conectando ao servidor | — |
+| `TM_AGENT_MAX_USD` | Teto em dólares por execução, lido pelo seu script (ex. `--max-budget-usd`) | — |
 | `TM_ASK_TIMEOUT` | Segundos que o `tm-agent ask` espera resposta humana | `900` |
 
 O comando também recebe `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_URL` e `TM_TOKEN`, caso o seu agente queira comentar ou criar subtarefas pela API.

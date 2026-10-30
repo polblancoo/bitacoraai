@@ -25,6 +25,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/bots/{uid}/token", post(rotate).delete(revoke))
         .route("/api/bots/{uid}", axum::routing::patch(update_bot))
         .route("/api/me/deny", get(my_deny))
+        .route("/api/me/allow", get(my_allow))
+        .route("/api/tasks/{id}/grant", post(grant_cmd))
+        .route("/api/tasks/{id}/grants", get(task_grants))
+        .route("/api/tasks/{id}/grants/claim", post(claim_grants))
 }
 
 #[derive(Deserialize)]
@@ -169,4 +173,89 @@ async fn update_bot(State(st): State<AppState>, user: AuthUser, Path(uid): Path<
 async fn my_deny(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
     let deny: String = sqlx::query_scalar("SELECT deny FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
     Ok(Json(json!({ "deny": deny })))
+}
+
+/// La IA lee su lista permanente de comandos permitidos (se agrega con «/permitir siempre …» o desde el pedido).
+async fn my_allow(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+    let allow: String = sqlx::query_scalar("SELECT allow FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
+    Ok(Json(json!({ "allow": allow })))
+}
+
+/// Tarea a la que se aplica el permiso (si es un pedido «🙋 Pedido de #N: …», la tarea N) y la IA responsable.
+async fn grant_target(st: &AppState, team: Id, task: Id) -> Result<(Id, Id)> {
+    let title: String = sqlx::query_scalar("SELECT title FROM tasks WHERE id = ?").bind(task).fetch_one(&st.db).await?;
+    let origin = title.strip_prefix("🙋 Pedido de #").and_then(|t| t.split(':').next()).and_then(|n| n.parse::<Id>().ok()).filter(|o| *o != task);
+    let target = match origin {
+        Some(o) => sqlx::query_scalar("SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = ? AND p.team_id = ?")
+            .bind(o)
+            .bind(team)
+            .fetch_optional(&st.db)
+            .await?
+            .unwrap_or(task),
+        None => task,
+    };
+    let bot: Option<Id> = sqlx::query_scalar("SELECT u.id FROM tasks t JOIN users u ON u.id = t.assignee_id WHERE t.id = ? AND u.is_bot = 1")
+        .bind(target)
+        .fetch_optional(&st.db)
+        .await?;
+    let bot = bot.ok_or_else(|| AppError::bad("la tarea no está asignada a una IA: no hay a quién darle el permiso"))?;
+    Ok((target, bot))
+}
+
+/// Da un permiso: `always` lo suma a la lista de la IA; si no, vale para la próxima ejecución de esa tarea.
+pub(crate) async fn grant(st: &AppState, user: &AuthUser, task: Id, command: &str, always: bool) -> Result<Id> {
+    user.human_only()?;
+    let team = crate::routes::team_of_task(st, task).await?;
+    crate::routes::require(st, team, user.id, Role::Admin).await?;
+    let command = command.trim();
+    if command.is_empty() || command.contains('\n') {
+        return Err(AppError::bad("falta el comando (una línea), por ejemplo: /permitir cargo build"));
+    }
+    limits::max_len("comando", command, 200)?;
+    let (target, bot) = grant_target(st, team, task).await?;
+    if always {
+        let cur: String = sqlx::query_scalar("SELECT allow FROM users WHERE id = ?").bind(bot).fetch_one(&st.db).await?;
+        if !cur.lines().any(|l| l == command) {
+            limits::max_len("lista de comandos permitidos", &format!("{cur}\n{command}"), 4000)?;
+            let new = if cur.is_empty() { command.to_string() } else { format!("{cur}\n{command}") };
+            sqlx::query("UPDATE users SET allow = ? WHERE id = ?").bind(new).bind(bot).execute(&st.db).await?;
+        }
+    } else {
+        sqlx::query("INSERT INTO task_grants (task_id, pattern, created_by, created_at, used) VALUES (?, ?, ?, ?, 0)")
+            .bind(target)
+            .bind(command)
+            .bind(user.id)
+            .bind(chrono::Utc::now())
+            .execute(&st.db)
+            .await?;
+    }
+    crate::extras::log_task(st, target, user.id, format!("autorizó «{command}» ({})", if always { "siempre" } else { "una vez" })).await;
+    Ok(target)
+}
+
+#[derive(Deserialize)]
+struct GrantReq {
+    command: String,
+    #[serde(default)]
+    always: bool,
+}
+
+async fn grant_cmd(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id>, Json(g): Json<GrantReq>) -> Result<Json<Value>> {
+    let target = grant(&st, &user, task, &g.command, g.always).await?;
+    Ok(Json(json!({ "task_id": target })))
+}
+
+/// Permisos «una vez» de la tarea que todavía no se usaron (los ven las personas del equipo y la IA responsable).
+async fn task_grants(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id>) -> Result<Json<Value>> {
+    crate::routes::ensure_member(&st, crate::routes::team_of_task(&st, task).await?, user.id).await?;
+    let rows: Vec<String> = sqlx::query_scalar("SELECT pattern FROM task_grants WHERE task_id = ? AND used = 0 ORDER BY id LIMIT 50").bind(task).fetch_all(&st.db).await?;
+    Ok(Json(json!({ "pending": rows })))
+}
+
+/// La IA toma sus permisos «una vez» al empezar: quedan marcados como usados y no vuelven a valer.
+async fn claim_grants(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id>) -> Result<Json<Value>> {
+    let mine: Option<i64> = sqlx::query_scalar("SELECT 1 FROM tasks WHERE id = ? AND assignee_id = ?").bind(task).bind(user.id).fetch_optional(&st.db).await?;
+    mine.ok_or_else(AppError::forbidden)?;
+    let rows: Vec<String> = sqlx::query_scalar("UPDATE task_grants SET used = 1 WHERE task_id = ? AND used = 0 RETURNING pattern").bind(task).fetch_all(&st.db).await?;
+    Ok(Json(json!({ "once": rows })))
 }

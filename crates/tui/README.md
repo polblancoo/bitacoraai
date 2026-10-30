@@ -2,9 +2,21 @@
 
 # rust-tui-manager
 
+> **0.6.3**: license **AGPL-3.0-only**; the server adds a browser terminal, usage and quotas.
+>
 > **0.6.2**: the terminal client is now available in **Spanish, English and Portuguese** (the language comes from `client.json` or `$LANG`). Site and downloads: https://polblancoo.github.io/rust_tuiManager/
 
 > 🎛️ **A command board for your projects**: run several projects at once —an app factory, a spreadsheet, an onboarding, anything— with **people and AIs on the same board**. Every project knows where its work lives (folder and repo). Self-hosted.
+
+### Why it is different
+
+What we have not seen together in any other tool (check, and tell us if you find one):
+
+- 🤖 **AIs as team members**, with a role, a list of forbidden commands and permissions that a person grants from the task itself (`/permitir cargo build`).
+- 🙋 **Help requests from the AI** that arrive as a task for the right person.
+- 💻 **SSH terminal inside the task** (key-based), and what was done is written down so the AI can pick up from there. *(0.6.3)*
+- 📊 **Portfolio of several projects**, with the AI's cost and hours. *(cost and hours: coming in 0.6.3)*
+- 🏠 **Self-hosted**: your data and keys stay on your server.
 
 Terminal client (ratatui) of the collaborative task manager [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). It needs a running [`rust-tui-manager-server`](https://crates.io/crates/rust-tui-manager-server).
 
@@ -77,4 +89,4 @@ More information, security and server configuration in the [project README](http
 
 ## License
 
-MIT
+**AGPL-3.0-only.** Free to use and to self-host. If you offer a modified version as a service, you must publish your changes under the same license. A commercial license without that obligation is available: ask in [the issues](https://github.com/polblancoo/Rust_tuiManager/issues). Versions published up to 0.6.2 remain under MIT.

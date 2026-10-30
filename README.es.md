@@ -10,6 +10,30 @@ Dirigí **varios proyectos a la vez desde un solo lugar**, con **personas y agen
 
 ![Tablero de comando: proyectos, IAs y tareas del equipo](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-01-tablero.png)
 
+### Qué lo hace distinto
+
+Lo que no vimos junto en ninguna otra herramienta (comprobalo, y avisanos si encontrás una):
+
+- 🤖 **IAs como integrantes del equipo**, con rol, lista de comandos prohibidos y permisos que una persona da desde la propia tarea (`/permitir cargo build`).
+- 🙋 **Pedidos de ayuda de la IA** que llegan como tarea a quien corresponde.
+- 💻 **Terminal SSH dentro de la tarea** (con clave), y lo hecho queda escrito para que la IA retome desde ahí. *(0.6.3)*
+- 📊 **Portafolio de varios proyectos**, con costo y horas de la IA. *(costo y horas: llegan en la 0.6.3)*
+- 🏠 **Autoalojado**: tus datos y tus claves quedan en tu servidor.
+
+### Para quién es
+
+- 🏢 **Una empresa con IA propia y trabajo colaborativo.** Tu gente y tus IAs comparten un mismo tablero. El tablero, sus datos, el historial y tus claves quedan en **tu** servidor, y la IA corre en **tus** máquinas; solo lo que el modelo necesita leer viaja al proveedor que elegiste. Cada IA tiene un rol, listas de comandos permitidos y prohibidos, y un historial de quién hizo qué.
+- 🌍 **Una IA que usa todo el equipo: contratada, o un modelo propio en el servidor.** O bien **contratás un modelo (Claude, Gemini, Codex…)** y lo instalás **una sola vez en el servidor** con `tm-agent`, o bien **corrés un modelo abierto en tu propio servidor** (por ejemplo con Ollama o llama.cpp, mediante cualquier herramienta que reciba un pedido y trabaje sobre archivos; `tm-agent` lanza el comando que le des, aunque todavía no probamos modelos locales). Todos en el equipo la usan con solo asignarle tareas, y nadie necesita cuenta propia. Con un modelo contratado le pagás una vez al proveedor (tu suscripción o tu clave de API); con un modelo propio **nada sale de tu infraestructura**. **Vos tenés el control:** `TM_AGENT_MAX` limita cuántas tareas corre a la vez y el resto espera en fila; cada IA tiene su rol y sus listas de comandos permitidos y prohibidos; pide permiso cuando lo necesita y cualquier owner o admin se lo da desde la tarea. Podés mezclar varios modelos y cambiarlos cuando quieras, porque el tablero no depende de ningún proveedor. Vienen los tokens y las horas por proyecto, para ver cuánto le cuesta a cada proyecto la IA compartida. También sirve con una IA que otro maneja en su propio servidor: se conecta por HTTPS con un token que **revocás con un clic**, limitada por rol; *aclaración honesta:* las listas de comandos las aplica el agente donde corre la IA, así que en máquinas que no controlás combinalas con el rol y con la revisión de cada tarea.
+- 👥 **Varias personas supervisando varias IAs.** Los pedidos de ayuda llegan a quien corresponde, cualquiera con permiso autoriza un comando desde la propia tarea, y todo queda escrito.
+
+### Más ventajas
+
+- 📦 **Un solo binario + SQLite**: se instala en minutos y se respalda copiando un archivo. Sin licencias por usuario.
+- 🔔 Novedades en tiempo real y avisos por web, Telegram y correo. Tres idiomas, ayudas en cada botón y un manual dentro de la app.
+- 💻 **Terminal en el navegador** *(0.6.3)*, solo para owners. Dos caminos: **por el agente** (`TM_AGENT_TERMINAL=1`: la conexión sale desde la máquina del proyecto, así que no hay claves ni puertos abiertos y anda detrás de NAT; Windows todavía sin probar) o **por SSH con clave** (con un botón que instala la clave usando tu contraseña una sola vez, sin guardarla). Cada sesión queda anotada en la tarea y en `.tm/terminal-*.md` dentro de la carpeta del proyecto, para que la IA retome donde dejaste.
+- 🖥️ **Vista Terminales** *(0.6.3)*: hasta 8 paneles a la vez, y al lado el estado de cada IA (trabajando, te necesita, terminó).
+- 📊 Tokens, costo y horas por proyecto y por IA, con **cuotas** por equipo, por proyecto y por tarea, y una estimación al crear la tarea.
+
 **Un proyecto puede ser lo que necesites:**
 
 | Ejemplo | Cómo se ve |
@@ -85,6 +109,27 @@ Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier client
 - **Un tablero de comandos**: asignás trabajo a tus agentes desde la web, la app o la terminal, y ves en vivo qué hace cada uno.
 
 > 🚀 **Que trabajen solas**: **`tm-agent`** vigila el tablero y, cuando le asignás una tarea a una IA, abre tu agente (Claude Code, Gemini CLI…) en la carpeta del proyecto, la pasa a *En curso*, la comenta y la deja en *Hecho*. El agente también puede levantar una **alarma de asistencia** 🙋 (`tm-agent ask "..."`) y esperar la respuesta de una persona. Paso a paso en el **[instructivo de agentes](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.md)**; dentro de la app está en *Configuración → Agentes de IA*. El binario `tm-mcp` (herramientas MCP) sigue en desarrollo (ver [ROADMAP.md](ROADMAP.md)).
+
+## Novedades de la 0.6.3
+
+### 💻 Terminal en el navegador y vista Terminales
+Un botón **💻 Terminal** en cada tarea (solo owners) abre una consola en la carpeta del proyecto. Dos caminos: **por el agente** (`TM_AGENT_TERMINAL=1`, la conexión sale desde la máquina del proyecto: sin claves ni puertos abiertos) o **SSH con clave** (la app genera la clave y guarda la huella del servidor). Cada sesión deja una nota `.tm/terminal-tarea-N.md` que la IA lee al retomar. La vista **🖥️ Terminales** muestra hasta 8 paneles y el estado de cada IA.
+
+![Vista Terminales](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-14-terminales.png)
+
+### 💰 Consumo y cuotas
+Tokens, costo y horas por tarea, proyecto, equipo e IA, con **cuotas** que se revisan antes de cada ejecución y una **estimación** de tokens (🧮) para fijar el tope de la tarea.
+
+![Consumo](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-15-consumo.png)
+![Tope de tokens en la tarea](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-17-tokens.png)
+
+### ✅ Permitir comandos desde la tarea
+Si una IA pide un comando, el botón **✅ Permitir comando…** explica qué hace y lo autoriza **una vez** o **siempre** (también con `/permitir` en un comentario).
+
+![Permitir comando](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-16-permitir.png)
+
+### Licencia
+Desde la 0.6.3 el proyecto es **AGPL-3.0-only** (las versiones anteriores siguen bajo MIT). Incluye xterm.js (MIT).
 
 ## Novedades de la 0.6.2
 
@@ -249,4 +294,4 @@ legacy/          gestor local anterior (0.1.x)
 
 ## Licencia
 
-MIT
+**AGPL-3.0-only.** Gratis para usar y autoalojar. Si ofrecés una versión modificada como servicio, tenés que publicar tus cambios con la misma licencia. Hay licencia comercial sin esa obligación: consultala en [los issues](https://github.com/polblancoo/Rust_tuiManager/issues). Las versiones publicadas hasta la 0.6.2 siguen siendo MIT.

@@ -157,3 +157,39 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     created_at TEXT NOT NULL,
     last_used TEXT
 );
+
+CREATE TABLE IF NOT EXISTS task_grants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    pattern TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL,
+    used INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS ssh_targets (
+    project_id INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    host TEXT NOT NULL,
+    port INTEGER NOT NULL DEFAULT 22,
+    user TEXT NOT NULL,
+    key_path TEXT NOT NULL,
+    host_fp TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS task_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    bot_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    model TEXT NOT NULL DEFAULT '',
+    started_at TEXT NOT NULL,
+    seconds INTEGER NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_create INTEGER NOT NULL DEFAULT 0,
+    cache_read INTEGER NOT NULL DEFAULT 0,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    ok INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_task_runs_project ON task_runs(project_id, started_at);
+CREATE INDEX IF NOT EXISTS idx_task_runs_task ON task_runs(task_id);

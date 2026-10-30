@@ -4,8 +4,8 @@ members = ["crates/core", "crates/server", "crates/tui", "crates/agent", "apps/d
 default-members = ["crates/core", "crates/server", "crates/tui", "crates/agent"]
 
 [workspace.package]
-version = "0.6.2"
+version = "0.6.3"
 edition = "2021"
 authors = ["Pablo Blanco <CrewHelmSupport@gmail.com>"]
-license = "MIT"
+license = "AGPL-3.0-only"
 repository = "https://github.com/polblancoo/Rust_tuiManager"

@@ -2,9 +2,21 @@
 
 # rust-tui-manager
 
+> **0.6.3**: licença **AGPL-3.0-only**; o servidor ganha terminal no navegador, consumo e cotas.
+>
 > **0.6.2**: o cliente de terminal agora está em **espanhol, inglês e português** (o idioma vem de `client.json` ou de `$LANG`). Site e downloads: https://polblancoo.github.io/rust_tuiManager/
 
 > 🎛️ **Painel de comando para os seus projetos**: dirija vários projetos ao mesmo tempo —uma fábrica de apps, uma planilha, um onboarding, o que for— com **pessoas e IAs no mesmo quadro**. Cada projeto sabe onde vive o seu trabalho (pasta e repositório). Self-hosted.
+
+### O que o torna diferente
+
+O que não vimos junto em nenhuma outra ferramenta (confira, e avise se achar uma):
+
+- 🤖 **IAs como integrantes da equipe**, com papel, lista de comandos proibidos e permissões que uma pessoa dá na própria tarefa (`/permitir cargo build`).
+- 🙋 **Pedidos de ajuda da IA** que chegam como tarefa para a pessoa certa.
+- 💻 **Terminal SSH dentro da tarefa** (com chave), e o que foi feito fica escrito para a IA retomar dali. *(0.6.3)*
+- 📊 **Portfólio de vários projetos**, com custo e horas da IA. *(custo e horas: chegam na 0.6.3)*
+- 🏠 **Auto-hospedado**: seus dados e suas chaves ficam no seu servidor.
 
 Cliente de terminal (ratatui) do gerenciador de tarefas colaborativo [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). Precisa de um servidor [`rust-tui-manager-server`](https://crates.io/crates/rust-tui-manager-server) em execução.
 
@@ -77,4 +89,4 @@ Mais informações, segurança e configuração do servidor no [README do projet
 
 ## Licença
 
-MIT
+**AGPL-3.0-only.** Grátis para usar e auto-hospedar. Se você oferecer uma versão modificada como serviço, precisa publicar suas mudanças com a mesma licença. Há licença comercial sem essa obrigação: pergunte nas [issues](https://github.com/polblancoo/Rust_tuiManager/issues). As versões publicadas até a 0.6.2 continuam em MIT.

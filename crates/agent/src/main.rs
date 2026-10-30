@@ -12,6 +12,8 @@ use std::{
 };
 use tokio::{process::Command, sync::Semaphore};
 
+mod term;
+
 const HELP: &str = "tm-agent: pone a trabajar a una IA cuando le asignan una tarea en rust-tui-manager.
 
 Variables de entorno:
@@ -23,6 +25,7 @@ Variables de entorno:
   TM_AGENT_TIMEOUT  segundos máximos por tarea (1800)
   TM_AGENT_MAX      tareas en paralelo (1)
   TM_AGENT_DIR      carpeta a usar si el proyecto no tiene una definida o no existe en esta máquina
+  TM_AGENT_TERMINAL=1  habilita la terminal desde la web: un owner abre un shell en esta máquina (carpeta del proyecto)
   TM_AGENT_ONCE=1   procesa lo pendiente y sale
 
 El comando corre en la carpeta de trabajo del proyecto con TM_TASK_PROMPT, TM_TASK_ID, TM_TASK_TITLE,
@@ -124,8 +127,17 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path) -> String {
         .as_array()
         .map(|a| a.iter().rev().take(10).rev().map(|c| format!("- {}: {}", c["username"].as_str().unwrap_or("?"), c["body"].as_str().unwrap_or(""))).collect())
         .unwrap_or_default();
+    // lo que una persona hizo en la terminal de esta tarea (la guarda tm-server en la carpeta del proyecto)
+    let term_note = std::fs::read_to_string(dir.join(format!(".tm/terminal-tarea-{}.md", job.id)))
+        .ok()
+        .map(|t| {
+            let v: Vec<char> = t.chars().collect();
+            let tail: String = v[v.len().saturating_sub(6000)..].iter().collect();
+            format!("Una persona trabajó en la terminal de esta tarea; esto es lo último que quedó anotado en .tm/terminal-tarea-{}.md (seguí desde ahí):\n{tail}\n\n", job.id)
+        })
+        .unwrap_or_default();
     format!(
-        "Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout.\n\nTrabajá dentro de la carpeta de trabajo. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
+        "{term_note}Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout.\n\nTrabajá dentro de la carpeta de trabajo. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
         job.project,
         if job.repo.is_empty() { "(sin definir)" } else { &job.repo },
         dir.display(),
@@ -146,6 +158,14 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
         api.say(job.id, &format!("⚠️ No puedo empezar: la carpeta de trabajo «{}» no existe en la máquina donde corre este agente (se puede usar TM_AGENT_DIR).", job.work_dir)).await;
         return Some(job.updated_at.clone());
     };
+    // cuotas: tope de la tarea, cuota mensual del proyecto y del equipo (las fija una persona en la app)
+    if let Ok(b) = api.call(Method::POST, &format!("/api/tasks/{}/budget-check", job.id), None).await {
+        if b["ok"] == false {
+            api.say(job.id, &format!("⛔ No empiezo: {}.", b["reason"].as_str().unwrap_or("se agotó la cuota"))).await;
+            log(&format!("⛔ #{} sin cuota", job.id));
+            return Some(job.updated_at.clone());
+        }
+    }
     let claimed = match api.set_status(job.id, "doing").await {
         Ok(t) => t,
         Err(e) => {
@@ -159,11 +179,20 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
 
     // Lista de comandos prohibidos que un admin edita desde la app (ficha de la IA).
     let deny = api.get("/api/me/deny").await.ok().and_then(|v| v["deny"].as_str().map(String::from)).unwrap_or_default();
+    // Comandos permitidos: los permanentes de la IA («/permitir siempre») y los de «una vez» de esta tarea, que se consumen al empezar.
+    let mut allow = api.get("/api/me/allow").await.ok().and_then(|v| v["allow"].as_str().map(String::from)).unwrap_or_default();
+    if let Ok(v) = api.call(Method::POST, &format!("/api/tasks/{}/grants/claim", job.id), None).await {
+        for c in v["once"].as_array().into_iter().flatten().filter_map(|c| c.as_str()) {
+            allow.push('\n');
+            allow.push_str(c);
+        }
+    }
     let mut cmd = if cfg!(windows) { let mut c = Command::new("cmd"); c.arg("/C"); c } else { let mut c = Command::new("sh"); c.arg("-c"); c };
     cmd.arg(&api.cfg.cmd)
         .current_dir(&dir)
         .env("TM_TASK_PROMPT", &prompt)
         .env("TM_DENY", deny)
+        .env("TM_ALLOW", allow)
         .env("TM_TASK_ID", job.id.to_string())
         .env("TM_TASK_TITLE", &job.title)
         .env("TM_PROJECT_ID", job.project_id.to_string())
@@ -173,18 +202,38 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    let started = std::time::Instant::now();
     let out = match tokio::time::timeout(Duration::from_secs(api.cfg.timeout), async { cmd.spawn()?.wait_with_output().await }).await {
         Ok(Ok(o)) => Ok(o),
         Ok(Err(e)) => Err(format!("no pude lanzar el comando: {e}")),
         Err(_) => Err(format!("se pasó del tiempo máximo ({} s) y lo cancelé", api.cfg.timeout)),
     };
+    // si el comando devuelve el JSON de Claude (`--output-format json`), de ahí salen los tokens y el costo reales
+    let usage = out.as_ref().ok().and_then(|o| parse_usage(&String::from_utf8_lossy(&o.stdout)));
+    let run_ok = out.as_ref().is_ok_and(|o| o.status.success()) && !usage.as_ref().is_some_and(|u| u.is_error);
+    let u = usage.as_ref();
+    let report = json!({
+        "seconds": started.elapsed().as_secs(), "ok": run_ok,
+        "input_tokens": u.map_or(0, |u| u.input), "output_tokens": u.map_or(0, |u| u.output),
+        "cache_create": u.map_or(0, |u| u.cache_create), "cache_read": u.map_or(0, |u| u.cache_read),
+        "cost_usd": u.map_or(0.0, |u| u.cost), "model": u.map_or("", |u| u.model.as_str()),
+    });
+    api.call(Method::POST, &format!("/api/tasks/{}/run", job.id), Some(report)).await.ok();
     let ok_text = |o: &std::process::Output| {
+        if let Some(t) = usage.as_ref().and_then(|u| u.text.clone()) {
+            return t;
+        }
         let so = String::from_utf8_lossy(&o.stdout);
         let se = String::from_utf8_lossy(&o.stderr);
         if so.trim().is_empty() { se.into_owned() } else { so.into_owned() }
     };
     match out {
-        Ok(o) if o.status.success() => {
+        Ok(_) if api.get(&format!("/api/tasks/{}/grants", job.id)).await.is_ok_and(|g| g["pending"].as_array().is_some_and(|a| !a.is_empty())) => {
+            api.say(job.id, "🔁 Me autorizaron comandos mientras trabajaba: vuelvo a empezar con esos permisos.").await;
+            api.set_status(job.id, "todo").await.ok();
+            None
+        }
+        Ok(o) if run_ok => {
             api.say(job.id, &format!("✅ Terminé.\n\n{}", tail(&ok_text(&o), 1800))).await;
             log(&format!("✅ #{} hecha", job.id));
             api.set_status(job.id, "done").await.ok().and_then(|t| t["updated_at"].as_str().map(String::from))
@@ -199,6 +248,45 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
             api.set_status(job.id, "todo").await.ok().and_then(|t| t["updated_at"].as_str().map(String::from)).or(claimed["updated_at"].as_str().map(String::from))
         }
     }
+}
+
+/// Gasto de una ejecución, leído del JSON de `claude -p --output-format json`.
+struct Usage {
+    input: i64,
+    output: i64,
+    cache_create: i64,
+    cache_read: i64,
+    cost: f64,
+    model: String,
+    text: Option<String>,
+    is_error: bool,
+}
+
+fn parse_usage(stdout: &str) -> Option<Usage> {
+    let t = stdout.trim();
+    let v: Value = serde_json::from_str(t).or_else(|_| serde_json::from_str(t.lines().last().unwrap_or(""))).ok()?;
+    v.get("total_cost_usd")?;
+    let mut u = Usage { input: 0, output: 0, cache_create: 0, cache_read: 0, cost: v["total_cost_usd"].as_f64().unwrap_or(0.0), model: String::new(), text: None, is_error: v["is_error"].as_bool().unwrap_or(false) };
+    let n = |x: &Value| x.as_i64().unwrap_or(0);
+    match v["modelUsage"].as_object().filter(|m| !m.is_empty()) {
+        Some(models) => {
+            u.model = models.keys().cloned().collect::<Vec<_>>().join(", ");
+            for m in models.values() {
+                u.input += n(&m["inputTokens"]);
+                u.output += n(&m["outputTokens"]);
+                u.cache_create += n(&m["cacheCreationInputTokens"]);
+                u.cache_read += n(&m["cacheReadInputTokens"]);
+            }
+        }
+        None => {
+            u.input = n(&v["usage"]["input_tokens"]);
+            u.output = n(&v["usage"]["output_tokens"]);
+            u.cache_create = n(&v["usage"]["cache_creation_input_tokens"]);
+            u.cache_read = n(&v["usage"]["cache_read_input_tokens"]);
+        }
+    }
+    u.text = v["result"].as_str().map(String::from).or_else(|| u.is_error.then(|| format!("{} ({})", v["subtype"].as_str().unwrap_or("error"), v["terminal_reason"].as_str().unwrap_or("sin detalle"))));
+    Some(u)
 }
 
 async fn pending(api: &Api, me: i64, skip: &HashMap<i64, String>, running: &HashSet<i64>) -> Result<Vec<Job>> {
@@ -287,6 +375,9 @@ async fn main() -> Result<()> {
     let my_id = me["id"].as_i64().context("respuesta inesperada de /api/me")?;
     log(&format!("conectado como {} (id {my_id}) a {}; reviso cada {poll} s, hasta {max} en paralelo", me["username"].as_str().unwrap_or("?"), api.cfg.url));
 
+    if std::env::var("TM_AGENT_TERMINAL").is_ok_and(|v| v == "1") && !once {
+        tokio::spawn(term::serve(api.clone()));
+    }
     let sem = Arc::new(Semaphore::new(max));
     let running: Arc<Mutex<HashSet<i64>>> = Default::default();
     let skip: Arc<Mutex<HashMap<i64, String>>> = Default::default();

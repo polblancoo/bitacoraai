@@ -14,4 +14,8 @@ pub const IMGS: &[(&str, &[u8])] = &[
     ("guia-11-portafolio.png", include_bytes!("../web/manual/img/guia-11-portafolio.png")),
     ("guia-12-pedido.png", include_bytes!("../web/manual/img/guia-12-pedido.png")),
     ("guia-13-manual.png", include_bytes!("../web/manual/img/guia-13-manual.png")),
+    ("guia-14-terminales.png", include_bytes!("../web/manual/img/guia-14-terminales.png")),
+    ("guia-15-consumo.png", include_bytes!("../web/manual/img/guia-15-consumo.png")),
+    ("guia-16-permitir.png", include_bytes!("../web/manual/img/guia-16-permitir.png")),
+    ("guia-17-tokens.png", include_bytes!("../web/manual/img/guia-17-tokens.png")),
 ];

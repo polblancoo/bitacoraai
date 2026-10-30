@@ -4,6 +4,16 @@
 
 > 🎛️ **Painel de comando para os seus projetos**: dirija vários projetos ao mesmo tempo —uma fábrica de apps, uma planilha, um onboarding, o que for— com **pessoas e IAs no mesmo quadro**. Cada projeto sabe onde vive o seu trabalho (pasta e repositório). Self-hosted.
 
+### O que o torna diferente
+
+O que não vimos junto em nenhuma outra ferramenta (confira, e avise se achar uma):
+
+- 🤖 **IAs como integrantes da equipe**, com papel, lista de comandos proibidos e permissões que uma pessoa dá na própria tarefa (`/permitir cargo build`).
+- 🙋 **Pedidos de ajuda da IA** que chegam como tarefa para a pessoa certa.
+- 💻 **Terminal SSH dentro da tarefa** (com chave), e o que foi feito fica escrito para a IA retomar dali. *(0.6.3)*
+- 📊 **Portfólio de vários projetos**, com custo e horas da IA. *(custo e horas: chegam na 0.6.3)*
+- 🏠 **Auto-hospedado**: seus dados e suas chaves ficam no seu servidor.
+
 Servidor multiusuário (axum + SQLite + WebSocket) do gerenciador de tarefas colaborativo [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). Os clientes são o [`rust-tui-manager`](https://crates.io/crates/rust-tui-manager) (terminal) e o app Tauri do repositório.
 
 Clientes: a TUI, o app gráfico de desktop e a **web que este mesmo servidor serve em `/`** (pode ser desativada com `TM_WEB=0`).
@@ -163,4 +173,4 @@ Cada usuário conecta a sua conta em Configurações → Google Agenda e as suas
 
 ## Licença
 
-MIT
+**AGPL-3.0-only.** Grátis para usar e auto-hospedar. Se você oferecer uma versão modificada como serviço, precisa publicar suas mudanças com a mesma licença. Há licença comercial sem essa obrigação: pergunte nas [issues](https://github.com/polblancoo/Rust_tuiManager/issues). As versões publicadas até a 0.6.2 continuam em MIT.

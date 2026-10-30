@@ -905,7 +905,7 @@ async fn delete_task(State(st): State<AppState>, user: AuthUser, Path(id): Path<
 
 // ---------- comments ----------
 
-fn comment_from_row(r: &SqliteRow) -> Comment {
+pub(crate) fn comment_from_row(r: &SqliteRow) -> Comment {
     Comment {
         id: r.get("id"),
         task_id: r.get("task_id"),
@@ -916,7 +916,7 @@ fn comment_from_row(r: &SqliteRow) -> Comment {
     }
 }
 
-const COMMENT_SELECT: &str = "SELECT c.id, c.task_id, c.user_id, u.username, c.body, c.created_at \
+pub(crate) const COMMENT_SELECT: &str = "SELECT c.id, c.task_id, c.user_id, u.username, c.body, c.created_at \
     FROM comments c JOIN users u ON u.id = c.user_id";
 
 async fn list_comments(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id>) -> Result<Json<Vec<Comment>>> {
@@ -932,7 +932,7 @@ async fn add_comment(
     State(st): State<AppState>,
     user: AuthUser,
     Path(task): Path<Id>,
-    Json(n): Json<NewComment>,
+    Json(mut n): Json<NewComment>,
 ) -> Result<Json<Comment>> {
     let team = team_of_task(&st, task).await?;
     ensure_writer(&st, team, user.id).await?;
@@ -940,6 +940,18 @@ async fn add_comment(
         return Err(AppError::bad("comentario vacío"));
     }
     max_len("comentario", &n.body, COMMENT_MAX)?;
+    // «/permitir [siempre] comando»: una persona con rol admin u owner habilita un comando para la IA de la tarea
+    if let Some(rest) = n.body.trim().strip_prefix("/permitir") {
+        if rest.is_empty() || rest.starts_with(char::is_whitespace) {
+            let rest = rest.trim();
+            let (always, cmd) = match rest.strip_prefix("siempre") {
+                Some(c) if c.starts_with(char::is_whitespace) => (true, c.trim()),
+                _ => (false, rest),
+            };
+            crate::bots::grant(&st, &user, task, cmd, always).await?;
+            n.body = format!("✅ Autorizado: `{cmd}` ({}). La IA lo puede usar {}.", if always { "siempre" } else { "una vez" }, if always { "desde su próxima ejecución" } else { "en su próxima ejecución de esta tarea" });
+        }
+    }
     if count(&st, "SELECT COUNT(*) FROM comments WHERE task_id = ?", task).await? >= MAX_COMMENTS_PER_TASK {
         return Err(too_many("comentarios", MAX_COMMENTS_PER_TASK));
     }
@@ -1149,4 +1161,13 @@ async fn remove_dep(State(st): State<AppState>, user: AuthUser, Path((id, dep)):
     let t = fetch_task(&st, id).await?;
     st.emit(team, Event::TaskUpdated(t.clone()));
     Ok(Json(t))
+}
+
+/// Comentario automático (a nombre de quien lo causó) que aparece en vivo en la tarea.
+pub(crate) async fn system_comment(st: &AppState, task: Id, user: Id, body: String) {
+    let Ok(team) = team_of_task(st, task).await else { return };
+    let Ok(id) = sqlx::query("INSERT INTO comments (task_id, user_id, body, created_at) VALUES (?, ?, ?, ?)").bind(task).bind(user).bind(body).bind(Utc::now()).execute(&st.db).await.map(|r| r.last_insert_rowid()) else { return };
+    if let Ok(row) = sqlx::query(sqlx::AssertSqlSafe(format!("{COMMENT_SELECT} WHERE c.id = ?"))).bind(id).fetch_one(&st.db).await {
+        st.emit(team, Event::CommentAdded(comment_from_row(&row)));
+    }
 }

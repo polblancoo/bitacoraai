@@ -272,7 +272,7 @@ const openProfile = guard(async () => {
 });
 
 async function selectTeam(team) {
-  S.portfolio = false; S.team = team; S.projects = []; S.project = null; S.tasks = []; S.members = []; S.labels = []; S.bots = []; S.canvas = null;
+  S.portfolio = false; S.terms = false; S.team = team; S.projects = []; S.project = null; S.tasks = []; S.members = []; S.labels = []; S.bots = []; S.canvas = null;
   if (team) {
     [S.projects, S.members, S.labels, S.bots] = await Promise.all([
       api("GET", `/api/teams/${team.id}/projects`), api("GET", `/api/teams/${team.id}/members`),
@@ -284,7 +284,7 @@ async function selectTeam(team) {
 }
 
 async function selectProject(p) {
-  S.portfolio = false; S.project = p; S.canvas = null; S.tasks = p ? await api("GET", `/api/projects/${p.id}/tasks`) : [];
+  S.portfolio = false; S.terms = false; S.project = p; S.canvas = null; S.tasks = p ? await api("GET", `/api/projects/${p.id}/tasks`) : [];
   render();
 }
 
@@ -848,6 +848,14 @@ const openTask = guard(async (task) => {
       if (done) { upsert(await api("PATCH", `/api/tasks/${task.id}`, { status: "done" })); render(); toast("Respuesta enviada a la IA; pedido marcado como Hecho"); }
       else toast("Respuesta enviada a la IA");
     });
+    const grantCmd = guard(async () => {
+      const ask = (cur().description.match(/LO QUE PIDE\n([\s\S]*?)\n\n/) || [])[1] || "";
+      const found = [...new Set([...cmds, ...[...ask.matchAll(/`([^`\n]+)`/g)].map((m) => m[1])])].map((c) => c.replace(/^cd [^&;]+&&\s*/, "").trim()).filter(Boolean);
+      const r = await grantDialog(found, ask);
+      if (!r) return;
+      await api("POST", `/api/tasks/${task.id}/grant`, { command: r.command, always: r.always });
+      await reply(`✅ Autorizado: \`${r.command}\` (${r.always ? "siempre" : "una vez"}). La IA lo puede usar en su próxima ejecución.`, true);
+    });
     return h("div", { class: "reqpanel" },
       h("h3", {}, "🙋 Pedido de una IA"),
       cmds.length > 0 && h("div", {}, h("b", {}, "1. Copiá y ejecutá en tu terminal:"),
@@ -858,7 +866,8 @@ const openTask = guard(async (task) => {
       h("div", { class: "row" },
         h("button", { class: "primary", title: "Publica la salida como comentario y marca el pedido como Hecho", onclick: () => out.value.trim() ? reply("📤 Salida:\n" + out.value.trim(), true).then(() => (out.value = "")) : toast("Pegá primero la salida", true) }, "📤 Enviar salida a la IA"),
         h("span", { class: "spacer" }),
-        h("button", { title: "Le responde a la IA que sí: úsalo cuando el pedido es una decisión o un permiso", onclick: () => reply("✅ Autorizado: seguí.", true) }, "✅ Autorizar"),
+        h("button", { title: "Le responde a la IA que sí: úsalo cuando el pedido es una decisión", onclick: () => reply("✅ Autorizado: seguí.", true) }, "✅ Autorizar"),
+        can("admin") && h("button", { class: "primary", title: "Te muestra qué comando pide la IA, qué hace, y elegís si lo permitís solo esta vez o siempre", onclick: () => grantCmd() }, "✅ Permitir comando…"),
         h("button", { class: "danger", title: "Le responde a la IA que no; podés escribir el motivo arriba", onclick: () => reply("❌ No autorizado." + (out.value.trim() ? "\n" + out.value.trim() : ""), true).then(() => (out.value = "")) }, "❌ Rechazar")),
       h("small", { class: "hint" }, "«Autorizar» es para decisiones (¿puedo borrar X?). Si la IA no puede ejecutar un comando porque está bloqueado, ejecutalo vos y enviá la salida."));
   };
@@ -882,6 +891,7 @@ const openTask = guard(async (task) => {
   const modal = h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
     h("div", { class: "modal task-modal" + (store.get("taskMax") === "1" ? " max" : "") },
       h("h3", { class: "task-head" }, "Tarea ", h("span", { class: "tid" }, "#" + task.id), h("span", { class: "spacer" }),
+        can("owner") && h("button", { class: "ghost", title: "Abre una terminal SSH a la máquina del proyecto, sin salir de la tarea (solo owners)", onclick: guard(() => openTerminal(cur())) }, "💻 Terminal"),
         h("button", { class: "ghost max-btn", title: "Maximizar o restaurar la ventana para leer los comentarios más cómodo", onclick: (e) => {
           const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("taskMax", on ? "1" : "0");
           e.currentTarget.textContent = on ? "⤡ Restaurar" : "⤢ Maximizar";
@@ -889,6 +899,7 @@ const openTask = guard(async (task) => {
       requestPanel(),
       h("label", {}, "Título", title),
       h("label", {}, "Descripción", desc),
+      can("member") && budgetBox(cur(), title, desc),
       h("h3", {}, "Etiquetas"), labelBox, newLabel,
       h("h3", {}, "Subtareas"), subBox, newSub,
       h("div", { class: "grid2" },
@@ -1019,14 +1030,14 @@ function calendarView() {
 
 function appView() {
   const search = h("input", { placeholder: "Buscar…", value: S.query, oninput: (e) => { S.query = e.target.value; render(true); } });
-  return h("div", { class: "shell" + (S.panel && S.team ? " with-panel" : "") },
+  return h("div", { class: "shell" + (S.panel && S.team ? " with-panel" : "") + (S.terms && store.get("tvZen") === "1" ? " tv-zen" : "") },
     h("aside", {},
       h("div", { class: "brand" }, "▣ Rust TUI Manager"),
       h("div", {}, h("h2", {}, "Equipos", h("span", {}, S.team && h("button", { class: "ghost", onclick: () => { S.panel = true; store.set("panel", "1"); loadOverview(); setTimeout(() => document.querySelector(".tp-sec:last-child")?.scrollIntoView(), 400); }, title: "Editar o eliminar el equipo actual (ajustes en el panel de la derecha)" }, "⚙"), h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
         h("div", { class: "nav" }, S.teams.map((t) => h("button", { class: t.id === S.team?.id ? "active" : "", onclick: () => selectTeam(t).catch((e) => toast(e.message, true)) }, t.name)))),
       S.team && h("div", {}, h("h2", {}, "Proyectos", h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
-        h("div", { class: "nav" }, S.projects.length > 0 && h("button", { class: S.portfolio ? "active" : "", onclick: openPortfolio, title: "Avance de todos los proyectos del equipo" }, "📊 Portafolio"),
-          S.projects.map((p) => h("button", { class: p.id === S.project?.id && !S.portfolio ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
+        h("div", { class: "nav" }, S.projects.length > 0 && can("owner") && h("button", { class: S.terms ? "active" : "", onclick: openTerms, title: "Terminales SSH de los proyectos y estado de las IAs, en paneles" }, "🖥️ Terminales"), S.projects.length > 0 && h("button", { class: S.portfolio ? "active" : "", onclick: openPortfolio, title: "Avance de todos los proyectos del equipo" }, "📊 Portafolio"),
+          S.projects.map((p) => h("button", { class: p.id === S.project?.id && !S.portfolio && !S.terms ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
           h("span", { class: "dot", style: `background:${p.color}` }), p.name)))),
       S.team && h("div", {}, h("h2", {}, "🤖 IAs", can("admin") && h("button", { class: "ghost", onclick: createBot, title: "Sumar una IA al equipo (crea su token)" }, "+")),
         h("div", { class: "nav" }, (S.bots || []).map((b) => h("button", { class: b.active ? "" : "revoked", onclick: () => botModal(b), title: b.active ? "Token activo" : "Token revocado" }, "🤖 " + b.username, b.model && h("small", { class: "inl" }, " · " + b.model))),
@@ -1041,24 +1052,26 @@ function appView() {
         h("button", { class: "ghost", onclick: logoutAll, title: "Cierra la sesión en todos los dispositivos" }, "⏻"))),
     h("main", {},
       h("div", { class: "top" },
-        h("h1", {}, S.portfolio ? "📊 Portafolio" : S.project ? S.project.name : S.team ? "Sin proyectos" : "Creá un equipo para empezar"),
+        h("h1", {}, S.terms ? "🖥️ Terminales" : S.portfolio ? "📊 Portafolio" : S.project ? S.project.name : S.team ? "Sin proyectos" : "Creá un equipo para empezar"),
         h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
-        S.project && !S.portfolio && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
+        S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
+        S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
         S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
-        !S.portfolio && h("div", { class: "seg" },
+        !S.portfolio && !S.terms && h("div", { class: "seg" },
           [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"], ["activity", "Actividad"]].map(([v, l]) =>
             h("button", { class: S.view === v ? "on" : "", onclick: () => { S.view = v; render(); } }, l))),
         search),
-      S.project && !S.portfolio && (S.project.work_dir || S.project.repo) && h("div", { class: "proj-meta" },
+      S.project && !S.portfolio && !S.terms && (S.project.work_dir || S.project.repo) && h("div", { class: "proj-meta" },
         S.project.work_dir && h("span", { title: "Carpeta de trabajo" }, "📁 " + S.project.work_dir),
         S.project.repo && h("span", { title: "Repositorio" }, "🔗 " + S.project.repo)),
-      S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
+      S.terms ? termsView() : S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
         : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos")),
     S.panel && S.team && teamPanel());
 }
 
 function render(keepFocus) {
+  if (S.terms && document.activeElement?.closest?.(".tv-grid")) { refreshTermSide(); return; }
   const root = document.getElementById("app");
   const focused = keepFocus && document.activeElement?.tagName === "INPUT";
   root.replaceChildren(S.token ? appView() : loginView());
@@ -1102,10 +1115,13 @@ const duplicateProject = guard(async () => {
 // ---------- actividad ----------
 // ---------- portafolio: el avance de todos los proyectos del equipo ----------
 const HEALTH = { ok: ["🟢", "Al día"], late: ["🔴", "Con vencidas"], stalled: ["🟡", "Sin movimiento"], done: ["✅", "Terminado"], empty: ["⚪", "Sin tareas"] };
-const openPortfolio = guard(async () => { S.portfolio = true; S.pf = null; render(); await loadPortfolio(); });
+const openPortfolio = guard(async () => { S.terms = false; S.portfolio = true; S.pf = null; render(); await loadPortfolio(); });
 async function loadPortfolio(quiet) {
   const team = S.team?.id; if (!team) return;
-  try { const d = await api("GET", `/api/teams/${team}/portfolio`); if (S.portfolio && S.team?.id === team) { S.pf = d; render(); } }
+  try {
+    const [d, u] = await Promise.all([api("GET", `/api/teams/${team}/portfolio`), api("GET", `/api/teams/${team}/usage`).catch(() => null)]);
+    if (S.portfolio && S.team?.id === team) { S.pf = d; S.pfu = u; render(); }
+  }
   catch (e) { if (!quiet) toast(e.message, true); }
 }
 const ago = (iso) => {
@@ -1129,6 +1145,7 @@ function portfolioView() {
       h("div", { class: "pf-nums" }, h("span", {}, `${pct}% · ${p.done}/${p.total}`), h("span", {}, `En curso ${p.doing}`), h("span", {}, `Por hacer ${p.todo}`),
         p.overdue > 0 && h("span", { class: "bad" }, `⏰ ${p.overdue} vencidas`), p.unassigned > 0 && h("span", { class: "warn" }, `${p.unassigned} sin asignar`)),
       h("div", { class: "pf-people" }, p.people.length ? p.people.slice(0, 6).map((x) => h("span", { class: "pf-chip", title: `${x.open} abiertas, ${x.doing} en curso` }, (x.bot ? "🤖 " : "") + x.username + " · " + x.open)) : h("small", { class: "hint" }, "Nadie con tareas abiertas")),
+      (() => { const u = S.pfu?.projects.find((x) => x.id === p.id); return u && (u.runs > 0 || u.quota > 0) ? h("div", { class: "pf-usage", title: "Consumo de las IAs este mes" }, h("small", {}, "💰 mes: " + usageLine(u)), quotaBar(u.tokens, u.quota)) : null; })(),
       h("div", { class: "pf-foot" }, h("small", {}, "Última actividad: " + ago(p.last_activity)), p.ai_24h > 0 && h("small", {}, `🤖 ${p.ai_24h} acciones de IAs en 24 h`),
         p.next_due && h("small", {}, "Próximo vencimiento: " + new Date(p.next_due).toLocaleDateString())));
   };
@@ -1137,6 +1154,7 @@ function portfolioView() {
     h("div", { class: "pf-tiles" },
       tile(ps.length, "proyectos"), tile(total ? Math.round((done / total) * 100) + "%" : "—", "avance general"), tile(sum("doing"), "en curso"),
       tile(sum("overdue"), "vencidas", sum("overdue") ? "bad" : ""), tile(risk, "proyectos en riesgo", risk ? "warn" : ""),
+      S.pfu && tile(fmtTok(S.pfu.team.tokens) + " · " + fmtUsd(S.pfu.team.cost_usd), "IAs este mes (tokens · costo)", S.pfu.team.quota > 0 && S.pfu.team.tokens >= S.pfu.team.quota ? "bad" : ""),
       h("button", { onclick: () => loadPortfolio() }, "Actualizar")),
     h("div", { class: "pf-grid" }, ps.map(card)),
     h("h3", {}, "🤖 Lo último que hicieron las IAs"),
@@ -1450,3 +1468,327 @@ document.addEventListener("keydown", (e) => {
 if (IS_WEB && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 render();
 if (S.token) boot(true).catch(() => { S.token = null; render(); });
+
+
+// ---------- terminal SSH integrada (solo owners): el servidor abre SSH con clave a la máquina del proyecto ----------
+const loadScript = (src) => new Promise((ok, no) => { const el = document.createElement("script"); el.src = src; el.onload = ok; el.onerror = () => no(new Error("no pude cargar " + src)); document.head.append(el); });
+
+async function openTerminal(task) {
+  if (!window.Terminal) { await loadScript("xterm.js"); await loadScript("xterm-fit.js"); }
+  const pid = task.project_id;
+  const cfg = await api("GET", `/api/projects/${pid}/ssh`);
+  const agents = await api("GET", `/api/projects/${pid}/term/agents`).catch(() => []);
+  const mode = h("select", { title: "Cómo se llega a la máquina del proyecto", onchange: () => applyMode() },
+    h("option", { value: "agent", selected: !!cfg.agent_id || (!cfg.host && agents.some((a) => a.online)) }, "🤖 Por el agente instalado en la máquina (recomendado)"),
+    h("option", { value: "ssh", selected: !cfg.agent_id && (!!cfg.host || !agents.some((a) => a.online)) }, "🔑 Por SSH con clave"));
+  const agentSel = h("select", {}, agents.length ? agents.map((a) => h("option", { value: a.id, selected: a.id === cfg.agent_id }, `🤖 ${a.name}${a.model ? " · " + a.model : ""} — ${a.online ? "🟢 conectado" : "⚪ sin conectar"}`)) : h("option", { value: "" }, "(no hay IAs en este equipo)"));
+  const agentBox = h("div", {}, h("label", {}, "Agente de la máquina", agentSel),
+    h("small", { class: "hint" }, "En la máquina donde está el proyecto, el agente se arranca con TM_AGENT_TERMINAL=1 (junto a TM_TOKEN y TM_URL de esa IA). Sale solo hacia el servidor: no hay que abrir puertos, ni copiar claves, ni cargar IPs. Funciona también detrás de NAT y en Windows."));
+  const f = {
+    host: h("input", { value: cfg.host, placeholder: "máquina (IP o nombre)" }),
+    port: h("input", { type: "number", value: cfg.port, placeholder: "22" }),
+    user: h("input", { value: cfg.user, placeholder: "usuario" }),
+    key: h("input", { value: cfg.key_path, class: "wide", placeholder: "clave privada en el servidor" }),
+  };
+  const pub = h("div", { class: "term-key", hidden: !cfg.public_key }, cfg.public_key || "");
+  const info = h("small", { class: "hint" }, cfg.host_fp ? "Huella de la máquina: " + cfg.host_fp : "Todavía no se conectó: la primera vez se guarda la huella de la máquina.");
+  const box = h("div", { class: "term-box" });
+  let sock = null, term = null, fit = null, ro = null;
+  const stop = () => { try { sock?.close(); } catch {} ro?.disconnect(); term?.dispose(); sock = term = null; };
+  const saveCfg = async () => {
+    if (mode.value === "agent") { if (!agentSel.value) throw new Error("Elegí un agente (o creá una IA en el equipo)"); return api("PUT", `/api/projects/${pid}/ssh`, { agent_id: +agentSel.value }); }
+    return api("PUT", `/api/projects/${pid}/ssh`, { host: f.host.value, port: +f.port.value || 22, user: f.user.value, key_path: f.key.value });
+  };
+  const connect = guard(async () => {
+    stop(); box.replaceChildren();
+    await saveCfg();
+    if (mode.value === "ssh") { const pk = (await api("GET", `/api/projects/${pid}/ssh`)).public_key; if (pk) { pub.hidden = false; pub.textContent = pk; } }
+    term = new Terminal({ cursorBlink: true, fontSize: 14, fontFamily: "monospace", theme: { background: "#0b0d14" } });
+    fit = new FitAddon.FitAddon(); term.loadAddon(fit); term.open(box); fit.fit();
+    const ws = new WebSocket(S.server.replace(/^http/, "ws") + `/api/projects/${pid}/term${task.id ? "?task=" + task.id : ""}`);
+    sock = ws; ws.binaryType = "arraybuffer";
+    ws.onopen = () => ws.send(JSON.stringify({ token: S.token, cols: term.cols, rows: term.rows }));
+    ws.onmessage = (e) => {
+      if (typeof e.data === "string") {
+        const m = JSON.parse(e.data);
+        if (m.error) term.write("\r\n\x1b[31m" + m.error + "\x1b[0m\r\n");
+        if (m.info) term.write("\x1b[33m" + m.info + "\x1b[0m\r\n");
+      } else term.write(new Uint8Array(e.data));
+    };
+    ws.onclose = () => term && term.write("\r\n\x1b[90m[sesión cerrada]\x1b[0m\r\n");
+    const enc = new TextEncoder();
+    term.onData((d) => ws.readyState === 1 && ws.send(enc.encode(d)));
+    term.onResize(({ cols, rows }) => ws.readyState === 1 && ws.send(JSON.stringify({ resize: [cols, rows] })));
+    ro = new ResizeObserver(() => { try { fit.fit(); } catch {} }); ro.observe(box);
+    term.focus();
+    cfg.host_fp = (await api("GET", `/api/projects/${pid}/ssh`)).host_fp; info.textContent = "Huella de la máquina: " + cfg.host_fp;
+  });
+  const keygen = guard(async () => {
+    await saveCfg();
+    const r = await api("POST", `/api/projects/${pid}/ssh/keygen`);
+    pub.hidden = false; pub.textContent = r.public_key;
+    toast("Clave lista: pegá la pública en ~/.ssh/authorized_keys de la máquina");
+  });
+  const pw = h("input", { type: "password", autocomplete: "off", placeholder: "contraseña de esa máquina (no se guarda)" });
+  const install = guard(async () => {
+    if (!pw.value) { pw.focus(); return toast("Escribí la contraseña de esa máquina para instalar la clave", true); }
+    await saveCfg();
+    const r = await api("POST", `/api/projects/${pid}/ssh/install-key`, { password: pw.value });
+    pw.value = "";
+    info.textContent = "Huella de la máquina: " + r.host_fp;
+    const pk = (await api("GET", `/api/projects/${pid}/ssh`)).public_key; if (pk) { pub.hidden = false; pub.textContent = pk; }
+    toast("✅ Clave instalada en la máquina. Ya podés tocar «Conectar»");
+  });
+  const copyAll = guard(async () => {
+    await saveCfg();
+    const r = await api("POST", `/api/projects/${pid}/ssh/copy-all`);
+    toast(r.copied ? `Misma máquina cargada en ${r.copied} proyecto(s) más` : "No hay otros proyectos en este equipo");
+  });
+  const forget = guard(async () => { await api("POST", `/api/projects/${pid}/ssh/forget-host`); info.textContent = "Huella olvidada: la próxima conexión guarda la nueva."; });
+  const sshBox = h("div", {},
+    h("div", { class: "term-cfg" }, f.host, f.port, f.user, f.key),
+    h("div", { class: "row" }, pw, h("button", { title: "Entra una sola vez con tu contraseña, deja la clave pública en ~/.ssh/authorized_keys de esa máquina y olvida la contraseña", onclick: install }, "🔐 Instalar clave")),
+    h("div", { class: "row" },
+      h("button", { title: "Crea una clave ed25519 en el servidor y muestra la pública", onclick: keygen }, "🔑 Generar clave"),
+      h("button", { class: "ghost", title: "Si la máquina se reinstaló: vuelve a guardar su huella en la próxima conexión", onclick: forget }, "Olvidar huella")),
+    pub, info);
+  const applyMode = () => { agentBox.hidden = mode.value !== "agent"; sshBox.hidden = mode.value !== "ssh"; };
+  applyMode();
+  const close = () => { stop(); closeModal(); };
+  const modal = h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && close() },
+    h("div", { class: "modal term-modal" + (store.get("termMax") === "1" ? " max" : "") },
+      h("h3", { class: "task-head" }, "💻 Terminal · " + (task.id ? "tarea #" + task.id : "configuración de la conexión"), h("span", { class: "spacer" }),
+        h("button", { class: "ghost max-btn", title: "Agranda la terminal para trabajar más cómodo", onclick: (e) => { const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("termMax", on ? "1" : "0"); e.currentTarget.textContent = on ? "⤡ Restaurar" : "⤢ Maximizar"; setTimeout(() => { try { fit?.fit(); } catch {} }, 80); } }, store.get("termMax") === "1" ? "⤡ Restaurar" : "⤢ Maximizar"),
+        h("button", { class: "ghost", onclick: close }, "✕")),
+      h("label", {}, "Conexión", mode),
+      agentBox,
+      sshBox,
+      h("div", { class: "row" },
+        h("button", { class: "primary", onclick: connect }, "▶ Conectar"),
+        h("button", { title: "Usa esta misma conexión en todos los demás proyectos del equipo", onclick: copyAll }, "📋 Usar en todos los proyectos")),
+      box,
+      h("small", { class: "hint" }, "Cada sesión queda anotada en el historial de la tarea. Se cierra sola a los 30 min sin uso.")));
+  closeModal(); S.open = null;
+  document.body.append(modal);
+}
+
+
+// ---------- vista Terminales: varias terminales SSH en paneles + estado de las IAs (solo owners) ----------
+const PANES = [];
+const ensureXterm = async () => { if (!window.Terminal) { await loadScript("xterm.js"); await loadScript("xterm-fit.js"); } };
+const tvSide = h("div", { class: "tv-side" });
+
+const openTerms = guard(async () => {
+  S.portfolio = false; S.terms = true;
+  S.tvProject = S.tvProject && S.projects.some((p) => p.id === S.tvProject) ? S.tvProject : (S.project?.id || S.projects[0]?.id);
+  await ensureXterm(); await loadTermTasks(); render(); startPanes();
+  clearInterval(openTerms.t); openTerms.t = setInterval(() => { if (!S.terms) return clearInterval(openTerms.t); loadTermTasks().catch(() => {}); }, 8000);
+});
+async function loadTermTasks() {
+  if (!S.tvProject) return;
+  S.tvTasks = await api("GET", `/api/projects/${S.tvProject}/tasks`);
+  refreshTermSide();
+}
+// estado de cada IA: lo que hace ahora, si te necesita o si terminó
+function aiState(t) {
+  if (/^🙋 Pedido de #/.test(t.title)) return t.status === "done" ? null : ["🙋", "te necesita", "need"];
+  if (t.status === "doing") return ["⚙️", "trabajando", "work"];
+  if (t.status === "todo") return ["⏳", "en cola", "wait"];
+  if (t.status === "done") return ["✅", "terminó", "done"];
+  return null;
+}
+function refreshTermSide() {
+  const bots = new Map((S.members || []).filter((m) => botInfo(m.username)).map((m) => [m.id, m]));
+  const rows = (S.tvTasks || []).map((t) => ({ t, st: aiState(t), who: bots.get(t.assignee_id) || (/^🙋/.test(t.title) ? null : null) }))
+    .filter((r) => r.st && (r.who || r.st[2] === "need"))
+    .sort((a, b) => ["need", "work", "wait", "done"].indexOf(a.st[2]) - ["need", "work", "wait", "done"].indexOf(b.st[2]))
+    .filter((r, i, all) => r.st[2] !== "done" || all.filter((x) => x.st[2] === "done").indexOf(r) < 5);
+  tvSide.replaceChildren(h("h3", {}, "🤖 IAs y su estado"), ...(
+    rows.length ? rows.map(({ t, st, who }) => h("button", { class: "tv-ai " + st[2], title: "Abrir una terminal ligada a esta tarea", onclick: () => addPane(t.project_id, t.id, `${who ? "🤖 " + who.username + (botInfo(who.username)?.model ? " · " + botInfo(who.username).model : "") : "🙋"} — #${t.id}`) },
+      h("span", { class: "tv-badge" }, st[0] + " " + st[1]), h("b", {}, who ? who.username : "pedido"), h("small", {}, `#${t.id} ${t.title}`)))
+      : [h("small", { class: "hint" }, "Ninguna IA con tareas en este proyecto.")]));
+}
+function termsView() {
+  const proj = h("select", { onchange: async (e) => { S.tvProject = +e.target.value; S.tvTasks = []; refreshTermSide(); await loadTermTasks().catch(() => {}); } },
+    S.projects.map((p) => h("option", { value: p.id, selected: p.id === S.tvProject }, p.name)));
+  const cols = h("select", { title: "Columnas del panel", onchange: (e) => { store.set("tvCols", e.target.value); render(); startPanes(); } },
+    [["0", "Auto"], ["1", "1 columna"], ["2", "2 columnas"], ["3", "3 columnas"]].map(([v, l]) => h("option", { value: v, selected: (store.get("tvCols") || "0") === v }, l)));
+  const n = PANES.length, c = +(store.get("tvCols") || 0) || (n <= 1 ? 1 : n <= 4 ? 2 : 3);
+  refreshTermSide();
+  return h("div", { class: "termsv" },
+    h("div", { class: "tv-bar" }, h("label", {}, "Proyecto ", proj), h("label", {}, "Vista ", cols),
+      h("button", { class: "primary", title: "Abre una terminal SSH nueva en la carpeta de este proyecto, sin crear tarea", onclick: () => addPane(S.tvProject, null, "💻 " + (S.projects.find((p) => p.id === S.tvProject)?.name || "terminal")) }, "+ Terminal"),
+      h("button", { class: store.get("tvZen") === "1" ? "on" : "", title: "Oculta el menú lateral y el panel del equipo para tener toda la pantalla para las terminales", onclick: () => { store.set("tvZen", store.get("tvZen") === "1" ? "0" : "1"); render(); startPanes(); } }, store.get("tvZen") === "1" ? "⛶ Mostrar barras" : "⛶ Ocultar barras"),
+      h("button", { class: store.get("tvSide") === "0" ? "on" : "", title: "Muestra u oculta la lista de IAs de la izquierda", onclick: () => { store.set("tvSide", store.get("tvSide") === "0" ? "1" : "0"); render(); startPanes(); } }, store.get("tvSide") === "0" ? "◧ Mostrar IAs" : "◧ Ocultar IAs"),
+      h("button", { title: "Cómo llega la terminal a la máquina de este proyecto: por el agente (recomendado) o por SSH", onclick: guard(() => openTerminal({ id: null, project_id: S.tvProject })) }, "⚙ Conexión"),
+      h("small", { class: "hint" }, "Hasta 8 a la vez. Lo que hagas queda anotado en .tm/ de la carpeta del proyecto para que la IA retome.")),
+    h("div", { class: "tv-body" }, store.get("tvSide") !== "0" && tvSide,
+      h("div", { class: "tv-grid", style: `--cols:${c}` }, PANES.length ? PANES.map((p) => p.el) : h("div", { class: "empty" }, "Tocá «+ Terminal» o elegí una IA de la izquierda."))));
+}
+async function addPane(pid, tid, title) {
+  if (PANES.length >= 8) return toast("Máximo 8 terminales abiertas", true);
+  try {
+    const c0 = await api("GET", `/api/projects/${pid}/ssh`); if (!c0.host && !c0.agent_id) { toast("Este proyecto todavía no tiene conexión a su máquina: configurala primero"); return openTerminal({ id: null, project_id: pid }); }
+  } catch (e) { return toast(e.message, true); }
+  const box = h("div", { class: "term-box" }), st = h("span", { class: "tv-st" }, "⏳");
+  const pane = { pid, tid, box, st, started: false };
+  pane.el = h("div", { class: "tv-pane" }, h("div", { class: "tv-head" }, st, h("b", {}, title), h("span", { class: "spacer" }),
+    h("button", { class: "ghost", title: "Agranda esta terminal a toda la pantalla (el mismo botón para volver)", onclick: (e) => { const on = pane.el.classList.toggle("full"); e.currentTarget.textContent = on ? "⤡" : "⤢"; setTimeout(() => { try { pane.fit?.fit(); pane.term?.focus(); } catch {} }, 80); } }, "⤢"),
+    h("button", { class: "ghost", title: "Cerrar esta terminal (guarda la nota .md)", onclick: () => closePane(pane) }, "✕")), box);
+  PANES.push(pane); render(); startPanes();
+}
+function closePane(p) { try { p.ws?.close(); } catch {} p.ro?.disconnect(); p.term?.dispose(); PANES.splice(PANES.indexOf(p), 1); p.el.remove(); render(); startPanes(); }
+function startPanes() {
+  requestAnimationFrame(() => PANES.forEach((p) => {
+    if (p.started || !p.el.isConnected) { try { p.fit?.fit(); } catch {} return; }
+    p.started = true;
+    const term = new Terminal({ cursorBlink: true, fontSize: 13, fontFamily: "monospace", theme: { background: "#0b0d14" } });
+    const fit = new FitAddon.FitAddon(); term.loadAddon(fit); term.open(p.box); fit.fit();
+    Object.assign(p, { term, fit });
+    const ws = new WebSocket(S.server.replace(/^http/, "ws") + `/api/projects/${p.pid}/term${p.tid ? "?task=" + p.tid : ""}`); p.ws = ws; ws.binaryType = "arraybuffer";
+    ws.onopen = () => { ws.send(JSON.stringify({ token: S.token, cols: term.cols, rows: term.rows })); p.st.textContent = "🟢"; };
+    ws.onmessage = (e) => {
+      if (typeof e.data !== "string") return term.write(new Uint8Array(e.data));
+      const m = JSON.parse(e.data);
+      if (m.error) term.write("\r\n\x1b[31m" + m.error + "\x1b[0m\r\n");
+      if (m.info) term.write("\x1b[33m" + m.info + "\x1b[0m\r\n");
+    };
+    ws.onclose = () => { p.st.textContent = "⚫"; term.write("\r\n\x1b[90m[sesión cerrada]\x1b[0m\r\n"); };
+    const enc = new TextEncoder();
+    term.onData((d) => ws.readyState === 1 && ws.send(enc.encode(d)));
+    term.onResize(({ cols, rows }) => ws.readyState === 1 && ws.send(JSON.stringify({ resize: [cols, rows] })));
+    p.ro = new ResizeObserver(() => { try { fit.fit(); } catch {} }); p.ro.observe(p.box);
+  }));
+}
+
+
+// ---------- cuadro para permitir un comando a una IA (con explicación de qué hace) ----------
+const CMD_HELP = [
+  ["cargo build", "Compila el proyecto Rust. Crea archivos en target/; no toca tu código."],
+  ["cargo check", "Revisa que el código compile sin generar el programa. Es rápido y seguro."],
+  ["cargo test", "Corre las pruebas del proyecto."],
+  ["cargo run", "Compila y EJECUTA el programa del proyecto."],
+  ["cargo fmt", "Reformatea el código (cambia archivos fuente)."],
+  ["cargo clippy", "Revisa el código buscando errores comunes. No cambia nada."],
+  ["cargo install", "Instala un programa en tu máquina."],
+  ["cargo publish", "⚠️ PUBLICA el crate en crates.io (público e irreversible)."],
+  ["git status", "Muestra qué archivos cambiaron. Solo lectura."],
+  ["git diff", "Muestra los cambios línea por línea. Solo lectura."],
+  ["git log", "Muestra el historial de commits. Solo lectura."],
+  ["git add", "Prepara archivos para el próximo commit."],
+  ["git commit", "Guarda un commit en el repositorio local."],
+  ["git push", "⚠️ Sube commits al repositorio remoto (visible para otros)."],
+  ["git pull", "Trae y mezcla cambios del remoto en tu carpeta."],
+  ["git checkout", "Cambia de rama o descarta cambios de archivos."],
+  ["git reset", "⚠️ Mueve o descarta commits y cambios."],
+  ["git stash", "Guarda cambios sin commitear en un cajón temporal."],
+  ["npm install", "Descarga las dependencias del proyecto (crea node_modules/)."],
+  ["npm run", "Ejecuta un script definido en package.json."],
+  ["npm test", "Corre las pruebas del proyecto."],
+  ["node --check", "Revisa la sintaxis de un archivo JavaScript sin ejecutarlo."],
+  ["node", "Ejecuta código JavaScript."],
+  ["python", "Ejecuta código Python."],
+  ["pip install", "Instala paquetes de Python."],
+  ["docker", "Maneja contenedores: puede crear, borrar o ejecutar cosas."],
+  ["systemctl", "⚠️ Inicia, detiene o reinicia servicios del sistema."],
+  ["make", "Ejecuta las tareas del Makefile del proyecto."],
+  ["curl", "Hace pedidos web; puede descargar o enviar datos a Internet."],
+  ["wget", "Descarga archivos de Internet."],
+  ["ssh", "Se conecta a otra máquina."],
+  ["tm-agent", "Comando del agente de este tablero (por ejemplo, pedir ayuda)."],
+  ["ls", "Lista los archivos de una carpeta. Solo lectura."],
+  ["cat", "Muestra el contenido de un archivo. Solo lectura."],
+  ["grep", "Busca texto dentro de archivos. Solo lectura."],
+  ["find", "Busca archivos por nombre o tipo. Solo lectura (salvo con -delete o -exec)."],
+  ["mkdir", "Crea carpetas."],
+  ["cp", "Copia archivos."],
+  ["mv", "Mueve o renombra archivos."],
+  ["rm", "⚠️ BORRA archivos. No hay papelera."],
+  ["chmod", "Cambia los permisos de archivos."],
+  ["sudo", "⚠️ Ejecuta con permisos de administrador: puede cambiar cualquier cosa del sistema."],
+];
+const RISKY = /\b(rm|sudo|dd|mkfs|chmod|chown|kill|pkill|reboot|shutdown)\b|push|publish|reset --hard|--force|-rf|\|\s*(sh|bash)|>\s*\/|systemctl/;
+function explainCmd(cmd) {
+  const c = cmd.trim().replace(/^Bash\((.*?)(:\*)?\)$/, "$1");
+  if (!c) return ["", false];
+  const hit = CMD_HELP.find(([k]) => c === k || c.startsWith(k + " ")) || CMD_HELP.find(([k]) => c.split(/\s+/)[0] === k.split(" ")[0]);
+  const risky = RISKY.test(c) || !!hit?.[1].startsWith("⚠️");
+  return [hit ? hit[1] : "No tengo una explicación para este comando: leelo bien antes de permitirlo, o preguntale a la IA qué necesita hacer.", risky];
+}
+function grantDialog(found, asked) {
+  return new Promise((resolve) => {
+    const cmd = h("input", { value: found[0] || "", maxLength: 200, placeholder: "ej.: cargo build" });
+    const why = h("div", { class: "gd-why" });
+    const scope = h("select", {}, h("option", { value: "once" }, "Solo esta vez (la próxima ejecución de esta tarea)"), h("option", { value: "always" }, "Siempre (todas las tareas de esta IA)"));
+    const upd = () => { const [t, risky] = explainCmd(cmd.value); why.className = "gd-why" + (risky ? " risky" : ""); why.textContent = t ? (risky && !t.startsWith("⚠️") ? "⚠️ Comando delicado. " : "") + t : "Escribí el comando que querés permitir."; };
+    cmd.addEventListener("input", upd); upd();
+    const done = (v) => { overlay.remove(); resolve(v); };
+    const ok = () => { if (!cmd.value.trim()) return cmd.focus(); done({ command: cmd.value.trim(), always: scope.value === "always" }); };
+    const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && done(null) },
+      h("div", { class: "modal small grant-dlg", onkeydown: (e) => { if (e.key === "Escape") { e.stopPropagation(); done(null); } else if (e.key === "Enter") { e.preventDefault(); ok(); } } },
+        h("h3", {}, "✅ Permitir un comando a la IA"),
+        asked && h("div", { class: "gd-ask" }, h("b", {}, "La IA pidió: "), asked.slice(0, 400)),
+        found.length > 1 && h("div", { class: "gd-chips" }, h("small", {}, "Comandos que mencionó: "), found.map((c) => h("button", { class: "ghost", onclick: () => { cmd.value = c; upd(); cmd.focus(); } }, c))),
+        h("label", {}, "Comando a permitir", cmd),
+        why,
+        h("small", { class: "hint" }, "Se permite con cualquier argumento (por ejemplo «cargo build» también deja pasar «cargo build --release»). Un comando que esté en la lista de prohibidos sigue prohibido."),
+        h("label", {}, "¿Por cuánto tiempo?", scope),
+        h("div", { class: "row" }, h("button", { onclick: () => done(null) }, "Cancelar"), h("button", { class: "primary", onclick: ok }, "✅ Permitir"))));
+    document.body.append(overlay); cmd.focus();
+  });
+}
+
+
+// ---------- consumo de las IAs: tokens, costo, horas y cuotas ----------
+const fmtTok = (n) => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + " M" : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + " k" : String(n);
+const fmtUsd = (n) => "$" + (n >= 100 ? n.toFixed(0) : n.toFixed(2));
+const fmtDur = (sec) => sec < 60 ? sec + " s" : sec < 3600 ? Math.round(sec / 60) + " min" : (sec / 3600).toFixed(1) + " h";
+const quotaBar = (used, quota) => quota > 0
+  ? h("div", { class: "qbar " + (used >= quota ? "over" : used >= quota * 0.8 ? "warn" : ""), title: `${fmtTok(used)} de ${fmtTok(quota)} tokens` }, h("i", { style: `width:${Math.min(100, (used / quota) * 100)}%` }))
+  : null;
+const usageLine = (u) => u ? `${fmtTok(u.tokens)} tokens · ${fmtUsd(u.cost_usd)} · ${fmtDur(u.seconds)} · ${u.runs} ejecuciones` : "—";
+
+const openUsage = guard(async () => {
+  if (!S.project) return;
+  const [pu, tu] = await Promise.all([api("GET", `/api/projects/${S.project.id}/usage`), api("GET", `/api/teams/${S.team.id}/usage`)]);
+  const pq = h("input", { type: "number", min: 0, step: 10000, value: pu.quota, disabled: !can("admin") });
+  const tq = h("input", { type: "number", min: 0, step: 10000, value: tu.team.quota, disabled: !can("owner") });
+  const saveQ = guard(async (kind) => {
+    if (kind === "p") await api("PUT", `/api/projects/${S.project.id}/quota`, { tokens: Math.max(0, +pq.value || 0) });
+    else await api("PUT", `/api/teams/${S.team.id}/quota`, { tokens: Math.max(0, +tq.value || 0) });
+    toast("Cuota guardada"); document.getElementById("modal")?.remove(); openUsage();
+  });
+  const modal = h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
+    h("div", { class: "modal usage-modal" },
+      h("h3", {}, "💰 Consumo de las IAs · " + S.project.name, h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: closeModal }, "✕")),
+      h("p", { class: "hint" }, "Los tokens son los frescos (entrada + salida + creación de caché). El costo y las horas vienen de lo que informa cada IA al terminar. Sin informe (IAs que no devuelven el gasto) solo se cuentan las horas."),
+      h("h4", {}, "Este mes · proyecto"), h("div", {}, usageLine(pu.month)), quotaBar(pu.month.tokens, pu.quota),
+      h("label", {}, "Cuota mensual del proyecto (tokens, 0 = sin límite)", h("div", { class: "row" }, pq, can("admin") && h("button", { class: "primary", onclick: () => saveQ("p") }, "Guardar"))),
+      h("h4", {}, "Este mes · todo el equipo «" + S.team.name + "»"), h("div", {}, usageLine(tu.team)), quotaBar(tu.team.tokens, tu.team.quota),
+      h("label", {}, "Cuota mensual del equipo (tokens, 0 = sin límite)", h("div", { class: "row" }, tq, can("owner") && h("button", { class: "primary", onclick: () => saveQ("t") }, "Guardar"))),
+      h("h4", {}, "Por IA este mes (en este proyecto)"),
+      pu.by_ai.length ? h("table", { class: "usage-tbl" }, h("tr", {}, ["IA", "Tokens", "Costo", "Horas", "Ejec."].map((x) => h("th", {}, x))),
+        pu.by_ai.map((a) => h("tr", {}, h("td", {}, "🤖 " + a.name, a.model && h("small", { class: "inl" }, " · " + a.model)), h("td", {}, fmtTok(a.tokens)), h("td", {}, fmtUsd(a.cost_usd)), h("td", {}, fmtDur(a.seconds)), h("td", {}, a.runs))))
+        : h("small", { class: "hint" }, "Todavía no hay ejecuciones este mes."),
+      h("h4", {}, "Total histórico del proyecto"), h("div", {}, usageLine(pu.total)),
+      h("small", { class: "hint" }, "Cuando una cuota se agota, las IAs no empiezan tareas nuevas y avisan en la tarea. Se reinicia el día 1 de cada mes (UTC).")));
+  document.body.append(modal);
+});
+
+// bloque «Tokens a gastar» del detalle de la tarea: tope, estimación y lo gastado
+function budgetBox(task, titleEl, descEl) {
+  const inp = h("input", { type: "number", min: 0, step: 1000, value: 0, style: "max-width:160px" });
+  const spent = h("small", { class: "hint" }, "");
+  const basis = h("small", { class: "hint" }, "");
+  api("GET", `/api/tasks/${task.id}/usage`).then((u) => { inp.value = u.budget; spent.textContent = u.runs ? `Gastó ${usageLine(u)}` : "Todavía no gastó nada."; }).catch(() => {});
+  const est = guard(async () => {
+    const r = await api("POST", `/api/projects/${task.project_id}/estimate`, { title: titleEl.value, description: descEl.value });
+    inp.value = Math.round(r.tokens / 1000) * 1000 || r.tokens;
+    basis.textContent = r.basis === "historial" ? `Estimación: promedio de las últimas ${r.runs} ejecuciones de este proyecto.` : "Estimación a ojo según el largo del pedido (todavía no hay historial en este proyecto): es solo una guía.";
+  });
+  const save = guard(async () => { await api("PUT", `/api/tasks/${task.id}/budget`, { tokens: Math.max(0, +inp.value || 0) }); toast(+inp.value > 0 ? "Tope guardado" : "Sin tope"); });
+  return h("div", { class: "budget-box" },
+    h("label", {}, "🪙 Tokens a gastar (tope; 0 = sin tope)",
+      h("div", { class: "row" }, inp, h("button", { title: "Calcula cuántos tokens podría gastar la IA en esta tarea, según el historial del proyecto", onclick: est }, "🧮 Estimar"), h("button", { class: "primary", onclick: save }, "Guardar tope"))),
+    basis, spent);
+}

@@ -20,6 +20,9 @@ Rust TUI Manager is a **command board**: one place where you see and direct seve
 10. [When an AI needs you to do something](#10-when-an-ai-needs-you-to-do-something)
 11. [Language, tooltips and this manual](#11-language-tooltips-and-this-manual)
 12. [Set up the server's email](#12-set-up-the-servers-email)
+13. [Allow commands from the task](#13-allow-commands-from-the-task)
+14. [Terminal in the browser](#14-terminal-in-the-browser)
+15. [Usage and quotas](#15-usage-and-quotas)
 
 ---
 
@@ -219,6 +222,30 @@ Then: `systemctl --user daemon-reload && systemctl --user restart tm-server`. If
 **Test it**: *Settings → My email*, type your address and the 6-digit code should arrive. If it does not, check the server log (`journalctl --user -u tm-server -n 50`): a rejected password or a blocked port shows up there.
 
 > Gmail and other free services limit sending (Gmail, about 500 per day) and rewrite the sender. Fine to start; with many users, use a sending service with your own domain.
+
+## 13. Allow commands from the task
+
+When an AI asks for a command, open the request task and press **✅ Allow command…**. The dialog shows the command, **explains what it does** (red warning if dangerous) and lets you pick **once** or **always**. You can also write `/permitir cmd` (once) or `/permitir siempre cmd` (owners and admins only) in a comment. The AI receives the permissions in `TM_ALLOW` and resumes the task.
+
+![Allow command](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-16-permitir.png)
+
+## 14. Terminal in the browser
+
+Owners only. The task's **💻 Terminal** button opens a console in the project folder. Two ways to connect it (chosen per project):
+
+- **Through the agent** (recommended): run `tm-agent` with `TM_AGENT_TERMINAL=1` on the project machine. The connection starts from that machine: no keys, no open ports, works behind NAT.
+- **SSH with a key**: the app generates an ed25519 key (**🔑 Generate key**) and installs it with **🔐 Install key with password** (the password is not stored). The server fingerprint is pinned the first time and rejected if it changes.
+
+Each session leaves a 📝 comment and a `.tm/terminal-tarea-N.md` note in the project folder, which the AI reads when it resumes. In the menu, **🖥️ Terminals** shows up to 8 panes and each AI's state (🙋 needs you · ⚙️ working · ⏳ queued · ✅ done).
+
+![Terminals view](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-14-terminales.png)
+
+## 15. Usage and quotas
+
+**💰 Usage** shows tokens, cost and hours per AI and task, with **quota** bars for team, project and task. On a task, **🪙 Tokens to spend** sets a cap and **🧮 Estimate** suggests a value from history. The quota is checked **before** each run: if it is short, the AI does not start and says so in a comment. To cut off in dollars use `TM_AGENT_MAX_USD` on the agent (1 USD or more). The Portfolio adds up the month's usage.
+
+![Usage](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-15-consumo.png)
+![Token cap](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-17-tokens.png)
 
 ---
 

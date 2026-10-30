@@ -12,6 +12,8 @@ mod telegram;
 mod web;
 mod profile;
 mod routes;
+mod term;
+mod usage;
 mod ws;
 
 use axum::{
@@ -102,6 +104,11 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE users ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE team_members ADD COLUMN executor INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN deny TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN allow TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE ssh_targets ADD COLUMN agent_id INTEGER",
+        "ALTER TABLE projects ADD COLUMN token_quota INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE teams ADD COLUMN token_quota INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE tasks ADD COLUMN token_budget INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE tasks ADD COLUMN position REAL NOT NULL DEFAULT 0",
     ] {
         let _ = sqlx::query(alter).execute(db).await;
@@ -188,7 +195,7 @@ async fn main() -> anyhow::Result<()> {
     extras::spawn_reminders(state.clone());
     google::spawn_sync(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(teampanel::router()).merge(bots::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

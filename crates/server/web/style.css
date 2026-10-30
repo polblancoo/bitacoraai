@@ -350,3 +350,50 @@ ol.guide pre { margin: 4px 0; }
 .reqpanel h3 { margin: 0; }
 .reqpanel textarea { width: 100%; }
 .reqpanel .cmdbox code { user-select: all; }
+
+/* terminal SSH integrada */
+.term-modal{width:min(1100px,96vw);max-width:96vw}
+.term-box{background:#0b0d14;border-radius:8px;padding:6px;height:min(60vh,520px);overflow:hidden}
+.term-cfg{display:grid;grid-template-columns:2fr 1fr 1.2fr;gap:8px;margin:8px 0}
+.term-cfg .wide{grid-column:1/-1}
+.term-key{font-family:monospace;font-size:12px;word-break:break-all;background:var(--panel2,#1a1d2b);padding:6px;border-radius:6px;user-select:all}
+
+/* vista Terminales (multiplexor) */
+.termsv{display:flex;flex-direction:column;gap:8px;height:calc(100vh - 110px)}
+.tv-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tv-body{display:flex;gap:10px;flex:1;min-height:0}
+.tv-side{width:260px;flex:none;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.tv-ai{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:8px;border-left:4px solid #888}
+.tv-ai small{opacity:.75;white-space:normal}
+.tv-ai.need{border-left-color:#e5484d}.tv-ai.work{border-left-color:#f5a524}.tv-ai.wait{border-left-color:#6e7681}.tv-ai.done{border-left-color:#30a46c}
+.tv-badge{font-size:12px}
+.tv-grid{flex:1;display:grid;grid-template-columns:repeat(var(--cols,1),minmax(0,1fr));gap:8px;overflow:auto;align-content:start}
+.tv-pane{display:flex;flex-direction:column;background:#0b0d14;border-radius:8px;min-height:300px;height:calc((100vh - 140px) / 2);overflow:hidden}
+.tv-pane .term-box{flex:1;height:auto;padding:4px}
+.tv-head{display:flex;gap:6px;align-items:center;padding:4px 8px;background:#161a28;color:#c0caf5;font-size:13px}
+
+/* cuadro «Permitir un comando» */
+.grant-dlg{width:min(560px,94vw)}
+.gd-ask{background:var(--panel2,#1a1d2b);padding:8px;border-radius:6px;margin:6px 0;font-size:13px;white-space:pre-wrap}
+.gd-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.gd-chips button{font-family:monospace;font-size:12px}
+.gd-why{margin:6px 0;padding:8px;border-radius:6px;background:rgba(48,164,108,.15);font-size:13px}
+.gd-why.risky{background:rgba(229,72,77,.18)}
+
+.shell.tv-zen{grid-template-columns:1fr}
+.shell.tv-zen aside,.shell.tv-zen .team-panel{display:none}
+.tv-pane.full{position:fixed;inset:8px;z-index:60;height:auto;min-height:0;box-shadow:0 0 0 9999px #000a}
+.modal.term-modal.max{width:98vw;max-width:98vw;height:96vh;max-height:96vh}
+.modal.term-modal.max .term-box{height:calc(96vh - 290px)}
+.tv-bar button.on{background:var(--accent,#7aa2f7);color:#0b0d14}
+
+/* consumo y cuotas */
+.usage-modal{width:min(720px,95vw)}
+.usage-modal h4{margin:14px 0 4px}
+.usage-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.usage-tbl th,.usage-tbl td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--line,#2a2e42)}
+.qbar{height:8px;border-radius:6px;background:var(--bg2,#1a1d2b);overflow:hidden;margin:4px 0}
+.qbar i{display:block;height:100%;background:#30a46c}
+.qbar.warn i{background:#f5a524}.qbar.over i{background:#e5484d}
+.pf-usage{margin:6px 0}
+.budget-box{margin:8px 0}

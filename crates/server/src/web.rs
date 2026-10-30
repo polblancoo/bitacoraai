@@ -12,6 +12,9 @@ const INDEX: &str = include_str!("../web/index.html");
 const APP_JS: &str = include_str!("../web/app.js");
 const I18N_JS: &str = include_str!("../web/i18n.js");
 const CANVAS_JS: &str = include_str!("../web/canvas.js");
+const XTERM_JS: &str = include_str!("../web/xterm.js");
+const XTERM_FIT: &str = include_str!("../web/xterm-fit.js");
+const XTERM_CSS: &str = include_str!("../web/xterm.css");
 const STYLE: &str = include_str!("../web/style.css");
 const MANIFEST: &str = include_str!("../web/manifest.webmanifest");
 const SW: &str = include_str!("../web/sw.js");
@@ -51,6 +54,9 @@ pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
         .route("/manual/img/{name}", get(manual_img))
         .route("/i18n.js", get(|| async { asset("text/javascript; charset=utf-8", I18N_JS) }))
         .route("/canvas.js", get(|| async { asset("text/javascript; charset=utf-8", CANVAS_JS) }))
+        .route("/xterm.js", get(|| async { asset("text/javascript; charset=utf-8", XTERM_JS) }))
+        .route("/xterm-fit.js", get(|| async { asset("text/javascript; charset=utf-8", XTERM_FIT) }))
+        .route("/xterm.css", get(|| async { asset("text/css; charset=utf-8", XTERM_CSS) }))
         .route("/style.css", get(|| async { asset("text/css; charset=utf-8", STYLE) }))
         .route("/manifest.webmanifest", get(|| async { asset("application/manifest+json", MANIFEST) }))
         .route("/sw.js", get(|| async { asset("text/javascript; charset=utf-8", SW) }))

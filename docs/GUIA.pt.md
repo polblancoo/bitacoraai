@@ -20,6 +20,9 @@ O Rust TUI Manager é um **painel de comando**: um lugar onde você vê e dirige
 10. [Quando uma IA precisa que você faça algo](#10-quando-uma-ia-precisa-que-você-faça-algo)
 11. [Idioma, tooltips e este manual](#11-idioma-tooltips-e-este-manual)
 12. [Configurar o email do servidor](#12-configurar-o-email-do-servidor)
+13. [Permitir comandos pela tarefa](#13-permitir-comandos-pela-tarefa)
+14. [Terminal no navegador](#14-terminal-no-navegador)
+15. [Consumo e cotas](#15-consumo-e-cotas)
 
 ---
 
@@ -219,6 +222,30 @@ Depois: `systemctl --user daemon-reload && systemctl --user restart tm-server`. 
 **Testar**: *Configurações → Meu email*, digite seu endereço e o código de 6 dígitos deve chegar. Se não chegar, veja o log do servidor (`journalctl --user -u tm-server -n 50`): uma senha rejeitada ou uma porta bloqueada aparece ali.
 
 > Gmail e outros serviços gratuitos limitam os envios (Gmail, uns 500 por dia) e reescrevem o remetente. Serve para começar; com muitos usuários, use um serviço de envio com domínio próprio.
+
+## 13. Permitir comandos pela tarefa
+
+Quando uma IA pede um comando, abra a tarefa de pedido e toque em **✅ Permitir comando…**. A caixa mostra o comando, **explica o que ele faz** (aviso vermelho se for perigoso) e deixa escolher **uma vez** ou **sempre**. Também dá para escrever `/permitir cmd` (uma vez) ou `/permitir siempre cmd` (só owners e admins) num comentário. A IA recebe as permissões em `TM_ALLOW` e retoma a tarefa.
+
+![Permitir comando](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-16-permitir.png)
+
+## 14. Terminal no navegador
+
+Só para **owners**. O botão **💻 Terminal** da tarefa abre um console na pasta do projeto. Há dois jeitos de conectar (escolhido por projeto):
+
+- **Pelo agente** (recomendado): rode `tm-agent` com `TM_AGENT_TERMINAL=1` na máquina do projeto. A conexão sai dessa máquina: sem chaves nem portas abertas, funciona atrás de NAT.
+- **SSH com chave**: o app gera uma chave ed25519 (**🔑 Gerar chave**) e a instala com **🔐 Instalar chave com senha** (a senha não é guardada). A impressão digital do servidor é fixada na primeira vez e, se mudar, é rejeitada.
+
+Cada sessão deixa um comentário 📝 e uma nota `.tm/terminal-tarea-N.md` na pasta do projeto, que a IA lê ao retomar. No menu, **🖥️ Terminais** mostra até 8 painéis e o estado de cada IA (🙋 precisa de você · ⚙️ trabalhando · ⏳ na fila · ✅ terminou).
+
+![Vista Terminais](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-14-terminales.png)
+
+## 15. Consumo e cotas
+
+**💰 Consumo** mostra tokens, custo e horas por IA e por tarefa, com barras de **cota** da equipe, do projeto e da tarefa. Numa tarefa, **🪙 Tokens a gastar** define um teto e **🧮 Estimar** sugere um valor pelo histórico. A cota é verificada **antes** de cada execução: se faltar, a IA não começa e avisa num comentário. Para cortar em dólares use `TM_AGENT_MAX_USD` no agente (1 USD ou mais). O Portfólio soma o consumo do mês.
+
+![Consumo](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-15-consumo.png)
+![Teto de tokens](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-17-tokens.png)
 
 ---
 
