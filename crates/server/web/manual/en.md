@@ -266,8 +266,8 @@ The **bar** on top appears with more than 3 people or 2 AIs, or if you declare i
 | Plan | Includes | List price | Founder price |
 |---|---|---|---|
 | **Free** (AGPL) | up to 3 people and 2 AIs, no notice | USD 0 | — |
-| **Team** | up to 10 people and 10 AIs | (see the purchase screen) | **USD 290 for life** |
-| **Company** | up to 50 people and 50 AIs, with support | (see the purchase screen) | — |
+| **Team** | up to 10 people and 10 AIs | **USD 290** | **USD 290 for life** (first 5) |
+| **Company** | up to 50 people and 50 AIs, with support | **USD 990** | — |
 
 - **🎖 Founder price:** the **first 5 customers** pay the founder price and keep it **for life** on renewals. The app shows it by itself while spots remain.
 - **If you grow:** if, with a valid license, you go over your plan's people or AIs, the app tells you and **⬆ Upgrade plan** appears: you pay only the **difference** between the new plan's price and what you already paid, and your expiry date does not change.

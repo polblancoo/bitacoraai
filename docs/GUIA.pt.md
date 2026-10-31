@@ -268,8 +268,8 @@ O **aviso** no topo aparece com mais de 3 pessoas ou 2 IAs, ou se você declarar
 | Plano | Inclui | Preço de tabela | Preço fundador |
 |---|---|---|---|
 | **Grátis** (AGPL) | até 3 pessoas e 2 IAs, sem aviso | USD 0 | — |
-| **Equipe** | até 10 pessoas e 10 IAs | (veja a tela de compra) | **USD 290 para sempre** |
-| **Empresa** | até 50 pessoas e 50 IAs, com suporte | (veja a tela de compra) | — |
+| **Equipe** | até 10 pessoas e 10 IAs | **USD 290** | **USD 290 para sempre** (primeiros 5) |
+| **Empresa** | até 50 pessoas e 50 IAs, com suporte | **USD 990** | — |
 
 - **🎖 Preço fundador:** os **primeiros 5 clientes** pagam o preço fundador e o mantêm **para sempre** nas renovações. O app mostra sozinho enquanto restarem vagas.
 - **Se você crescer:** se, com uma licença vigente, você passar das pessoas ou IAs do plano, o app avisa e aparece **⬆ Melhorar o plano**: você paga só a **diferença** entre o preço do plano novo e o que já pagou, e o vencimento não muda.

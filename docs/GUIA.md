@@ -268,8 +268,8 @@ El **cartel** de arriba aparece cuando hay más de 3 personas o 2 IAs, o si lo d
 | Plan | Incluye | Precio de lista | Precio fundador |
 |---|---|---|---|
 | **Gratis** (AGPL) | hasta 3 personas y 2 IAs, sin aviso | USD 0 | — |
-| **Equipo** | hasta 10 personas y 10 IAs | (ver pantalla de compra) | **USD 290 de por vida** |
-| **Empresa** | hasta 50 personas y 50 IAs, con soporte | (ver pantalla de compra) | — |
+| **Equipo** | hasta 10 personas y 10 IAs | **USD 290** | **USD 290 de por vida** (primeros 5) |
+| **Empresa** | hasta 50 personas y 50 IAs, con soporte | **USD 990** | — |
 
 - **🎖 Precio fundador:** los **primeros 5 clientes** pagan el precio fundador y lo conservan **de por vida** en las renovaciones. La app te lo muestra sola si todavía quedan cupos.
 - **Si crecés:** si con una licencia vigente superás las personas o IAs del plan, la app lo avisa y aparece **⬆ Mejorar el plan**: pagás solo la **diferencia** entre el precio del plan nuevo y lo que ya pagaste, y tu vencimiento no cambia.
