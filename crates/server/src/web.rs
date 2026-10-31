@@ -23,6 +23,8 @@ const MANUAL_EN: &str = include_str!("../web/manual/en.md");
 const MANUAL_PT: &str = include_str!("../web/manual/pt.md");
 const ICON_192: &[u8] = include_bytes!("../web/icon-192.png");
 const ICON_512: &[u8] = include_bytes!("../web/icon-512.png");
+const FAVICON_ICO: &[u8] = include_bytes!("../web/favicon.ico");
+const FAVICON_SVG: &str = include_str!("../web/favicon.svg");
 
 fn bytes(mime: &'static str, body: &'static [u8]) -> Response {
     ([(header::CONTENT_TYPE, mime)], body).into_response()
@@ -62,6 +64,8 @@ pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
         .route("/sw.js", get(|| async { asset("text/javascript; charset=utf-8", SW) }))
         .route("/icon-192.png", get(|| async { bytes("image/png", ICON_192) }))
         .route("/icon-512.png", get(|| async { bytes("image/png", ICON_512) }))
+        .route("/favicon.ico", get(|| async { bytes("image/x-icon", FAVICON_ICO) }))
+        .route("/favicon.svg", get(|| async { asset("image/svg+xml", FAVICON_SVG) }))
         .layer(set(header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
         .layer(set(header::X_FRAME_OPTIONS, "DENY"))
         .layer(set(header::REFERRER_POLICY, "no-referrer"))

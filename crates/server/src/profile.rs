@@ -69,7 +69,7 @@ async fn set_email(State(st): State<AppState>, user: AuthUser, Json(b): Json<Set
         .execute(&st.db)
         .await?;
     let sent = mailer
-        .send(&email, "[Rust TUI Manager] Código de verificación", format!("Tu código de verificación es {code}. Vence en 15 minutos.\n\nSi no lo pediste, ignorá este mensaje."))
+        .send(&email, &format!("[{}] Código de verificación", crate::notify::APP_NAME), format!("Tu código de verificación es {code}. Vence en 15 minutos.\n\nSi no lo pediste, ignorá este mensaje."))
         .await;
     if let Err(e) = sent {
         tracing::warn!("verificación de email: {e}");

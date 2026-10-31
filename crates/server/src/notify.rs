@@ -1,7 +1,8 @@
 //! Novedades dentro de la app y emails por SMTP (opcional).
 use crate::{limits, AppState};
 use lettre::{
-    message::Mailbox, transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message,
+    message::{header, header::ContentType, Mailbox, MultiPart, SinglePart},
+    transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message,
     Tokio1Executor,
 };
 use sqlx::Row;
@@ -43,14 +44,40 @@ impl Mailer {
 
     pub async fn send(&self, to: &str, subject: &str, body: String) -> Result<(), String> {
         let to: Mailbox = to.parse().map_err(|e| format!("destinatario inválido: {e}"))?;
+        // texto plano + HTML con encabezado de la marca (el logo va dentro del mensaje, sin descargar nada)
+        let logo = SinglePart::builder().header(ContentType::parse("image/png").map_err(|e| e.to_string())?).header(header::ContentDisposition::inline()).header(header::ContentId::from("<logo>".to_string())).body(LOGO.to_vec());
+        let html = SinglePart::html(html_body(&body));
         let msg = Message::builder()
             .from(self.from.clone())
             .to(to)
             .subject(subject)
-            .body(body)
+            .multipart(MultiPart::alternative().singlepart(SinglePart::plain(body)).multipart(MultiPart::related().singlepart(html).singlepart(logo)))
             .map_err(|e| e.to_string())?;
         self.transport.send(msg).await.map(|_| ()).map_err(|e| e.to_string())
     }
+}
+
+/// Nombre de la app en lo que se ve (pantallas, correos y avisos). Los repositorios y los paquetes conservan su nombre.
+pub const APP_NAME: &str = "Factory App";
+const LOGO: &[u8] = include_bytes!("../web/icon-192.png");
+
+fn esc(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+/// Cuerpo HTML del correo: banda con el logo y el nombre, y el texto del aviso respetando los saltos de línea.
+fn html_body(text: &str) -> String {
+    format!(
+        "<!doctype html><html><body style=\"margin:0;background:#f3f4f8;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif\">\
+         <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td align=\"center\" style=\"padding:24px 12px\">\
+         <table role=\"presentation\" width=\"560\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:100%;background:#ffffff;border-radius:12px;overflow:hidden\">\
+         <tr><td style=\"background:#1a1b26;padding:16px 22px\"><img src=\"cid:logo\" width=\"36\" height=\"36\" alt=\"\" style=\"vertical-align:middle;border-radius:8px\"> \
+         <span style=\"color:#ffffff;font-size:18px;font-weight:600;vertical-align:middle;margin-left:8px\">{APP_NAME}</span></td></tr>\
+         <tr><td style=\"padding:22px;color:#1f2330;font-size:15px;line-height:1.5;white-space:pre-wrap\">{}</td></tr>\
+         <tr><td style=\"padding:12px 22px;background:#f3f4f8;color:#6b7280;font-size:12px\">{APP_NAME}</td></tr>\
+         </table></td></tr></table></body></html>",
+        esc(text)
+    )
 }
 
 /// Valida un email de forma conservadora (sin espacios, con un `@`, dominio con punto, sin saltos de línea).
@@ -151,9 +178,9 @@ pub async fn notify_via(st: &AppState, user: Id, kind: &str, team: Option<Id>, t
         return;
     }
     let to: String = row.get("email");
-    let subject = format!("[Rust TUI Manager] {}", text.lines().next().unwrap_or("").chars().take(80).collect::<String>());
+    let subject = format!("[{APP_NAME}] {}", text.lines().next().unwrap_or("").chars().take(80).collect::<String>());
     tokio::spawn(async move {
-        if let Err(e) = mailer.send(&to, &subject, format!("{text}\n\n— Rust TUI Manager")).await {
+        if let Err(e) = mailer.send(&to, &subject, format!("{text}\n\n— {APP_NAME}")).await {
             tracing::warn!("no se pudo enviar el email: {e}");
         }
     });

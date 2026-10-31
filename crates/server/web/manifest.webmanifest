@@ -1,7 +1,7 @@
 {
-  "name": "Rust TUI Manager",
-  "short_name": "TUI Manager",
-  "description": "Gestor de tareas colaborativo: tablero, calendario, Gantt y pizarra",
+  "name": "Factory App",
+  "short_name": "Factory App",
+  "description": "Personas e IAs trabajando juntas: tareas, consumo de tokens y tareas programadas",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

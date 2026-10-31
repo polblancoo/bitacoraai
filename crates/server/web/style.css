@@ -404,3 +404,24 @@ ol.guide pre { margin: 4px 0; }
 .lic-qr{background:#fff;padding:8px;border-radius:8px;width:236px;height:236px}.lic-qr svg{width:100%;height:100%}
 
 .sched-list{display:grid;gap:8px}.sched-row{display:grid;gap:4px;padding:10px;border:1px solid var(--line);border-radius:10px}.sched-row.off{opacity:.6}
+
+.modal.term-modal.cfg-hidden .term-box{height:min(calc(60vh + 170px),700px)}
+.modal.term-modal.max.cfg-hidden .term-box{height:calc(96vh - 130px)}
+.term-tools{gap:8px;margin:6px 0}
+
+.brand { display: flex; align-items: center; }
+.brand .side-toggle { margin-left: auto; padding: 2px 8px; }
+.shell.side-off { grid-template-columns: 46px 1fr; }
+.shell.side-off.with-panel { grid-template-columns: 46px 1fr 330px; }
+.shell.side-off aside { padding: 10px 6px; align-items: center; overflow: hidden; }
+.shell.side-off aside > :not(.brand) { display: none; }
+.shell.side-off .brand { flex-direction: column; gap: 10px; }
+.shell.side-off .brand .brand-name { display: none; }
+.shell.side-off .brand .side-toggle { margin: 0; }
+
+.askbox { background: rgba(0,0,0,.18); border-radius: 8px; padding: 8px 10px; }
+.cmdbox.big { background: #0b0d14; border: 1px solid var(--accent, #7aa2f7); padding: 10px 12px; }
+.cmdbox.big code { font-size: 1.05em; font-weight: 600; color: #c8e1ff; }
+.modal { resize: both; }
+.modal.xmax { width: 96vw; max-width: 96vw; height: 94vh; max-height: 94vh; }
+.modal .xbtn { padding: 2px 8px; }

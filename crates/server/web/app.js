@@ -11,12 +11,14 @@ const ROLES = [["viewer", "Lector"], ["member", "Miembro"], ["admin", "Admin"], 
 const RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
 const AVATAR = ["#7aa2f7", "#bb9af7", "#9ece6a", "#e0af68", "#f7768e", "#7dcfff"];
 
+const APP_NAME = "Factory App";
 const store = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
 };
 
 const S = {
+  sideOff: store.get("sideOff") === "1",
   panel: store.get("panel") === "1", overview: null,
   // servida por tm-server (web): el servidor es el propio origen; en Tauri se elige a mano
   server: /^https?:$/.test(location.protocol) && location.hostname !== "tauri.localhost" ? location.origin : store.get("server") || "http://127.0.0.1:7878",
@@ -685,7 +687,7 @@ const openTeam = guard(async () => {
         const msg = inviteMessage(r.code);
         inv.replaceChildren(h("code", {}, r.code), h("button", { onclick: () => navigator.clipboard?.writeText(r.code).then(() => toast("Código copiado")) }, "Copiar"),
           h("button", { title: "Texto listo para pegar en WhatsApp, Telegram, etc.", onclick: () => navigator.clipboard?.writeText(msg).then(() => toast("Invitación copiada: pegala en un chat")) }, "Copiar invitación"),
-          h("a", { class: "btnlike", href: `mailto:?subject=${encodeURIComponent("Invitación a Rust TUI Manager")}&body=${encodeURIComponent(msg)}` }, "Enviar por email"),
+          h("a", { class: "btnlike", href: `mailto:?subject=${encodeURIComponent("Invitación a " + APP_NAME)}&body=${encodeURIComponent(msg)}` }, "Enviar por email"),
           h("small", {}, "Se muestra una sola vez · vence en 7 días · 10 usos"),
           /localhost|127\.0\.0\.1/.test(S.server) && h("small", { class: "warn" }, "Ojo: tu servidor es local (" + S.server + "); para que otra persona entre, tiene que ser una dirección que ella alcance."));
       }) }, "Generar código")),
@@ -785,7 +787,7 @@ function teamPanel() {
 }
 const RELEASES_URL = "https://github.com/polblancoo/Rust_tuiManager/releases/latest";
 const inviteMessage = (code) => [
-  `Te invito al equipo «${S.team.name}» en Rust TUI Manager.`,
+  `Te invito al equipo «${S.team.name}» en ${APP_NAME}.`,
   "",
   `1. Instalá la app (Linux .deb/.rpm/AppImage): ${RELEASES_URL}`,
   `   o abrila directo en el navegador: ${S.server}`,
@@ -980,8 +982,14 @@ const openTask = guard(async (task) => {
       await api("POST", `/api/tasks/${task.id}/grant`, { command: r.command, always: r.always });
       await reply(`✅ Autorizado: \`${r.command}\` (${r.always ? "siempre" : "una vez"}). La IA lo puede usar en su próxima ejecución.`, true);
     });
+    // lo que pide la IA, con los comandos mencionados resaltados y listos para copiar
+    const askText = (cur().description.match(/LO QUE PIDE\n([\s\S]*?)\n\n/) || [])[1] || "";
+    const askCmds = [...new Set([...askText.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]).concat([...askText.matchAll(/'([a-z][^'\n]*\s[^'\n]*)'/g)].map((m) => m[1])))].map((c) => c.trim()).filter(Boolean);
     return h("div", { class: "reqpanel" },
       h("h3", {}, "🙋 Pedido de una IA"),
+      askText && h("div", { class: "askbox" }, h("b", {}, "Lo que pide la IA"), h("p", { style: "white-space:pre-wrap;margin:4px 0" }, askText),
+        askCmds.map((cmd) => h("div", { class: "cmdbox big" }, h("code", {}, cmd),
+          h("button", { title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar")))),
       cmds.length > 0 && h("div", {}, h("b", {}, "1. Copiá y ejecutá en tu terminal:"),
         cmds.map((cmd) => h("div", { class: "cmdbox" }, h("code", {}, cmd),
           h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar")))),
@@ -1058,7 +1066,7 @@ function loginView() {
   };
   pass.addEventListener("keydown", (e) => e.key === "Enter" && go());
   return h("div", { class: "login" }, h("div", { class: "login-card" },
-    h("h1", {}, "Rust TUI Manager"),
+    h("h1", {}, h("img", { src: "icon-192.png", alt: "", width: 56, height: 56, style: "vertical-align:middle;margin-right:10px;border-radius:12px" }), APP_NAME),
     h("label", {}, "Servidor", srv), h("label", {}, "Usuario", user), h("label", {}, "Contraseña", pass),
     err,
     h("button", { class: "primary", onclick: go }, S.register ? "Crear cuenta" : "Entrar"),
@@ -1152,11 +1160,13 @@ function calendarView() {
         }, t.title))))));
 }
 
+const toggleSide = () => { S.sideOff = !S.sideOff; store.set("sideOff", S.sideOff ? "1" : "0"); render(); setTimeout(() => window.dispatchEvent(new Event("resize")), 50); };
 function appView() {
   const search = h("input", { placeholder: "Buscar…", value: S.query, oninput: (e) => { S.query = e.target.value; render(true); } });
-  return h("div", { class: "shell" + (S.panel && S.team ? " with-panel" : "") + (S.terms && store.get("tvZen") === "1" ? " tv-zen" : "") },
+  return h("div", { class: "shell" + (S.sideOff ? " side-off" : "") + (S.panel && S.team ? " with-panel" : "") + (S.terms && store.get("tvZen") === "1" ? " tv-zen" : "") },
     h("aside", {},
-      h("div", { class: "brand" }, "▣ Rust TUI Manager"),
+      h("div", { class: "brand" }, h("img", { src: "icon-192.png", alt: "", width: 22, height: 22, style: "vertical-align:middle;margin-right:6px;border-radius:5px" }), h("span", { class: "brand-name" }, APP_NAME),
+        h("button", { class: "ghost side-toggle", title: S.sideOff ? "Mostrar la barra lateral" : "Ocultar la barra lateral (queda una franja para volver a abrirla)", onclick: toggleSide }, S.sideOff ? "»" : "«")),
       h("div", {}, h("h2", {}, "Equipos", h("span", {}, S.team && h("button", { class: "ghost", onclick: () => { S.panel = true; store.set("panel", "1"); loadOverview(); setTimeout(() => document.querySelector(".tp-sec:last-child")?.scrollIntoView(), 400); }, title: "Editar o eliminar el equipo actual (ajustes en el panel de la derecha)" }, "⚙"), h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
         h("div", { class: "nav" }, S.teams.map((t) => h("button", { class: t.id === S.team?.id ? "active" : "", onclick: () => selectTeam(t).catch((e) => toast(e.message, true)) }, t.name)))),
       S.team && h("div", {}, h("h2", {}, "Proyectos", h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
@@ -1676,11 +1686,11 @@ async function openTerminal(task) {
     fit = new FitAddon.FitAddon(); term.loadAddon(fit); term.open(box); fit.fit();
     const ws = new WebSocket(S.server.replace(/^http/, "ws") + `/api/projects/${pid}/term${task.id ? "?task=" + task.id : ""}`);
     sock = ws; ws.binaryType = "arraybuffer";
-    ws.onopen = () => ws.send(JSON.stringify({ token: S.token, cols: term.cols, rows: term.rows }));
+    ws.onopen = () => { ws.send(JSON.stringify({ token: S.token, cols: term.cols, rows: term.rows })); setCfg(true); };
     ws.onmessage = (e) => {
       if (typeof e.data === "string") {
         const m = JSON.parse(e.data);
-        if (m.error) term.write("\r\n\x1b[31m" + m.error + "\x1b[0m\r\n");
+        if (m.error) { term.write("\r\n\x1b[31m" + m.error + "\x1b[0m\r\n"); setCfg(false); }
         if (m.info) term.write("\x1b[33m" + m.info + "\x1b[0m\r\n");
       } else term.write(new Uint8Array(e.data));
     };
@@ -1692,13 +1702,14 @@ async function openTerminal(task) {
     term.focus();
     // la máquina del proyecto no tiene herdr: se propone instalarlo (el comando queda escrito en la terminal; lo confirma la persona con Enter)
     const ag = mode.value === "agent" ? (await api("GET", `/api/projects/${pid}/term/agents`).catch(() => [])).find((x) => String(x.id) === agentSel.value) : null;
+    drawTools(ag);
     if (ag && ag.online && !ag.herdr && store.get("no_herdr") !== "1") {
       const bar = h("div", { class: "row", style: "background:var(--bg2);border-radius:8px;padding:8px 10px;margin-top:6px" },
         h("span", { class: "grow" }, "Esta máquina no tiene herdr: un panel que muestra qué hace cada IA (trabajando, esperando o bloqueada) y deja las sesiones corriendo si cerrás la terminal."),
         h("button", { class: "primary", onclick: () => { ws.readyState === 1 && ws.send(enc.encode("curl -fsSL https://herdr.dev/install.sh | sh")); bar.remove(); toast("Revisá el comando en la terminal y tocá Enter para instalarlo"); term.focus(); } }, "Instalar"),
         h("button", { onclick: () => bar.remove() }, "Ahora no"),
         h("button", { class: "ghost", onclick: () => { store.set("no_herdr", "1"); bar.remove(); } }, "No preguntar más"));
-      box.after(bar);
+      tools.after(bar);
     }
     cfg.host_fp = (await api("GET", `/api/projects/${pid}/ssh`)).host_fp; info.textContent = "Huella de la máquina: " + cfg.host_fp;
   });
@@ -1733,18 +1744,32 @@ async function openTerminal(task) {
     pub, info);
   const applyMode = () => { agentBox.hidden = mode.value !== "agent"; sshBox.hidden = mode.value !== "ssh"; };
   applyMode();
+  // todo lo de la conexión se puede ocultar para dejarle el lugar a la terminal (se oculta solo al conectar)
+  const cfgWrap = h("div", {},
+    h("label", {}, "Conexión", mode),
+    agentBox,
+    sshBox,
+    h("div", { class: "row" },
+      h("button", { class: "primary", onclick: connect }, "▶ Conectar"),
+      h("button", { title: "Usa esta misma conexión en todos los demás proyectos del equipo", onclick: copyAll }, "📋 Usar en todos los proyectos")));
+  const tools = h("div", { class: "row term-tools" });
+  const setCfg = (hide) => { cfgWrap.hidden = hide; modal.querySelector(".term-modal")?.classList.toggle("cfg-hidden", hide); const b = tools.querySelector(".cfg-toggle"); if (b) b.textContent = hide ? "⚙ Mostrar conexión" : "⚙ Ocultar conexión"; setTimeout(() => { try { fit?.fit(); } catch {} }, 60); };
+  const AI_BIN = { claude: "claude", gemini: "gemini", openai: "codex" };
+  const typeCmd = (text) => { if (sock && sock.readyState === 1) { sock.send(new TextEncoder().encode(text + "\r")); term?.focus(); } else toast("Conectate primero", true); };
+  const drawTools = (ag) => {
+    const ai = ag && AI_BIN[(ag.model || "").split(":")[0].toLowerCase()];
+    tools.replaceChildren(h("button", { class: "ghost cfg-toggle", onclick: () => setCfg(!cfgWrap.hidden) }, cfgWrap.hidden ? "⚙ Mostrar conexión" : "⚙ Ocultar conexión"),
+      ag && ag.herdr && h("button", { title: "Abre herdr en la carpeta del proyecto: panel con el estado de cada IA", onclick: () => typeCmd("herdr") }, "▶ Abrir herdr"),
+      ai && h("button", { title: `Abre ${ai} en la carpeta del proyecto, para mandarle trabajo desde acá`, onclick: () => typeCmd(ai) }, "🤖 Abrir " + ai));
+  };
   const close = () => { stop(); closeModal(); };
   const modal = h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && close() },
     h("div", { class: "modal term-modal" + (store.get("termMax") === "1" ? " max" : "") },
       h("h3", { class: "task-head" }, "💻 Terminal · " + (task.id ? "tarea #" + task.id : "configuración de la conexión"), h("span", { class: "spacer" }),
         h("button", { class: "ghost max-btn", title: "Agranda la terminal para trabajar más cómodo", onclick: (e) => { const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("termMax", on ? "1" : "0"); e.currentTarget.textContent = on ? "⤡ Restaurar" : "⤢ Maximizar"; setTimeout(() => { try { fit?.fit(); } catch {} }, 80); } }, store.get("termMax") === "1" ? "⤡ Restaurar" : "⤢ Maximizar"),
         h("button", { class: "ghost", onclick: close }, "✕")),
-      h("label", {}, "Conexión", mode),
-      agentBox,
-      sshBox,
-      h("div", { class: "row" },
-        h("button", { class: "primary", onclick: connect }, "▶ Conectar"),
-        h("button", { title: "Usa esta misma conexión en todos los demás proyectos del equipo", onclick: copyAll }, "📋 Usar en todos los proyectos")),
+      cfgWrap,
+      tools,
       box,
       h("small", { class: "hint" }, "Cada sesión queda anotada en el historial de la tarea. Se cierra sola a los 30 min sin uso.")));
   closeModal(); S.open = null;
@@ -2158,3 +2183,18 @@ const openSchedules = guard(async () => {
       can("member") && h("label", { class: "row" }, skip, h("span", {}, "Si la tarea anterior sigue abierta, no crear otra")),
       can("member") && h("div", { class: "row" }, h("button", { class: "primary", onclick: add }, "Programar")))));
 });
+
+// ventanas: botón para ampliar/restaurar en todas (y se pueden redimensionar desde la esquina)
+new MutationObserver((muts) => {
+  for (const m of muts) for (const n of m.addedNodes) {
+    if (n.nodeType !== 1) continue;
+    for (const modal of n.matches?.(".overlay > .modal") ? [n] : n.querySelectorAll?.(".overlay > .modal") || []) {
+      if (modal.classList.contains("term-modal") || modal.querySelector(".xbtn")) continue;
+      const head = modal.querySelector("h3");
+      if (!head) continue;
+      const b = h("button", { class: "ghost xbtn", title: "Ampliar o restaurar la ventana", onclick: () => { const on = modal.classList.toggle("xmax"); b.textContent = on ? "⤡" : "⤢"; } }, "⤢");
+      const sp = head.querySelector(".spacer");
+      sp ? sp.after(b) : head.append(b);
+    }
+  }
+}).observe(document.body, { childList: true, subtree: true });
