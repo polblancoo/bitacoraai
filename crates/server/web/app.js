@@ -23,13 +23,14 @@ const S = {
   // servida por tm-server (web): el servidor es el propio origen; en Tauri se elige a mano
   server: /^https?:$/.test(location.protocol) && location.hostname !== "tauri.localhost" ? location.origin : store.get("server") || "http://127.0.0.1:7878",
   token: store.get("token"),
-  user: JSON.parse(store.get("user") || "null"),
+  user: (() => { try { return JSON.parse(store.get("user") || "null"); } catch { return null; } })(),
   teams: [], team: null, projects: [], project: null,
   tasks: [], members: [], labels: [], online: false, query: "", view: store.get("view") || "board", month: new Date(),
   open: null, comments: [], ws: null, register: false, loginError: "",
   inbox: null, unread: 0, me: null, canvas: null, prefix: false,
 };
 
+const PANES = [];
 const myRole = () => S.members.find((m) => m.id === S.user?.id)?.role || "viewer";
 const can = (min) => RANK[myRole()] >= RANK[min];
 
@@ -1835,7 +1836,6 @@ async function openTerminal(task) {
 
 
 // ---------- vista Terminales: varias terminales SSH en paneles + estado de las IAs (solo owners) ----------
-const PANES = [];
 const ensureXterm = async () => { if (!window.Terminal) { await loadScript("xterm.js"); await loadScript("xterm-fit.js"); } };
 const tvSide = h("div", { class: "tv-side" });
 
