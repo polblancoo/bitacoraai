@@ -1755,12 +1755,18 @@ async function openTerminal(task) {
   const tools = h("div", { class: "row term-tools" });
   const setCfg = (hide) => { cfgWrap.hidden = hide; modal.querySelector(".term-modal")?.classList.toggle("cfg-hidden", hide); const b = tools.querySelector(".cfg-toggle"); if (b) b.textContent = hide ? "⚙ Mostrar conexión" : "⚙ Ocultar conexión"; setTimeout(() => { try { fit?.fit(); } catch {} }, 60); };
   const AI_BIN = { claude: "claude", gemini: "gemini", openai: "codex" };
+  // con una tarea, la IA arranca leyendo el contexto que el servidor dejó en .tm/ (sin comillas ni símbolos que la shell interprete)
+  const aiCmdFor = (ai) => {
+    if (!task.id) return ai;
+    const prompt = `Leé el archivo .tm/terminal-contexto-${task.id}.md: es el contexto de la tarea ${task.id}. Resumime en dos líneas qué hay que hacer y esperá mis indicaciones.`;
+    return ai === "gemini" ? `gemini -i "${prompt}"` : `${ai} "${prompt}"`;
+  };
   const typeCmd = (text) => { if (sock && sock.readyState === 1) { sock.send(new TextEncoder().encode(text + "\r")); term?.focus(); } else toast("Conectate primero", true); };
   const drawTools = (ag) => {
     const ai = ag && AI_BIN[(ag.model || "").split(":")[0].toLowerCase()];
     tools.replaceChildren(h("button", { class: "ghost cfg-toggle", onclick: () => setCfg(!cfgWrap.hidden) }, cfgWrap.hidden ? "⚙ Mostrar conexión" : "⚙ Ocultar conexión"),
       ag && ag.herdr && h("button", { title: "Abre herdr en la carpeta del proyecto: panel con el estado de cada IA", onclick: () => typeCmd("herdr") }, "▶ Abrir herdr"),
-      ai && h("button", { title: `Abre ${ai} en la carpeta del proyecto, para mandarle trabajo desde acá`, onclick: () => typeCmd(ai) }, "🤖 Abrir " + ai));
+      ai && h("button", { title: task.id ? `Abre ${ai} ya enterado de esta tarea (título, descripción y lo último que se habló), en la carpeta del proyecto` : `Abre ${ai} en la carpeta del proyecto`, onclick: () => typeCmd(aiCmdFor(ai)) }, "🤖 Abrir " + ai + (task.id ? " con la tarea" : "")));
   };
   const close = () => { stop(); closeModal(); };
   const modal = h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && close() },

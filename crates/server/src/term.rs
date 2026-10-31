@@ -23,6 +23,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::mpsc;
+use sqlx::Row;
 use tm_core::{Id, Role};
 
 /// Terminales abiertas por persona (el multiplexor abre varias a la vez; cada una es una tarea async independiente).
@@ -560,6 +561,44 @@ async fn agent_ws(State(st): State<AppState>, headers: HeaderMap, Path(sid): Pat
     })
 }
 
+/// Resumen de la tarea para una IA que se abre a mano en la terminal: qué hay que hacer y lo último que se habló.
+async fn task_context(st: &AppState, task: Id) -> Option<String> {
+    let r = sqlx::query(
+        "SELECT t.title, t.description, t.status, t.priority, COALESCE(u.username, 'sin responsable') AS who, p.name AS project, p.repo, p.work_dir \
+         FROM tasks t JOIN projects p ON p.id = t.project_id LEFT JOIN users u ON u.id = t.assignee_id WHERE t.id = ?",
+    )
+    .bind(task)
+    .fetch_optional(&st.db)
+    .await
+    .ok()??;
+    let comments: Vec<(String, String)> = sqlx::query_as(
+        "SELECT u.username, c.body FROM comments c JOIN users u ON u.id = c.user_id WHERE c.task_id = ? ORDER BY c.id DESC LIMIT 12",
+    )
+    .bind(task)
+    .fetch_all(&st.db)
+    .await
+    .unwrap_or_default();
+    let cut = |s: &str, n: usize| -> String { s.chars().take(n).collect() };
+    let mut out = format!(
+        "# Contexto de la tarea #{task}\n\n- Título: {}\n- Proyecto: {}\n- Repositorio: {}\n- Carpeta de trabajo: {}\n- Estado: {}\n- Responsable: {}\n\n## Qué hay que hacer\n\n{}\n",
+        r.get::<String, _>("title"),
+        r.get::<String, _>("project"),
+        r.get::<String, _>("repo"),
+        r.get::<String, _>("work_dir"),
+        r.get::<String, _>("status"),
+        r.get::<String, _>("who"),
+        cut(&r.get::<String, _>("description"), 4000),
+    );
+    if !comments.is_empty() {
+        out.push_str("\n## Lo último que se habló (del más nuevo al más viejo)\n\n");
+        for (who, body) in &comments {
+            out.push_str(&format!("- **{who}**: {}\n", cut(body, 600).replace('\n', " ")));
+        }
+    }
+    out.push_str("\n## Cómo trabajar\n\nTrabajá dentro de esta carpeta. Si en `.tm/terminal-tarea-N.md` hay notas de sesiones anteriores, seguí desde ahí. Antes de ejecutar algo delicado (borrar, publicar, tocar servicios) preguntale a la persona que está en la terminal.\n");
+    Some(out)
+}
+
 /// Sesión por agente: reenvía bytes entre el navegador y el shell que abre `tm-agent` en la máquina del proyecto.
 #[allow(clippy::too_many_arguments)]
 async fn run_agent(sock: &mut WebSocket, st: &AppState, project: Id, task: Option<Id>, who: Id, cols: u32, rows: u32, agent: Id) -> std::result::Result<String, String> {
@@ -572,6 +611,12 @@ async fn run_agent(sock: &mut WebSocket, st: &AppState, project: Id, task: Optio
     let (to_agent, from_browser) = mpsc::channel::<Message>(512);
     let (to_browser, mut from_agent) = mpsc::channel::<Message>(512);
     PENDING.lock().unwrap().insert(sid.clone(), Pending { agent, dir, cols, rows, handoff: Some(AgentEnd { from_browser, to_browser }) });
+    // el contexto de la tarea queda escrito en la carpeta del proyecto, para que una IA abierta en esta terminal sepa de qué se trata
+    if let Some(t) = task {
+        if let Some(body) = task_context(st, t).await {
+            let _ = to_agent.send(Message::Text(json!({ "note": { "rel": format!(".tm/terminal-contexto-{t}.md"), "body": body, "replace": true } }).to_string().into())).await;
+        }
+    }
     let started = chrono::Utc::now();
     let host = format!("agente {name}");
     let mut transcript: Vec<u8> = Vec::new();

@@ -84,7 +84,7 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                             if let Message::Text(t) = m {
                                 if let Ok(v) = serde_json::from_str::<Value>(&t) {
                                     if let (Some(rel), Some(body)) = (v["note"]["rel"].as_str(), v["note"]["body"].as_str()) {
-                                        if let Err(e) = save_note(&dir, rel, body) { log(&format!("no pude guardar la nota: {e}")); }
+                                        if let Err(e) = save_note(&dir, rel, body, v["note"]["replace"].as_bool().unwrap_or(false)) { log(&format!("no pude guardar la nota: {e}")); }
                                         break;
                                     }
                                 }
@@ -102,7 +102,7 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                         let _ = pair.master.resize(PtySize { rows: sz[1].as_u64().unwrap_or(24).clamp(2, 200) as u16, cols: sz[0].as_u64().unwrap_or(80).clamp(10, 500) as u16, pixel_width: 0, pixel_height: 0 });
                     }
                     if let (Some(rel), Some(body)) = (v["note"]["rel"].as_str(), v["note"]["body"].as_str()) {
-                        if let Err(e) = save_note(&dir, rel, body) { log(&format!("no pude guardar la nota: {e}")); }
+                        if let Err(e) = save_note(&dir, rel, body, v["note"]["replace"].as_bool().unwrap_or(false)) { log(&format!("no pude guardar la nota: {e}")); }
                     }
                 }
                 Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
@@ -116,12 +116,13 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
 }
 
 /// Agrega la nota de la sesión a `.tm/terminal-*.md` dentro de la carpeta del proyecto (y deja `.tm/` fuera de git).
-fn save_note(dir: &Path, rel: &str, body: &str) -> std::io::Result<()> {
+/// `replace`: el archivo se reescribe (contexto de la tarea); si no, se agrega al final (historial de sesiones).
+fn save_note(dir: &Path, rel: &str, body: &str, replace: bool) -> std::io::Result<()> {
     if !dir.is_dir() || !rel.starts_with(".tm/terminal-") || !rel.ends_with(".md") || rel.contains("..") || rel.contains('\\') || rel[4..].contains('/') {
         return Err(std::io::Error::other("ruta de nota no permitida"));
     }
     std::fs::create_dir_all(dir.join(".tm"))?;
-    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(dir.join(rel))?;
+    let mut f = std::fs::OpenOptions::new().create(true).write(true).append(!replace).truncate(replace).open(dir.join(rel))?;
     f.write_all(body.as_bytes())?;
     let exclude = dir.join(".git/info/exclude");
     if dir.join(".git").is_dir() && !std::fs::read_to_string(&exclude).unwrap_or_default().lines().any(|l| l == ".tm/") {
