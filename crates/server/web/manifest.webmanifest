@@ -1,6 +1,6 @@
 {
-  "name": "Factory App",
-  "short_name": "Factory App",
+  "name": "CrewHelm",
+  "short_name": "CrewHelm",
   "description": "Personas e IAs trabajando juntas: tareas, consumo de tokens y tareas programadas",
   "start_url": "/",
   "scope": "/",

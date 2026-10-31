@@ -11,7 +11,7 @@ const ROLES = [["viewer", "Lector"], ["member", "Miembro"], ["admin", "Admin"], 
 const RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
 const AVATAR = ["#7aa2f7", "#bb9af7", "#9ece6a", "#e0af68", "#f7768e", "#7dcfff"];
 
-const APP_NAME = "Factory App";
+const APP_NAME = "CrewHelm";
 const store = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },

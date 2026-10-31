@@ -58,7 +58,7 @@ impl Mailer {
 }
 
 /// Nombre de la app en lo que se ve (pantallas, correos y avisos). Los repositorios y los paquetes conservan su nombre.
-pub const APP_NAME: &str = "Factory App";
+pub const APP_NAME: &str = "CrewHelm";
 const LOGO: &[u8] = include_bytes!("../web/icon-192.png");
 
 fn esc(s: &str) -> String {
