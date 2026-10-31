@@ -131,7 +131,7 @@ async fn ping(st: &AppState) {
     }
 }
 
-async fn instance_admin(db: &SqlitePool, user: i64) -> bool {
+pub(crate) async fn instance_admin(db: &SqlitePool, user: i64) -> bool {
     sqlx::query_scalar::<_, Option<i64>>("SELECT MIN(id) FROM users WHERE id NOT IN (SELECT user_id FROM api_tokens)")
         .fetch_one(db).await.ok().flatten() == Some(user)
 }

@@ -215,3 +215,12 @@ CREATE TABLE IF NOT EXISTS schedules (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS schedules_due ON schedules (active, next_run);
+
+CREATE TABLE IF NOT EXISTS bot_runners (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 0,
+    set_by INTEGER
+);

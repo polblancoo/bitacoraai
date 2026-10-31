@@ -138,3 +138,13 @@ El comando también recibe `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_U
 | Comentario «la carpeta de trabajo … no existe» | La ruta del proyecto no existe en esa máquina: corregila en ⚙ Proyecto o usá `TM_AGENT_DIR`. |
 | La tarea vuelve a Por hacer con un error | Mirá el comentario: es la salida del agente. Corregí y volvé a tocar la tarea. |
 | No pasa nada al asignar | ¿La tarea está en **Por hacer** y asignada a *esa* IA? ¿`tm-agent` está corriendo? |
+
+## Agente integrado (sin comandos)
+
+Si el código del proyecto está en la **misma máquina** que `tm-server`, no hace falta abrir una terminal: al crear la IA (🤖 IAs → «+») queda marcado «Que este servidor la ejecute solo», o en la ficha de la IA, **⚙ Ejecución**. El servidor arranca y vigila su `tm-agent` (lo busca junto a `tm-server` o en el `PATH`), lo reinicia si se cae y muestra 🟢/🔴 en esa misma ventana.
+
+- Lo maneja solo la primera persona registrada (admin de la instancia). `TM_RUNNER=0` lo desactiva.
+- Soporta Claude, Gemini, OpenAI/Codex y un modelo propio de la empresa (dirección que da IT). Claude usa `run-claude.sh` con sus listas (`whitelist.txt`/`blacklist.txt` en `~/.local/share/tm-server/agents/<nombre>/`) y los pedidos 🙋 por la web.
+- La clave de la IA se toma de las variables del entorno del servidor (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`) o de la sesión iniciada de `claude`; no se guarda en la base.
+- Cada arranque emite un token nuevo para la IA: el anterior deja de valer.
+- Si el servidor está en la nube y el código en las PCs del equipo, usá el instructivo de arriba (`cargo install rust-tui-manager-agent` y el comando que muestra la app al crear la IA).

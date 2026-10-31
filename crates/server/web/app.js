@@ -453,6 +453,11 @@ const aiCmd = (token, kind, model, key, url) => {
     + (k.local ? `OPENAI_BASE_URL=${url || "http://servidor-ia:11434/v1"} \\\nOPENAI_API_KEY=${key || "${OPENAI_API_KEY:-sin-clave}"} \\\n` : "") + `TM_AGENT_CMD='${k.cmd(model || "modelo")}' \\\ntm-agent` + (k.setup ? `\n\n${k.setup}` : "") + (k.paid && !key ? `\n\n# Usa la variable ${k.key} de tu máquina. Si no la tenés:\n# export ${k.key}=tu-clave   (agregala a ~/.bashrc para que quede)` : "");
 };
 const createBot = guard(async () => {
+  const rn = await api("GET", "/api/runner").catch(() => ({ allowed: false }));
+  const run = h("input", { type: "checkbox", checked: !!(rn.allowed && rn.agent_found) });
+  const runL = h("label", { class: "row" }, run, h("span", {}, "Que este servidor la ejecute solo (sin comandos)"),
+    h("small", { class: "hint" }, rn.allowed ? "Funciona si el código del proyecto está en la misma máquina que este servidor. Si el servidor está en la nube, desmarcalo y seguí el instructivo que aparece al crearla." : "Solo la primera persona registrada puede activarlo, y el servidor debe tener tm-agent instalado."));
+  runL.style.display = rn.allowed ? "" : "none";
   const kind = h("select", {}, Object.entries(AI_KINDS).map(([v, k]) => h("option", { value: v }, k.name + (k.paid ? " · paga" : ""))));
   const model = h("select", {});
   const own = h("input", { placeholder: "Escribí el nombre del modelo", maxLength: 40, style: "display:none" });
@@ -475,6 +480,7 @@ const createBot = guard(async () => {
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
     h("div", { class: "modal small" }, h("h3", {}, "Nueva IA en el equipo"),
       h("label", {}, "Nombre", name, h("small", { class: "hint" }, "Cómo se va a ver en el tablero. Sin espacios, ej. claude-ana.")), h("label", {}, "¿Qué IA es?", kind, h("small", { class: "hint" }, "Elegí la marca. Las pagas necesitan una clave (API key) de tu cuenta. «Modelo propio» es uno que corre en un servidor de tu empresa.")), h("label", {}, "Modelo", model, own, h("small", { class: "hint" }, "Elegí uno de la lista. Si el tuyo no está, tocá «Escribir otro…» y escribí su nombre tal cual lo da el proveedor o IT.")), urlL, keyL, h("label", {}, "Rol", role, h("small", { class: "hint" }, "Miembro: puede crear y editar tareas. Lector: solo mira.")),
+      runL,
       h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { onclick: () => overlay.remove() }, "Cancelar"),
         h("button", { class: "primary", onclick: guard(async () => {
           const m = (model.value === "__otro" ? own.value : model.value).trim();
@@ -483,7 +489,14 @@ const createBot = guard(async () => {
           const r = await api("POST", `/api/teams/${S.team.id}/bots`, { name: name.value.trim(), role: role.value, model: `${tag}:${m}` });
           overlay.remove();
           S.members = await api("GET", `/api/teams/${S.team.id}/members`);
-          await loadBots(); showBotToken(r.user.username, r.token, aiCmd(r.token, kind.value, m, key.value, url.value.trim()));
+          await loadBots();
+          if (run.checked && kind.value !== "otra") {
+            await api("PUT", `/api/bots/${r.user.id}/runner`, { kind: kind.value, model: m, url: url.value.trim(), enabled: true });
+            toast(`${r.user.username} activada: el servidor la ejecuta. Asignale una tarea o probala con 🧪`);
+            runnerModal(S.bots.find((x) => x.id === r.user.id) || { id: r.user.id, username: r.user.username });
+            return;
+          }
+          showBotToken(r.user.username, r.token, aiCmd(r.token, kind.value, m, key.value, url.value.trim()));
         }) }, "Crear"))));
   document.body.append(overlay);
 });
@@ -514,6 +527,35 @@ const testBot = async (b) => {
   }
   if (alive) note.textContent = "❌ No respondió en 2 minutos. Revisá que el agente (tm-agent) de esta IA esté corriendo y apunte a este servidor: la tarea de prueba quedó en el tablero.";
 };
+// ejecución en el servidor: estado de la IA, activar o detener
+const RUN_KINDS = { claude: ["Claude (Anthropic)", ["Opus", "Sonnet", "Haiku"]], gemini: ["Gemini (Google)", ["gemini-2.5-pro", "gemini-2.5-flash"]], openai: ["ChatGPT / Codex (OpenAI)", ["gpt-5", "gpt-5-codex"]], local: ["Modelo propio de la empresa (local)", []] };
+const runnerModal = async (b) => {
+  document.getElementById("runner-modal")?.remove();
+  const [cur, av] = await Promise.all([api("GET", `/api/bots/${b.id}/runner`).catch(() => ({ configured: false })), api("GET", "/api/runner").catch(() => ({}))]);
+  const kind = h("select", {}, Object.entries(RUN_KINDS).map(([v, [n]]) => h("option", { value: v, selected: cur.kind === v }, n)));
+  const model = h("input", { value: cur.model || "", placeholder: "Modelo (ej. Opus, gemini-2.5-pro, llama3.1:70b)", maxLength: 60 });
+  const dl = h("datalist", { id: "runner-models" }); model.setAttribute("list", "runner-models");
+  const url = h("input", { value: cur.url || "", placeholder: "http://10.0.0.5:11434/v1", maxLength: 200 });
+  const urlL = h("label", {}, "Servidor de la IA (lo da IT)", url);
+  const sync = () => { dl.replaceChildren(...RUN_KINDS[kind.value][1].map((m) => h("option", { value: m }))); urlL.style.display = kind.value === "local" ? "" : "none"; };
+  kind.onchange = sync; sync();
+  const st = cur.enabled ? (cur.running ? `🟢 Conectada desde ${new Date(cur.since).toLocaleString()}` : `🔴 Activada pero no está corriendo${cur.last_exit ? " (" + cur.last_exit + ")" : ""}. Se reintenta sola.`) : "⚪ No activada";
+  const save = (enabled) => guard(async () => {
+    if (enabled && !model.value.trim()) { toast("Falta el modelo"); return; }
+    await api("PUT", `/api/bots/${b.id}/runner`, { kind: kind.value, model: model.value.trim() || cur.model || "x", url: url.value.trim(), enabled });
+    toast(enabled ? "Activada: en unos segundos aparece conectada" : "Detenida"); runnerModal(b);
+  });
+  const tool = av.tools && av.tools[kind.value === "local" ? "openai" : kind.value] === false ? h("p", { class: "warn" }, "No encuentro el programa de esta IA instalado en el servidor (claude, gemini o codex). Instalalo ahí y se conecta.") : null;
+  const box = h("div", { class: "overlay", id: "runner-modal", onmousedown: (e) => e.target === box && box.remove() },
+    h("div", { class: "modal small" }, h("h3", {}, `⚙ ${b.username}: ejecución en el servidor`), h("p", {}, st),
+      !av.allowed ? h("p", { class: "warn" }, "Solo la primera persona registrada puede activar esto, y el servidor no debe tener TM_RUNNER=0.") : [
+        !av.agent_found && h("p", { class: "warn" }, "El servidor no encuentra el programa tm-agent: instalalo en la misma máquina (cargo install rust-tui-manager-agent)."),
+        h("label", {}, "¿Qué IA es?", kind), h("label", {}, "Modelo", model, dl), urlL, tool,
+        h("small", { class: "hint" }, "La clave de la IA se toma de las variables de entorno del servidor (ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY) o de su sesión iniciada. No se guarda acá."),
+        h("div", { class: "row" }, cur.enabled && h("button", { class: "danger", onclick: save(false) }, "Detener"), h("span", { class: "spacer" }),
+          h("button", { onclick: () => box.remove() }, "Cerrar"), h("button", { class: "primary", onclick: save(true) }, cur.enabled ? "Guardar y reiniciar" : "Activar"))]));
+  document.body.append(box);
+};
 const botModal = (b) => {
   const admin = can("admin");
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
@@ -530,6 +572,7 @@ const botModal = (b) => {
           await api("PATCH", `/api/bots/${b.id}`, { deny: f.deny }); overlay.remove(); await loadBots(); toast("Lista guardada");
         }) }, "🚫 Comandos prohibidos"),
         admin && h("button", { onclick: guard(async () => { const r = await api("POST", `/api/bots/${b.id}/token`); overlay.remove(); await loadBots(); showBotToken(b.username, r.token); }) }, "Nuevo token"),
+        admin && h("button", { title: "Hacer que el servidor ejecute esta IA, sin comandos", onclick: () => { overlay.remove(); runnerModal(b); } }, "⚙ Ejecución"),
         S.project && can("member") && b.active && h("button", { title: "Le manda una tarea simple a esta IA y espera que la conteste", onclick: guard(async () => { overlay.remove(); await testBot(b); }) }, "🧪 Probar"),
         admin && b.active && h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", `/api/bots/${b.id}/token`); overlay.remove(); await loadBots(); toast("Token revocado"); }) }, "Revocar"),
         h("button", { onclick: () => overlay.remove() }, "Cerrar"))));

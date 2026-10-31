@@ -52,7 +52,7 @@ fn new_token() -> String {
     format!("{API_TOKEN_PREFIX}{}", random_hex(24))
 }
 
-async fn store_token(st: &AppState, bot: Id, by: Id) -> Result<String> {
+pub(crate) async fn store_token(st: &AppState, bot: Id, by: Id) -> Result<String> {
     let token = new_token();
     sqlx::query("INSERT OR REPLACE INTO api_tokens (user_id, hash, created_by, created_at) VALUES (?, ?, ?, ?)")
         .bind(bot)
