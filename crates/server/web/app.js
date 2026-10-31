@@ -2331,7 +2331,7 @@ const openLicense = guard(async () => {
     const fund = pl.planes.find((p) => p.fundador && p.cupos_restantes > 0);
     const terms = termsBox(pl.terminos);
     body.replaceChildren(h("h4", {}, "Comprar una licencia comercial"),
-      fund && h("p", { class: "lic-ok" }, `🎖 Precio fundador: quedan ${fund.cupos_restantes} cupos. Se mantiene en las renovaciones mientras la licencia no se interrumpa más de 30 días.`),
+      fund && h("p", { class: "lic-ok" }, `🎖 Precio fundador: quedan ${fund.cupos_restantes} cupos. Lo conservás de por vida en las renovaciones.`),
       h("label", {}, "Plan", plan), h("label", {}, "Pagar con", met), cont, h("label", {}, "Email", email),
       h("small", { class: "hint" }, "El email se usa solo para mandarte el código y el comprobante. Si después sumás más personas o IAs de las que incluye tu plan, pagás la diferencia con el plan que corresponde."),
       ...terms.nodes,

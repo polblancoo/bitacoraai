@@ -266,10 +266,10 @@ The **bar** on top appears with more than 3 people or 2 AIs, or if you declare i
 | Plan | Includes | List price | Founder price |
 |---|---|---|---|
 | **Free** (AGPL) | up to 3 people and 2 AIs, no notice | USD 0 | — |
-| **Team** | up to 10 people and 10 AIs | **USD 290** | **USD 120** |
-| **Company** | up to 50 people and 50 AIs, with support | **USD 990** | **USD 480** |
+| **Team** | up to 10 people and 10 AIs | (see the purchase screen) | **USD 290 for life** |
+| **Company** | up to 50 people and 50 AIs, with support | (see the purchase screen) | — |
 
-- **🎖 Founder price:** the **first 10 customers** pay the founder price and keep it on renewals as long as the license does not lapse for more than 30 days. The app shows it by itself while spots remain.
+- **🎖 Founder price:** the **first 5 customers** pay the founder price and keep it **for life** on renewals. The app shows it by itself while spots remain.
 - **If you grow:** if, with a valid license, you go over your plan's people or AIs, the app tells you and **⬆ Upgrade plan** appears: you pay only the **difference** between the new plan's price and what you already paid, and your expiry date does not change.
 - **Terms:** before paying you read and accept the **commercial license terms** (in your language). We keep the version you accepted and the date. Among other things, the terms state that every command or permission you approve for an AI is your responsibility and that the software comes without warranties.
 - Prices are confirmed on the purchase screen: what you see there is what is charged.

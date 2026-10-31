@@ -14,6 +14,10 @@ categories = ["command-line-utilities"]
 name = "tm-server"
 path = "src/main.rs"
 
+[features]
+# Enlaza el módulo cerrado «pro» (crate privado crewhelm-pro, que agrega la CI privada al compilar los binarios oficiales).
+pro = []
+
 [dependencies]
 anyhow = "1.0.104"
 argon2 = "0.6.0"

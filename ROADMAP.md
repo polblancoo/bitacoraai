@@ -55,7 +55,7 @@ Un CTO (o varios admins) arma varios proyectos, asigna recursos **humanos e IA**
 - [ ] Modelo **open-core**: núcleo abierto (AGPL) + módulo cerrado con licencia firmada para funciones de empresa (revisión de trabajo de IAs, auditoría, SSO, MCP, GitHub/GitLab).
 - [ ] **Marca y dominio**: reservar dominio de CrewHelm, registrar marca, nombre del repo y de los crates (`crewhelm-*`).
 - [ ] **CrewHelm Cloud**: versión alojada con actualizaciones, copias de seguridad y soporte.
-- [x] Precios: Equipo USD 290 y Empresa USD 990 al año; **precio fundador** (USD 120 / 480) para los primeros 10 clientes; diferencia a pagar al superar el plan; términos aceptados antes de pagar.
+- [x] Precios en Supabase (editables en el panel); **precio fundador** USD 290 de por vida para los primeros 5 clientes; diferencia a pagar al superar el plan; términos aceptados antes de pagar.
 
 ## Más adelante
 

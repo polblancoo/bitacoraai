@@ -152,6 +152,7 @@ async fn status(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value
     let (max_h, max_a) = (info["max_usuarios"].as_i64(), info["max_ias"].as_i64());
     let exceeds_plan = valid && (max_h.is_some_and(|m| humans > m) || max_a.is_some_and(|m| ais > m));
     Ok(Json(json!({
+        "pro": crate::pro::info(),
         "plan_limits": if valid { json!({ "humans": max_h, "ais": max_a }) } else { Value::Null }, "exceeds_plan": exceeds_plan,
         "humans": humans, "ais": ais, "projects": projects, "teams": teams,
         "free": { "humans": FREE_HUMANS, "ais": FREE_AIS },
