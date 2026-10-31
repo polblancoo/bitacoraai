@@ -162,7 +162,7 @@ function canvasView() {
       if (!g) {
         g = sv("g", {}, sv("line", { class: "cv-line", "marker-end": "url(#cvarr)" }), sv("line", { class: "cv-hit" }));
         if (edit) g.lastChild.addEventListener("click", guard(async () => {
-          if (confirm("¿Borrar la conexión?")) await api("DELETE", `/api/canvas/links/${l.id}`);
+          if (await ask("¿Borrar la conexión?")) await api("DELETE", `/api/canvas/links/${l.id}`);
         }));
         svg.append(g); lineEls.set(l.id, g);
       }
