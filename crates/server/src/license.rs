@@ -126,10 +126,19 @@ async fn ping(st: &AppState) {
         // Si el servicio no devuelve licencia no se pisa la que quedó guardada al activar (puede no estar registrada todavía).
         if !info.is_null() {
             let _ = meta_set(&st.db, "lic_info", &info.to_string()).await;
+            if let Some(t) = info["token"].as_str() {
+                let _ = meta_set(&st.db, "lic_token", t).await;
+            }
         }
         let _ = meta_set(&st.db, "lic_msg", v["mensaje"].as_str().unwrap_or("")).await;
         let _ = meta_set(&st.db, "lic_min", v["version_minima"].as_str().unwrap_or("")).await;
     }
+}
+
+/// Funciones del módulo «pro» que esta instalación tiene habilitadas por su licencia firmada (vacío si no hay o no es válida).
+pub(crate) async fn pro_features(db: &SqlitePool) -> Vec<String> {
+    let (Some(token), Ok(id)) = (meta_get(db, "lic_token").await, install_id(db).await) else { return Vec::new() };
+    crate::license_token::verify(&token, &id).map(|c| c.funciones).unwrap_or_default()
 }
 
 pub(crate) async fn instance_admin(db: &SqlitePool, user: i64) -> bool {
@@ -152,7 +161,7 @@ async fn status(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value
     let (max_h, max_a) = (info["max_usuarios"].as_i64(), info["max_ias"].as_i64());
     let exceeds_plan = valid && (max_h.is_some_and(|m| humans > m) || max_a.is_some_and(|m| ais > m));
     Ok(Json(json!({
-        "pro": crate::pro::info(),
+        "pro": { "module": crate::pro::info(), "enabled": pro_features(&st.db).await },
         "plan_limits": if valid { json!({ "humans": max_h, "ais": max_a }) } else { Value::Null }, "exceeds_plan": exceeds_plan,
         "humans": humans, "ais": ais, "projects": projects, "teams": teams,
         "free": { "humans": FREE_HUMANS, "ais": FREE_AIS },
@@ -277,6 +286,9 @@ async fn activate_code(st: &AppState, code: &str) -> Result<Value> {
     let info = call("licencia", json!({ "accion": "activar", "app": APP, "id_pc": id, "codigo": code })).await?;
     meta_set(&st.db, "lic_info", &info.to_string()).await?;
     meta_set(&st.db, "lic_code", code).await?;
+    if let Some(t) = info["token"].as_str() {
+        let _ = meta_set(&st.db, "lic_token", t).await;
+    }
     Ok(info)
 }
 

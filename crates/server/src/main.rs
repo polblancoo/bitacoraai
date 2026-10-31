@@ -4,6 +4,7 @@ mod manual_img;
 mod error;
 mod canvas;
 mod license;
+mod license_token;
 mod pro;
 mod limits;
 mod notify;
