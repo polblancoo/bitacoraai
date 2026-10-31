@@ -192,8 +192,25 @@ pub fn spawn_runners(st: AppState) {
     tokio::spawn(async move {
         let mut kids: HashMap<Id, (Child, String)> = HashMap::new();
         let mut cooldown: HashMap<Id, Instant> = HashMap::new();
+        // al cortar el servidor (systemctl stop, Ctrl+C) se cierran también los agentes: si no, quedan huérfanos con un token vencido
+        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).ok();
+        let mut int = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).ok();
         loop {
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            let stop = async {
+                match (term.as_mut(), int.as_mut()) {
+                    (Some(t), Some(i)) => tokio::select! { _ = t.recv() => {}, _ = i.recv() => {} },
+                    _ => std::future::pending().await,
+                }
+            };
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                _ = stop => {
+                    for (_, (c, _)) in kids.iter_mut() {
+                        let _ = c.start_kill();
+                    }
+                    std::process::exit(0);
+                }
+            }
             let rows = sqlx::query(
                 "SELECT r.user_id, r.kind, r.model, r.url, r.set_by, u.username FROM bot_runners r JOIN users u ON u.id = r.user_id WHERE r.enabled = 1",
             )
