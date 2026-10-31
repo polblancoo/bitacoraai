@@ -227,13 +227,13 @@ const jumpToTask = guard(async (it) => {
 function openInbox() {
   document.getElementById("inbox-modal")?.remove();
   const inb = S.inbox; if (!inb) return;
-  const KIND = { assigned: "📌", comment: "💬", member_added: "👥", role_changed: "🎖", message: "✉", mention: "@", reminder: "⏰" };
+  const KIND = { assigned: "📌", comment: "💬", member_added: "👥", role_changed: "🎖", message: "✉", mention: "@", reminder: "⏰", report: "📊" };
   document.body.append(h("div", { class: "overlay", id: "inbox-modal", onmousedown: (e) => e.target.id === "inbox-modal" && closeInbox() },
     h("div", { class: "modal" },
       h("h3", {}, `Novedades${S.unread ? ` (${S.unread} sin leer)` : ""}`),
       h("div", { class: "inbox-list" }, inb.notifications.length === 0 ? h("small", {}, "Nada nuevo.") :
         inb.notifications.map((n) => h("div", { class: "note-row" + (n.read ? "" : " unread") },
-          h("span", {}, KIND[n.kind] || "•"), h("span", { class: "grow" }, n.text),
+          h("span", {}, KIND[n.kind] || "•"), h("span", { class: "grow", style: "white-space:pre-wrap" }, n.text),
           h("small", {}, new Date(n.created_at).toLocaleString())))),
       h("h3", {}, `Mis tareas abiertas (${inb.tasks.length})`),
       h("div", { class: "inbox-list" }, inb.tasks.length === 0 ? h("small", {}, "No tenés tareas asignadas.") :
@@ -1173,6 +1173,7 @@ function appView() {
         h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openSchedules, title: "Tareas que se crean solas a una hora fija: cada día, semana o mes" }, "⏰ Programadas"),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
+        S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
         S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
         S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
@@ -2064,6 +2065,36 @@ const schedText = (s) => s.freq === "daily" ? `Cada día a las ${hhmm(s.at_minut
   : s.freq === "weekly" ? `Cada ${DIAS[s.weekday].toLowerCase()} a las ${hhmm(s.at_minute)}`
   : `Cada mes, el día ${s.monthday}, a las ${hhmm(s.at_minute)}`;
 
+// informes automáticos del equipo (bandeja, Telegram y email)
+const openReports = guard(async () => {
+  if (!S.team) return;
+  closeModal();
+  const r = await api("GET", `/api/teams/${S.team.id}/report`);
+  const cur = r.sub;
+  const freq = h("select", {}, [["daily", "Todos los días"], ["weekly", "Una vez por semana"]].map(([v, l]) => h("option", { value: v, selected: (cur?.freq || "daily") === v }, l)));
+  const wd = h("select", {}, DIAS.map((d, i) => h("option", { value: i, selected: (cur?.weekday ?? 0) === i }, d)));
+  const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const at = h("input", { type: "time", value: hhmm(cur?.at_minute ?? 540), style: "max-width:130px" });
+  const wdL = h("label", {}, "Día", wd);
+  const sync = () => { wdL.style.display = freq.value === "weekly" ? "" : "none"; };
+  freq.onchange = sync; sync();
+  const preview = h("pre", { class: "bot-cfg", style: "display:none;white-space:pre-wrap" });
+  const body = (active = true) => { const [H, M] = (at.value || "09:00").split(":").map(Number); return { freq: freq.value, weekday: +wd.value, at_minute: H * 60 + M, tz_offset: -new Date().getTimezoneOffset(), active }; };
+  const via = ["📥 la bandeja de la app", r.telegram && "Telegram", r.email && "tu email"].filter(Boolean).join(", ");
+  document.body.append(h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
+    h("div", { class: "modal" },
+      h("h3", {}, "📊 Informes · " + S.team.name, h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: closeModal }, "✕")),
+      h("p", { class: "hint" }, "Un resumen con lo que terminaron las personas y las IAs, cuánto gastaron las IAs y qué quedó trabado (en curso hace más de un día, pedidos 🙋 sin responder, vencidas). Te llega por: " + via + "." + (r.telegram && r.email ? "" : " Para recibirlo también por Telegram o email, vinculalos en Configuración.")),
+      cur && h("p", {}, cur.active ? "✓ Suscripto. Próximo: " + new Date(cur.next_run).toLocaleString() : "En pausa"),
+      h("div", { class: "row" }, h("label", {}, "Frecuencia", freq), wdL, h("label", {}, "Hora", at)),
+      h("div", { class: "row" },
+        h("button", { class: "primary", onclick: guard(async () => { const x = await api("PUT", `/api/teams/${S.team.id}/report`, body()); toast("Listo. Próximo informe: " + new Date(x.next_run).toLocaleString()); openReports(); }) }, cur ? "Guardar" : "Suscribirme"),
+        cur && h("button", { onclick: guard(async () => { await api("PUT", `/api/teams/${S.team.id}/report`, body(!cur.active)); openReports(); }) }, cur.active ? "⏸ Pausar" : "▶ Reanudar"),
+        cur && h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", `/api/teams/${S.team.id}/report`); openReports(); }) }, "Quitar"),
+        h("span", { class: "spacer" }),
+        h("button", { title: "Arma el informe de ahora y te lo manda para que lo veas", onclick: guard(async () => { const x = await api("POST", `/api/teams/${S.team.id}/report/now`, { freq: freq.value, tz_offset: -new Date().getTimezoneOffset() }); preview.textContent = x.text; preview.style.display = ""; }) }, "Enviarme uno ahora")),
+      preview)));
+});
 const openSchedules = guard(async () => {
   if (!S.project) return;
   closeModal();

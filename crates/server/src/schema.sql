@@ -232,3 +232,17 @@ CREATE TABLE IF NOT EXISTS github_links (
     scope TEXT NOT NULL DEFAULT '',
     linked_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS report_subs (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    freq TEXT NOT NULL,
+    weekday INTEGER NOT NULL DEFAULT 0,
+    at_minute INTEGER NOT NULL DEFAULT 540,
+    tz_offset INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    next_run TEXT NOT NULL,
+    last_run TEXT,
+    PRIMARY KEY (user_id, team_id)
+);
+CREATE INDEX IF NOT EXISTS report_subs_due ON report_subs (active, next_run);

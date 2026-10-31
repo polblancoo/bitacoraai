@@ -14,6 +14,7 @@ mod telegram;
 mod web;
 mod profile;
 mod routes;
+mod report;
 mod runner;
 mod schedule;
 mod term;
@@ -203,8 +204,9 @@ async fn main() -> anyhow::Result<()> {
     license::spawn_ping(state.clone());
     schedule::spawn_schedules(state.clone());
     runner::spawn_runners(state.clone());
+    report::spawn_reports(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(schedule::router()).merge(runner::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))
