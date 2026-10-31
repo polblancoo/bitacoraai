@@ -110,6 +110,16 @@ Os assistentes de código (Claude Code, Cursor, Windsurf, Zed ou qualquer client
 
 > 🚀 **Para que trabalhem sozinhas**: o **`tm-agent`** vigia o quadro e, quando você atribui uma tarefa a uma IA, abre o seu agente (Claude Code, Gemini CLI…) na pasta do projeto, passa a tarefa para *Em andamento*, comenta e a deixa em *Concluído*. O agente também pode acionar um **alarme de ajuda** 🙋 (`tm-agent ask "..."`) e esperar a resposta de uma pessoa. Passo a passo no **[guia de agentes](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.pt.md)**; dentro do app fica em *Configurações → Agentes de IA*. O binário `tm-mcp` (ferramentas MCP) ainda está em desenvolvimento (veja o [ROADMAP.md](ROADMAP.md)).
 
+## Novidades da 0.7.1
+
+- **Chama-se CrewHelm.** Novo nome na interface, nos e-mails e no manifesto.
+- **Instalador de uma linha** (`install.sh`, Linux x86_64, sem sudo, com SHA256) e **guia de início** com desenhos na primeira vez que você entra.
+- **Pedidos de uma IA**: lista de comandos com ✕ para tirar, um só «✅ Permitir sempre», acesso à lista da IA; a IA escreve os comandos em bloco.
+- **Terminal da tarefa** em tela cheia com herdr por padrão.
+- **Novidades** ampliáveis que abrem sua tarefa; **Portfólio** clicável que abre a conversa da IA; **Configurações em abas**.
+- **Zoom A−/A+** em todas as telas e **confirmações próprias** (chega de avisos do navegador).
+- Correção: a página ficava preta ao recarregar com sessão salva.
+
 ## Novidades da 0.7.0
 
 ### 🏢 Licença comercial e aviso de instalação

@@ -35,6 +35,8 @@ O servidor guarda tudo (equipes, tarefas, usuários) e serve a web. Instala-se u
 
 Para que outras pessoas entrem de outras máquinas, coloque o servidor num endereço que elas alcancem (idealmente com HTTPS: veja a [configuração do servidor](https://github.com/polblancoo/Rust_tuiManager/blob/main/README.pt.md)). Se for só para testar, `localhost` basta.
 
+**Instalação de uma linha (Linux x86_64, sem sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh`. Baixa o servidor do release, **verifica o SHA256** (se não bater, não instala), deixa em `~/.local/bin` e cria um serviço de usuário que inicia sozinho. Opções: `--port N`, `--no-service`, `--with-agent`, `--version X`. Na primeira vez que você entra, um **guia de início** com desenhos leva você por equipe, projeto e IA (repita em Configurações → Preferências → 🧭 Guia de início).
+
 Se preferir terminal ou janela própria, também há um cliente de terminal e um app de desktop na mesma página de downloads.
 
 ## 2. Criar sua conta e sua equipe
@@ -262,6 +264,19 @@ O **aviso** no topo aparece com mais de 3 pessoas ou 2 IAs, ou se você declarar
 ---
 
 **Algo não ficou claro?** Cada opção de **Configurações** tem um «?» com ajuda. E se encontrar um problema, abra uma [issue](https://github.com/polblancoo/Rust_tuiManager/issues).
+
+## 17. Novidades da interface (0.7.1)
+
+- **CrewHelm.** O app agora se chama **CrewHelm** (interface, e-mails e manifesto). Programas e serviços mantêm seus nomes por enquanto.
+- **Guia de início.** Um assistente de 5 passos com ilustrações: boas-vindas, equipe, projeto, IA (opcional) e tarefa de exemplo. Abre sozinho se você não tem equipes; em um servidor vazio, a tela de entrada oferece direto **Criar conta**.
+- **Pedidos de uma IA, mais rápidos.** Os comandos que a IA pede aparecem juntos em uma lista: **📋** copia, **✕** tira os que você não quer e **✅ Permitir os N comandos sempre** adiciona todos à lista da IA, avisa e marca o pedido como Feito. **⚙ Lista da IA** abre a lista de permitidos para apagar ou editar linhas (salva na hora). Um comando pode ter até 1000 caracteres.
+- **Tarefa mais cômoda.** **💾 Salvar** e **🗑 Apagar** também ficam no alto, em um cabeçalho fixo, e a barra de baixo fica grudada no fundo. **⤢ Maximizar** deixa os comentários maiores.
+- **Terminal da tarefa.** Uma só terminal ocupa a tela toda e, se a máquina tem `herdr`, abre sozinho (desligue com `localStorage autoHerdr = "0"`). `~/pasta` funciona como pasta de trabalho.
+- **Novidades ampliáveis.** Amplie com **⤢**; ao tocar numa novidade abre **a sua** tarefa.
+- **Portfólio clicável.** Em «O último que as IAs fizeram», uma linha com **💬 ver** abre a tarefa e toda a conversa.
+- **Configurações em abas**, com ajuda sob cada linha.
+- **Zoom da letra.** Embaixo à direita: **A−**, a porcentagem (clique = 100 %) e **A+**; também **Ctrl + Alt + roda**. Lembrado em cada dispositivo.
+- **Confirmações próprias.** Apagar, sair de uma equipe ou desconectar uma conta pergunta em uma janela do app (Esc cancela), não no aviso do navegador.
 
 ---
 

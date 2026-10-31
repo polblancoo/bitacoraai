@@ -35,6 +35,8 @@ The server stores everything (teams, tasks, users) and serves the web app. You i
 
 For other people to join from other machines, put the server at an address they can reach (ideally with HTTPS: see the [server configuration](https://github.com/polblancoo/Rust_tuiManager#readme)). If you are only trying it out, `localhost` is enough.
 
+**One-line install (Linux x86_64, no sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh`. It downloads the server from the release, **verifies its SHA256** (no match, no install), puts it in `~/.local/bin` and creates a user service that starts by itself. Options: `--port N`, `--no-service`, `--with-agent`, `--version X`. The first time you sign in, a **start guide** with drawings walks you through team, project and AI (repeat it from Settings → Preferences → 🧭 Start guide).
+
 If you prefer a terminal or a window of its own, there is also a terminal client and a desktop app on the same downloads page.
 
 ## 2. Create your account and your team
@@ -262,6 +264,19 @@ The **bar** on top appears with more than 3 people or 2 AIs, or if you declare i
 ---
 
 **Something not clear?** Every option in **Settings** has a «?» with help. And if you find a problem, open an [issue](https://github.com/polblancoo/Rust_tuiManager/issues).
+
+## 17. Interface news (0.7.1)
+
+- **CrewHelm.** The app is now called **CrewHelm** (interface, emails and manifest). Programs and services keep their names for now.
+- **Start guide.** A 5-step assistant with illustrations: welcome, team, project, AI (optional) and a sample task. It opens by itself if you have no teams; on an empty server the sign-in screen offers **Create account** directly.
+- **AI requests, faster.** The commands the AI asks for appear together in one list: **📋** copies, **✕** removes the ones you don't want and **✅ Allow all N commands always** adds them all to the AI's list, tells it and marks the request Done. **⚙ AI list** opens the allowed list so you can delete or edit lines (saved instantly). A command can be up to 1000 characters long.
+- **A friendlier task window.** **💾 Save** and **🗑 Delete** are also at the top, in a sticky header, and the bottom bar stays pinned. **⤢ Maximize** gives you bigger comments.
+- **Task terminal.** A single terminal fills the screen and, if the machine has `herdr`, it opens by itself (turn off with `localStorage autoHerdr = "0"`). `~/folder` works as a working directory.
+- **Expandable inbox.** Enlarge it with **⤢**; tapping an item opens **its** task.
+- **Clickable portfolio.** In "Latest from the AIs", a row with **💬 ver** opens the task and the whole conversation.
+- **Settings in tabs**, with help under each line.
+- **Text zoom.** Bottom right: **A−**, the percentage (click = 100%) and **A+**; also **Ctrl + Alt + wheel**. Remembered per device.
+- **Our own confirmations.** Deleting, leaving a team or disconnecting an account asks in an app window (Esc cancels), not the browser's alert.
 
 ---
 

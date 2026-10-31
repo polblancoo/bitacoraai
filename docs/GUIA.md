@@ -37,6 +37,8 @@ El servidor guarda todo (equipos, tareas, usuarios) y sirve la web. Se instala u
 
 Para que otras personas entren desde otras máquinas, poné el servidor en una dirección que alcancen (idealmente con HTTPS: ver [Configuración del servidor](https://github.com/polblancoo/Rust_tuiManager/blob/main/README.es.md)). Si solo vas a probar, alcanza con `localhost`.
 
+**Instalación de una línea (Linux x86_64, sin sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh`. Baja el servidor del release, **verifica su suma SHA256** (si no coincide, no instala), lo deja en `~/.local/bin` y crea un servicio de usuario que arranca solo. Opciones: `--port N`, `--no-service`, `--with-agent` y `--version X`. La primera vez que entrás, una **guía de inicio** con dibujos te lleva por equipo, proyecto e IA (se repite desde Configuración → Preferencias → 🧭 Guía de inicio).
+
 Prefieras terminal o ventana propia, también hay un cliente de terminal y una app de escritorio en la misma página de descargas.
 
 ## 2. Crear tu cuenta y tu equipo
@@ -264,3 +266,16 @@ El **cartel** de arriba aparece cuando hay más de 3 personas o 2 IAs, o si lo d
 ---
 
 **¿Algo no quedó claro?** Cada opción de **Configuración** tiene un «?» con ayuda. Y si encontrás un problema, abrí un [issue](https://github.com/polblancoo/Rust_tuiManager/issues).
+
+## 17. Novedades de la interfaz (0.7.1)
+
+- **Nombre CrewHelm.** La app se llama ahora **CrewHelm** (interfaz, correos y manifiesto). Los programas y servicios mantienen sus nombres por ahora.
+- **Guía de inicio.** Un asistente de 5 pasos con ilustraciones: bienvenida, equipo, proyecto, IA (opcional) y tarea de ejemplo. Se abre solo si no tenés equipos; si el servidor está vacío, la pantalla de ingreso ofrece directamente **Crear cuenta**.
+- **Pedidos de una IA, más rápidos.** Los comandos que pide la IA aparecen juntos en una lista: **📋** copia, **✕** quita los que no querés y **✅ Permitir los N comandos siempre** los agrega todos a la lista de la IA, le avisa y marca el pedido como Hecho. **⚙ Lista de la IA** abre la lista de permitidos para borrar o editar líneas (se guarda al instante). Un comando puede tener hasta 1000 caracteres.
+- **Tarea más cómoda.** **💾 Guardar** y **🗑 Borrar** están también arriba, en la cabecera fija, y la barra de abajo queda pegada al fondo. Con **⤢ Maximizar** leés los comentarios más grandes.
+- **Terminal de tarea.** Una sola terminal ocupa toda la pantalla y, si la máquina tiene `herdr`, se abre solo (se apaga con `localStorage autoHerdr = "0"`). `~/carpeta` funciona como carpeta de trabajo.
+- **Novedades ampliables.** La bandeja se puede agrandar con **⤢** y al tocar una novedad se abre **su** tarea.
+- **Portafolio clicable.** En «Lo último que hicieron las IAs», una fila con **💬 ver** abre la tarea y toda la conversación.
+- **Configuración en solapas**, con una ayuda bajo cada línea.
+- **Zoom de la letra.** Abajo a la derecha: **A−**, el porcentaje (clic = 100 %) y **A+**; también **Ctrl + Alt + rueda**. Se recuerda en cada dispositivo.
+- **Confirmaciones propias.** Borrar, salir de un equipo o desconectar una cuenta pide confirmación en una ventana de la app (Esc cancela), no en el aviso del navegador.

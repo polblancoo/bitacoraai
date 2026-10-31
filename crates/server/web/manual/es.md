@@ -35,6 +35,8 @@ El servidor guarda todo (equipos, tareas, usuarios) y sirve la web. Se instala u
 
 Para que otras personas entren desde otras máquinas, poné el servidor en una dirección que alcancen (idealmente con HTTPS: ver [Configuración del servidor](https://github.com/polblancoo/Rust_tuiManager/blob/main/README.es.md)). Si solo vas a probar, alcanza con `localhost`.
 
+**Instalación de una línea (Linux x86_64, sin sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh`. Baja el servidor del release, **verifica su suma SHA256** (si no coincide, no instala), lo deja en `~/.local/bin` y crea un servicio de usuario que arranca solo. Opciones: `--port N`, `--no-service`, `--with-agent` y `--version X`. La primera vez que entrás, una **guía de inicio** con dibujos te lleva por equipo, proyecto e IA (se repite desde Configuración → Preferencias → 🧭 Guía de inicio).
+
 Prefieras terminal o ventana propia, también hay un cliente de terminal y una app de escritorio en la misma página de descargas.
 
 ## 2. Crear tu cuenta y tu equipo
@@ -263,6 +265,19 @@ El **cartel** de arriba aparece cuando hay más de 3 personas o 2 IAs, o si lo d
 
 **¿Algo no quedó claro?** Cada opción de **Configuración** tiene un «?» con ayuda. Y si encontrás un problema, abrí un [issue](https://github.com/polblancoo/Rust_tuiManager/issues).
 
+## 17. Novedades de la interfaz (0.7.1)
+
+- **Nombre CrewHelm.** La app se llama ahora **CrewHelm** (interfaz, correos y manifiesto). Los programas y servicios mantienen sus nombres por ahora.
+- **Guía de inicio.** Un asistente de 5 pasos con ilustraciones: bienvenida, equipo, proyecto, IA (opcional) y tarea de ejemplo. Se abre solo si no tenés equipos; si el servidor está vacío, la pantalla de ingreso ofrece directamente **Crear cuenta**.
+- **Pedidos de una IA, más rápidos.** Los comandos que pide la IA aparecen juntos en una lista: **📋** copia, **✕** quita los que no querés y **✅ Permitir los N comandos siempre** los agrega todos a la lista de la IA, le avisa y marca el pedido como Hecho. **⚙ Lista de la IA** abre la lista de permitidos para borrar o editar líneas (se guarda al instante). Un comando puede tener hasta 1000 caracteres.
+- **Tarea más cómoda.** **💾 Guardar** y **🗑 Borrar** están también arriba, en la cabecera fija, y la barra de abajo queda pegada al fondo. Con **⤢ Maximizar** leés los comentarios más grandes.
+- **Terminal de tarea.** Una sola terminal ocupa toda la pantalla y, si la máquina tiene `herdr`, se abre solo (se apaga con `localStorage autoHerdr = "0"`). `~/carpeta` funciona como carpeta de trabajo.
+- **Novedades ampliables.** La bandeja se puede agrandar con **⤢** y al tocar una novedad se abre **su** tarea.
+- **Portafolio clicable.** En «Lo último que hicieron las IAs», una fila con **💬 ver** abre la tarea y toda la conversación.
+- **Configuración en solapas**, con una ayuda bajo cada línea.
+- **Zoom de la letra.** Abajo a la derecha: **A−**, el porcentaje (clic = 100 %) y **A+**; también **Ctrl + Alt + rueda**. Se recuerda en cada dispositivo.
+- **Confirmaciones propias.** Borrar, salir de un equipo o desconectar una cuenta pide confirmación en una ventana de la app (Esc cancela), no en el aviso del navegador.
+
 ---
 
 # Instructivo: que una IA trabaje sola con `tm-agent`
@@ -403,3 +418,13 @@ El comando también recibe `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_U
 | Comentario «la carpeta de trabajo … no existe» | La ruta del proyecto no existe en esa máquina: corregila en ⚙ Proyecto o usá `TM_AGENT_DIR`. |
 | La tarea vuelve a Por hacer con un error | Mirá el comentario: es la salida del agente. Corregí y volvé a tocar la tarea. |
 | No pasa nada al asignar | ¿La tarea está en **Por hacer** y asignada a *esa* IA? ¿`tm-agent` está corriendo? |
+
+## Agente integrado (sin comandos)
+
+Si el código del proyecto está en la **misma máquina** que `tm-server`, no hace falta abrir una terminal: al crear la IA (🤖 IAs → «+») queda marcado «Que este servidor la ejecute solo», o en la ficha de la IA, **⚙ Ejecución**. El servidor arranca y vigila su `tm-agent` (lo busca junto a `tm-server` o en el `PATH`), lo reinicia si se cae y muestra 🟢/🔴 en esa misma ventana.
+
+- Lo maneja solo la primera persona registrada (admin de la instancia). `TM_RUNNER=0` lo desactiva.
+- Soporta Claude, Gemini, OpenAI/Codex y un modelo propio de la empresa (dirección que da IT). Claude usa `run-claude.sh` con sus listas (`whitelist.txt`/`blacklist.txt` en `~/.local/share/tm-server/agents/<nombre>/`) y los pedidos 🙋 por la web.
+- La clave de la IA se toma de las variables del entorno del servidor (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`) o de la sesión iniciada de `claude`; no se guarda en la base.
+- Cada arranque emite un token nuevo para la IA: el anterior deja de valer.
+- Si el servidor está en la nube y el código en las PCs del equipo, usá el instructivo de arriba (`cargo install rust-tui-manager-agent` y el comando que muestra la app al crear la IA).

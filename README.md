@@ -110,6 +110,16 @@ Coding assistants (Claude Code, Cursor, Windsurf, Zed or any [MCP](https://model
 
 > 🚀 **Let them work on their own**: **`tm-agent`** watches the board and, when you assign a task to an AI, opens your agent (Claude Code, Gemini CLI…) in the project's folder, moves the task to *In progress*, comments on it and leaves it in *Done*. An agent can also raise a 🙋 **help alarm** (`tm-agent ask "..."`) and wait for a human answer. Step by step in the **[agents guide](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTS.md)**; inside the app it is under *Settings → AI agents*. The `tm-mcp` binary (MCP tools) is still in development (see [ROADMAP.md](ROADMAP.md)).
 
+## What's new in 0.7.1
+
+- **It is called CrewHelm.** New name in the interface, emails and manifest.
+- **One-line installer** (`install.sh`, Linux x86_64, no sudo, SHA256-verified) and a **start guide** with drawings the first time you sign in.
+- **AI requests**: a command list with ✕ to remove, one "✅ Allow always", quick access to the AI's list; the AI now writes commands in a code block.
+- **Task terminal** full screen with herdr by default.
+- Expandable **inbox** that opens the task; clickable **portfolio** that opens the AI's conversation; **Settings in tabs**.
+- **A−/A+ zoom** on every screen and **our own confirmation dialogs** (no more browser alerts).
+- Fix: the page went black when reloading with a saved session.
+
 ## What's new in 0.7.0
 
 ### 🏢 Commercial license and install ping
