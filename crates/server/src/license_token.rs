@@ -9,8 +9,7 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::Deserialize;
 
 /// Clave pública de verificación (32 bytes en hex). La privada vive solo como secreto del servicio de licencias.
-/// Vacía = todavía no hay clave de producción: no se acepta ningún token.
-pub const PUBLIC_KEY_HEX: &str = "";
+pub const PUBLIC_KEY_HEX: &str = "c0011d1db808b68166402d0e1a21f1f913f672f6ef852ddfd1de59a5a9e36225";
 
 /// Días de gracia después del vencimiento.
 const GRACE_DAYS: i64 = 30;
@@ -117,9 +116,12 @@ mod tests {
     }
 
     #[test]
-    fn sin_clave_de_produccion_no_acepta_nada() {
-        assert!(verify("00.00", PC).is_err());
-        assert_eq!(PUBLIC_KEY_HEX, "");
+    fn la_clave_de_produccion_es_valida_y_rechaza_tokens_ajenos() {
+        assert_eq!(PUBLIC_KEY_HEX.len(), 64);
+        assert!(VerifyingKey::from_bytes(&unhex(PUBLIC_KEY_HEX).unwrap().try_into().unwrap()).is_ok());
+        // un token firmado con la clave de prueba no pasa con la de producción
+        let (sk, _) = key();
+        assert!(verify(&token(&sk, &body("2099-01-01T00:00:00Z")), PC).is_err());
     }
 
     /// Token generado con Node (misma firma Ed25519 que hace la Edge Function): el formato coincide de punta a punta.
