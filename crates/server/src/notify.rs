@@ -76,6 +76,12 @@ pub async fn username_of(st: &AppState, id: Id) -> String {
 /// Registra una novedad, la empuja por WebSocket y, si el destinatario tiene un email verificado y
 /// el servidor tiene SMTP, la envía por correo (con tope por hora).
 pub async fn notify(st: &AppState, user: Id, kind: &str, team: Option<Id>, task: Option<Id>, text: String) {
+    notify_via(st, user, kind, team, task, text, true, true).await;
+}
+
+/// Igual que `notify`, pero se puede apagar Telegram o el email (la bandeja de la app siempre se llena).
+#[allow(clippy::too_many_arguments)]
+pub async fn notify_via(st: &AppState, user: Id, kind: &str, team: Option<Id>, task: Option<Id>, text: String, via_tg: bool, via_mail: bool) {
     let now = chrono::Utc::now();
     let id = match sqlx::query("INSERT INTO notifications (user_id, kind, team_id, task_id, text, read, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)")
         .bind(user)
@@ -113,7 +119,7 @@ pub async fn notify(st: &AppState, user: Id, kind: &str, team: Option<Id>, task:
         }),
     );
 
-    if let Some(tg) = st.telegram.clone() {
+    if let Some(tg) = st.telegram.clone().filter(|_| via_tg) {
         let chat: Option<i64> = sqlx::query_scalar::<_, Option<i64>>("SELECT telegram_chat_id FROM users WHERE id = ?")
             .bind(user)
             .fetch_optional(&st.db)
@@ -133,7 +139,7 @@ pub async fn notify(st: &AppState, user: Id, kind: &str, team: Option<Id>, task:
         }
     }
 
-    let Some(mailer) = st.mailer.clone() else { return };
+    let Some(mailer) = st.mailer.clone().filter(|_| via_mail) else { return };
     let Ok(Some(row)) = sqlx::query("SELECT email FROM users WHERE id = ? AND email_verified = 1 AND email IS NOT NULL")
         .bind(user)
         .fetch_optional(&st.db)
@@ -145,7 +151,7 @@ pub async fn notify(st: &AppState, user: Id, kind: &str, team: Option<Id>, task:
         return;
     }
     let to: String = row.get("email");
-    let subject = format!("[Rust TUI Manager] {}", text.chars().take(80).collect::<String>().replace(['\r', '\n'], " "));
+    let subject = format!("[Rust TUI Manager] {}", text.lines().next().unwrap_or("").chars().take(80).collect::<String>());
     tokio::spawn(async move {
         if let Err(e) = mailer.send(&to, &subject, format!("{text}\n\n— Rust TUI Manager")).await {
             tracing::warn!("no se pudo enviar el email: {e}");

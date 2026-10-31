@@ -241,6 +241,8 @@ CREATE TABLE IF NOT EXISTS report_subs (
     at_minute INTEGER NOT NULL DEFAULT 540,
     tz_offset INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1,
+    via_telegram INTEGER NOT NULL DEFAULT 1,
+    via_email INTEGER NOT NULL DEFAULT 1,
     next_run TEXT NOT NULL,
     last_run TEXT,
     PRIMARY KEY (user_id, team_id)

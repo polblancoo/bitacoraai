@@ -3,7 +3,7 @@
 use crate::{
     auth::AuthUser,
     error::{AppError, Result},
-    notify::notify,
+    notify::notify_via,
     routes::require,
     schedule::next_after,
     AppState,
@@ -38,7 +38,7 @@ fn window(freq: &str) -> Duration {
 
 async fn run_due(st: &AppState) {
     let now = Utc::now();
-    let Ok(rows) = sqlx::query("SELECT user_id, team_id, freq, weekday, at_minute, tz_offset FROM report_subs WHERE active = 1 AND next_run <= ?")
+    let Ok(rows) = sqlx::query("SELECT user_id, team_id, freq, weekday, at_minute, tz_offset, via_telegram, via_email FROM report_subs WHERE active = 1 AND next_run <= ?")
         .bind(now)
         .fetch_all(&st.db)
         .await
@@ -59,7 +59,7 @@ async fn run_due(st: &AppState) {
             continue;
         }
         if let Ok(text) = build(st, team, &freq, r.get("tz_offset")).await {
-            notify(st, user, "report", Some(team), None, text).await;
+            notify_via(st, user, "report", Some(team), None, text, r.get::<i64, _>("via_telegram") != 0, r.get::<i64, _>("via_email") != 0).await;
         }
     }
 }
@@ -162,7 +162,7 @@ async fn build(st: &AppState, team: Id, freq: &str, tz: i64) -> Result<String> {
 fn sub_json(r: &sqlx::sqlite::SqliteRow) -> Value {
     json!({
         "freq": r.get::<String, _>("freq"), "weekday": r.get::<i64, _>("weekday"), "at_minute": r.get::<i64, _>("at_minute"), "tz_offset": r.get::<i64, _>("tz_offset"),
-        "active": r.get::<i64, _>("active") != 0, "next_run": r.get::<DateTime<Utc>, _>("next_run"), "last_run": r.get::<Option<DateTime<Utc>>, _>("last_run"),
+        "active": r.get::<i64, _>("active") != 0, "via_telegram": r.get::<i64, _>("via_telegram") != 0, "via_email": r.get::<i64, _>("via_email") != 0, "next_run": r.get::<DateTime<Utc>, _>("next_run"), "last_run": r.get::<Option<DateTime<Utc>>, _>("last_run"),
     })
 }
 
@@ -189,6 +189,10 @@ struct Body {
     tz_offset: i64,
     #[serde(default = "yes")]
     active: bool,
+    #[serde(default = "yes")]
+    via_telegram: bool,
+    #[serde(default = "yes")]
+    via_email: bool,
 }
 
 fn nine() -> i64 { 540 }
@@ -202,9 +206,9 @@ async fn put_sub(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id
     }
     let next = next_after(&b.freq, b.weekday, 1, b.at_minute, b.tz_offset, Utc::now());
     sqlx::query(
-        "INSERT INTO report_subs (user_id, team_id, freq, weekday, at_minute, tz_offset, active, next_run) VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
+        "INSERT INTO report_subs (user_id, team_id, freq, weekday, at_minute, tz_offset, active, via_telegram, via_email, next_run) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
          ON CONFLICT(user_id, team_id) DO UPDATE SET freq = excluded.freq, weekday = excluded.weekday, at_minute = excluded.at_minute, \
-         tz_offset = excluded.tz_offset, active = excluded.active, next_run = excluded.next_run",
+         tz_offset = excluded.tz_offset, active = excluded.active, via_telegram = excluded.via_telegram, via_email = excluded.via_email, next_run = excluded.next_run",
     )
     .bind(user.id)
     .bind(team)
@@ -213,6 +217,8 @@ async fn put_sub(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id
     .bind(b.at_minute)
     .bind(b.tz_offset)
     .bind(i64::from(b.active))
+    .bind(i64::from(b.via_telegram))
+    .bind(i64::from(b.via_email))
     .bind(next)
     .execute(&st.db)
     .await?;
@@ -231,6 +237,10 @@ struct NowBody {
     freq: Option<String>,
     #[serde(default)]
     tz_offset: i64,
+    #[serde(default = "yes")]
+    via_telegram: bool,
+    #[serde(default = "yes")]
+    via_email: bool,
 }
 
 /// «Enviarme uno ahora»: arma el informe del período y lo manda por los mismos canales; devuelve el texto para verlo.
@@ -242,6 +252,13 @@ async fn send_now(State(st): State<AppState>, user: AuthUser, Path(team): Path<I
     }
     let freq = b.freq.as_deref().filter(|f| matches!(*f, "daily" | "weekly")).unwrap_or("daily");
     let text = build(&st, team, freq, b.tz_offset.clamp(-840, 840)).await?;
-    notify(&st, user.id, "report", Some(team), None, text.clone()).await;
-    Ok(Json(json!({ "text": text })))
+    notify_via(&st, user.id, "report", Some(team), None, text.clone(), b.via_telegram, b.via_email).await;
+    let mut sent = vec!["bandeja"];
+    if b.via_telegram && st.telegram.is_some() && sqlx::query_scalar::<_, Option<i64>>("SELECT telegram_chat_id FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await.ok().flatten().is_some() {
+        sent.push("Telegram");
+    }
+    if b.via_email && st.mailer.is_some() && sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users WHERE id = ? AND email_verified = 1 AND email IS NOT NULL").bind(user.id).fetch_one(&st.db).await.unwrap_or(0) > 0 {
+        sent.push("email");
+    }
+    Ok(Json(json!({ "text": text, "sent": sent })))
 }

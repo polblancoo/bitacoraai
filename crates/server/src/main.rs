@@ -116,6 +116,8 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE teams ADD COLUMN token_quota INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE tasks ADD COLUMN token_budget INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE tasks ADD COLUMN position REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE report_subs ADD COLUMN via_telegram INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE report_subs ADD COLUMN via_email INTEGER NOT NULL DEFAULT 1",
     ] {
         let _ = sqlx::query(alter).execute(db).await;
     }

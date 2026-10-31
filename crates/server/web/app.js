@@ -2096,12 +2096,15 @@ const openReports = guard(async () => {
   const sync = () => { wdL.style.display = freq.value === "weekly" ? "" : "none"; };
   freq.onchange = sync; sync();
   const preview = h("pre", { class: "bot-cfg", style: "display:none;white-space:pre-wrap" });
-  const body = (active = true) => { const [H, M] = (at.value || "09:00").split(":").map(Number); return { freq: freq.value, weekday: +wd.value, at_minute: H * 60 + M, tz_offset: -new Date().getTimezoneOffset(), active }; };
-  const via = ["📥 la bandeja de la app", r.telegram && "Telegram", r.email && "tu email"].filter(Boolean).join(", ");
+  const tg = h("input", { type: "checkbox", checked: r.telegram && (cur?.via_telegram ?? true), disabled: !r.telegram });
+  const em = h("input", { type: "checkbox", checked: r.email && (cur?.via_email ?? true), disabled: !r.email });
+  const body = (active = true) => { const [H, M] = (at.value || "09:00").split(":").map(Number); return { freq: freq.value, weekday: +wd.value, at_minute: H * 60 + M, tz_offset: -new Date().getTimezoneOffset(), active, via_telegram: tg.checked, via_email: em.checked }; };
   document.body.append(h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
     h("div", { class: "modal" },
       h("h3", {}, "📊 Informes · " + S.team.name, h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: closeModal }, "✕")),
-      h("p", { class: "hint" }, "Un resumen con lo que terminaron las personas y las IAs, cuánto gastaron las IAs y qué quedó trabado (en curso hace más de un día, pedidos 🙋 sin responder, vencidas). Te llega por: " + via + "." + (r.telegram && r.email ? "" : " Para recibirlo también por Telegram o email, vinculalos en Configuración.")),
+      h("p", { class: "hint" }, "Un resumen con lo que terminaron las personas y las IAs, cuánto gastaron las IAs y qué quedó trabado (en curso hace más de un día, pedidos 🙋 sin responder, vencidas). Siempre queda en la bandeja de la app. Elegí además dónde querés recibirlo:"),
+      h("label", { class: "row" }, tg, h("span", {}, r.telegram ? "Telegram" : "Telegram (no lo tenés vinculado: Configuración → Telegram)")),
+      h("label", { class: "row" }, em, h("span", {}, r.email ? "Email" : "Email (sin email verificado o el servidor no tiene correo: Configuración → Email)")),
       cur && h("p", {}, cur.active ? "✓ Suscripto. Próximo: " + new Date(cur.next_run).toLocaleString() : "En pausa"),
       h("div", { class: "row" }, h("label", {}, "Frecuencia", freq), wdL, h("label", {}, "Hora", at)),
       h("div", { class: "row" },
@@ -2109,7 +2112,7 @@ const openReports = guard(async () => {
         cur && h("button", { onclick: guard(async () => { await api("PUT", `/api/teams/${S.team.id}/report`, body(!cur.active)); openReports(); }) }, cur.active ? "⏸ Pausar" : "▶ Reanudar"),
         cur && h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", `/api/teams/${S.team.id}/report`); openReports(); }) }, "Quitar"),
         h("span", { class: "spacer" }),
-        h("button", { title: "Arma el informe de ahora y te lo manda para que lo veas", onclick: guard(async () => { const x = await api("POST", `/api/teams/${S.team.id}/report/now`, { freq: freq.value, tz_offset: -new Date().getTimezoneOffset() }); preview.textContent = x.text; preview.style.display = ""; }) }, "Enviarme uno ahora")),
+        h("button", { title: "Arma el informe de ahora y te lo manda para que lo veas", onclick: guard(async () => { const x = await api("POST", `/api/teams/${S.team.id}/report/now`, { freq: freq.value, tz_offset: -new Date().getTimezoneOffset(), via_telegram: tg.checked, via_email: em.checked }); toast("Enviado a: " + x.sent.join(", ")); preview.textContent = x.text; preview.style.display = ""; }) }, "Enviarme uno ahora")),
       preview)));
 });
 const openSchedules = guard(async () => {
