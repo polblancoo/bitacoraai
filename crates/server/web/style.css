@@ -467,3 +467,8 @@ ol.guide pre { margin: 4px 0; }
 /* una sola terminal: ocupa todo el alto disponible */
 .tv-grid.one { grid-template-rows: minmax(0, 1fr); align-content: stretch; }
 .tv-grid.one .tv-pane { height: 100%; min-height: 0; }
+
+.reqpanel > * { min-width: 0; }
+.cmdbox.big { flex-wrap: wrap; }
+.cmdbox.big code { flex: 1 1 100%; min-width: 0; }
+.cmdbox.big button { flex: none; }

@@ -478,6 +478,11 @@ const aiCmd = (token, kind, model, key, url) => {
   return `TM_URL=${S.server} \\\nTM_TOKEN=${token} \\\n` + (k.paid && key ? `${k.key}=${key} \\\n` : "") + (k.env ? `${k.env(model || "opus")} \\\n` : "")
     + (k.local ? `OPENAI_BASE_URL=${url || "http://servidor-ia:11434/v1"} \\\nOPENAI_API_KEY=${key || "${OPENAI_API_KEY:-sin-clave}"} \\\n` : "") + `TM_AGENT_CMD='${k.cmd(model || "modelo")}' \\\ntm-agent` + (k.setup ? `\n\n${k.setup}` : "") + (k.paid && !key ? `\n\n# Usa la variable ${k.key} de tu máquina. Si no la tenés:\n# export ${k.key}=tu-clave   (agregala a ~/.bashrc para que quede)` : "");
 };
+// lista de comandos permitidos de una IA (se abre desde su ficha y desde un pedido de ayuda)
+const editAllow = guard(async (b) => {
+  const f = await form("Comandos permitidos de " + b.username, [{ name: "allow", label: "Uno por línea, ej. git clone · cargo build · Bash(npm test:*). Se suman a la lista base (whitelist.txt) del agente. «/permitir siempre …» en un pedido también los agrega acá. Lo prohibido siempre gana.", type: "textarea", value: b.allow || "", max: 4000 }], "Guardar"); if (!f) return;
+  await api("PATCH", `/api/bots/${b.id}`, { allow: f.allow }); await loadBots(); toast("Lista guardada");
+});
 const createBot = guard(async () => {
   const rn = await api("GET", "/api/runner").catch(() => ({ allowed: false }));
   const run = h("input", { type: "checkbox", checked: !!(rn.allowed && rn.agent_found) });
@@ -597,10 +602,7 @@ const botModal = (b) => {
           const f = await form("Comandos prohibidos", [{ name: "deny", label: "Uno por línea, ej. Bash(rm:*) · Bash(git push:*). La IA no puede ejecutarlos; si los necesita, te avisa con una alarma 🙋.", type: "textarea", value: b.deny || "", max: 4000 }], "Guardar"); if (!f) return;
           await api("PATCH", `/api/bots/${b.id}`, { deny: f.deny }); overlay.remove(); await loadBots(); toast("Lista guardada");
         }) }, "🚫 Comandos prohibidos"),
-        admin && h("button", { title: "Comandos que esta IA puede usar sin pedir permiso", onclick: guard(async () => {
-          const f = await form("Comandos permitidos", [{ name: "allow", label: "Uno por línea, ej. git clone · cargo build · Bash(npm test:*). Se suman a la lista base (whitelist.txt) del agente. «/permitir siempre …» en un pedido también los agrega acá. Lo prohibido siempre gana.", type: "textarea", value: b.allow || "", max: 4000 }], "Guardar"); if (!f) return;
-          await api("PATCH", `/api/bots/${b.id}`, { allow: f.allow }); overlay.remove(); await loadBots(); toast("Lista guardada");
-        }) }, "✅ Comandos permitidos"),
+        admin && h("button", { title: "Comandos que esta IA puede usar sin pedir permiso", onclick: guard(async () => { await editAllow(b); overlay.remove(); }) }, "✅ Comandos permitidos"),
         admin && h("button", { onclick: guard(async () => { const r = await api("POST", `/api/bots/${b.id}/token`); overlay.remove(); await loadBots(); showBotToken(b.username, r.token); }) }, "Nuevo token"),
         admin && h("button", { title: "Hacer que el servidor ejecute esta IA, sin comandos", onclick: () => { overlay.remove(); runnerModal(b); } }, "⚙ Ejecución"),
         S.project && can("member") && b.active && h("button", { title: "Le manda una tarea simple a esta IA y espera que la conteste", onclick: guard(async () => { overlay.remove(); await testBot(b); }) }, "🧪 Probar"),
@@ -1001,12 +1003,17 @@ const openTask = guard(async (task) => {
     });
     // lo que pide la IA, con los comandos mencionados resaltados y listos para copiar
     const askText = (cur().description.match(/LO QUE PIDE\n([\s\S]*?)\n\n/) || [])[1] || "";
-    const askCmds = [...new Set([...askText.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]).concat([...askText.matchAll(/'([a-z][^'\n]*\s[^'\n]*)'/g)].map((m) => m[1])))].map((c) => c.trim()).filter(Boolean);
+    const fenced = [...askText.matchAll(/```[a-z]*\n?([\s\S]*?)```/g)].flatMap((m) => m[1].split("\n")).map((l) => l.replace(/^\$ /, "").trim()).filter((l) => l.length > 1);
+    const askCmds = [...new Set(fenced.concat([...askText.replace(/```[\s\S]*?```/g, "").matchAll(/`([^`\n]+)`/g)].map((m) => m[1]).concat([...askText.matchAll(/'([a-z][^'\n]*\s[^'\n]*)'/g)].map((m) => m[1]))))].map((c) => c.trim()).filter(Boolean);
     return h("div", { class: "reqpanel" },
       h("h3", {}, "🙋 Pedido de una IA"),
-      askText && h("div", { class: "askbox" }, h("b", {}, "Lo que pide la IA"), h("p", { style: "white-space:pre-wrap;margin:4px 0" }, askText),
+      askText && h("div", { class: "askbox" }, h("b", {}, "Lo que pide la IA"), h("p", { style: "white-space:pre-wrap;margin:4px 0" }, askText.replace(/```[\s\S]*?```/g, "").replace(/\n{3,}/g, "\n\n").trim() || "(comandos abajo)"),
         askCmds.map((cmd) => h("div", { class: "cmdbox big" }, h("code", {}, cmd),
-          h("button", { title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar")))),
+          h("button", { title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar"),
+          can("admin") && h("button", { class: "primary", title: "Lo agrega a la lista de comandos permitidos de esta IA y le avisa, sin salir de acá", onclick: guard(async () => {
+            await api("POST", `/api/tasks/${task.id}/grant`, { command: cmd, always: true });
+            await reply(`✅ Autorizado: \`${cmd}\` (siempre). La IA lo puede usar en su próxima ejecución.`, true);
+          }) }, "✅ Permitir siempre")))),
       cmds.length > 0 && h("div", {}, h("b", {}, "1. Copiá y ejecutá en tu terminal:"),
         cmds.map((cmd) => h("div", { class: "cmdbox" }, h("code", {}, cmd),
           h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar")))),
@@ -1016,6 +1023,12 @@ const openTask = guard(async (task) => {
         h("button", { class: "primary", title: "Publica la salida como comentario y marca el pedido como Hecho", onclick: () => out.value.trim() ? reply("📤 Salida:\n" + out.value.trim(), true).then(() => (out.value = "")) : toast("Pegá primero la salida", true) }, "📤 Enviar salida a la IA"),
         h("span", { class: "spacer" }),
         h("button", { title: "Le responde a la IA que sí: úsalo cuando el pedido es una decisión", onclick: () => reply("✅ Autorizado: seguí.", true) }, "✅ Autorizar"),
+        can("admin") && h("button", { title: "Abre la lista de comandos permitidos de la IA que pidió ayuda, para sumar el comando a mano", onclick: guard(async () => {
+          const who = (cur().description.match(/La IA «([^»]+)»/) || [])[1];
+          const bot = (S.bots || []).find((x) => x.username === who);
+          if (!bot) return toast("No encuentro a esa IA en este equipo", true);
+          await editAllow(bot);
+        }) }, "⚙ Lista de la IA"),
         can("admin") && h("button", { class: "primary", title: "Te muestra qué comando pide la IA, qué hace, y elegís si lo permitís solo esta vez o siempre", onclick: () => grantCmd() }, "✅ Permitir comando…"),
         h("button", { class: "danger", title: "Le responde a la IA que no; podés escribir el motivo arriba", onclick: () => reply("❌ No autorizado." + (out.value.trim() ? "\n" + out.value.trim() : ""), true).then(() => (out.value = "")) }, "❌ Rechazar")),
       h("small", { class: "hint" }, "«Autorizar» es para decisiones (¿puedo borrar X?). Si la IA no puede ejecutar un comando porque está bloqueado, ejecutalo vos y enviá la salida."));
@@ -2107,7 +2120,7 @@ function grantDialog(found, asked) {
   return new Promise((resolve) => {
     const cmd = h("input", { value: found[0] || "", maxLength: 200, placeholder: "ej.: cargo build" });
     const why = h("div", { class: "gd-why" });
-    const scope = h("select", {}, h("option", { value: "once" }, "Solo esta vez (la próxima ejecución de esta tarea)"), h("option", { value: "always" }, "Siempre (todas las tareas de esta IA)"));
+    const scope = h("select", {}, h("option", { value: "always" }, "Siempre: se agrega a la lista de comandos permitidos de esta IA (recomendado)"), h("option", { value: "once" }, "Solo esta vez (la próxima ejecución de esta tarea)"));
     const upd = () => { const [t, risky] = explainCmd(cmd.value); why.className = "gd-why" + (risky ? " risky" : ""); why.textContent = t ? (risky && !t.startsWith("⚠️") ? "⚠️ Comando delicado. " : "") + t : "Escribí el comando que querés permitir."; };
     cmd.addEventListener("input", upd); upd();
     const done = (v) => { overlay.remove(); resolve(v); };

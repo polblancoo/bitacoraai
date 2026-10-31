@@ -524,11 +524,20 @@ async fn request_help(
 /// Comandos entre `backticks` de un pedido, uno por línea en la tarea de pedido.
 fn backtick_cmds(q: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    for (i, part) in q.split('`').enumerate() {
-        let p = part.trim();
-        if i % 2 == 1 && p.len() >= 2 && !p.contains('\n') && !out.iter().any(|c| c == p) {
-            out.push(p.to_string());
+    let mut push = |c: &str| { let c = c.trim().trim_start_matches("$ ").trim(); if c.len() >= 2 && !out.iter().any(|x| x == c) { out.push(c.to_string()); } };
+    // bloques con tres comillas invertidas: un comando por línea (se ignora un posible nombre de lenguaje en la primera línea)
+    let mut inline = String::new();
+    for (i, part) in q.split("```").enumerate() {
+        if i % 2 == 1 {
+            let mut lines = part.lines().collect::<Vec<_>>();
+            if lines.len() > 1 && lines[0].trim().chars().all(|c| c.is_ascii_alphanumeric()) && !lines[0].trim().is_empty() { lines.remove(0); }
+            for l in lines { push(l); }
+        } else {
+            inline.push_str(part);
         }
+    }
+    for (i, part) in inline.split('`').enumerate() {
+        if i % 2 == 1 && !part.contains('\n') { push(part); }
     }
     out.truncate(8);
     out
@@ -1183,5 +1192,17 @@ pub(crate) async fn system_comment(st: &AppState, task: Id, user: Id, body: Stri
     let Ok(id) = sqlx::query("INSERT INTO comments (task_id, user_id, body, created_at) VALUES (?, ?, ?, ?)").bind(task).bind(user).bind(body).bind(Utc::now()).execute(&st.db).await.map(|r| r.last_insert_rowid()) else { return };
     if let Ok(row) = sqlx::query(sqlx::AssertSqlSafe(format!("{COMMENT_SELECT} WHERE c.id = ?"))).bind(id).fetch_one(&st.db).await {
         st.emit(team, Event::CommentAdded(comment_from_row(&row)));
+    }
+}
+
+#[cfg(test)]
+mod backtick_tests {
+    use super::backtick_cmds;
+
+    #[test]
+    fn comandos_en_bloque_y_en_linea() {
+        let q = "Necesito esto:\n```bash\n$ git clone https://x/y /tmp/y\ncargo build\n```\ny además `rar a x.rar .` por favor";
+        assert_eq!(backtick_cmds(q), vec!["git clone https://x/y /tmp/y", "cargo build", "rar a x.rar ."]);
+        assert!(backtick_cmds("sin comandos").is_empty());
     }
 }

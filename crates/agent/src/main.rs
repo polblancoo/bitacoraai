@@ -146,7 +146,7 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path) -> String {
         })
         .unwrap_or_default();
     format!(
-        "{term_note}Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout.\n\nTrabajá dentro de la carpeta de trabajo. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
+        "{term_note}Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout. Si lo que pedís es que una persona ejecute o permita un comando, escribilo dentro de la pregunta en un bloque de código (tres comillas invertidas, un comando por línea): la app lo muestra en un recuadro para copiar y permitir con un clic.\n\nTrabajá dentro de la carpeta de trabajo. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
         job.project,
         if job.repo.is_empty() { "(sin definir)" } else { &job.repo },
         dir.display(),
