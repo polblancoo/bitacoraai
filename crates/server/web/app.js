@@ -2132,7 +2132,7 @@ function explainCmd(cmd) {
 }
 function grantDialog(found, asked) {
   return new Promise((resolve) => {
-    const cmd = h("input", { value: found[0] || "", maxLength: 200, placeholder: "ej.: cargo build" });
+    const cmd = h("input", { value: found[0] || "", maxLength: 1000, placeholder: "ej.: cargo build" });
     const why = h("div", { class: "gd-why" });
     const scope = h("select", {}, h("option", { value: "always" }, "Siempre: se agrega a la lista de comandos permitidos de esta IA (recomendado)"), h("option", { value: "once" }, "Solo esta vez (la próxima ejecución de esta tarea)"));
     const upd = () => { const [t, risky] = explainCmd(cmd.value); why.className = "gd-why" + (risky ? " risky" : ""); why.textContent = t ? (risky && !t.startsWith("⚠️") ? "⚠️ Comando delicado. " : "") + t : "Escribí el comando que querés permitir."; };

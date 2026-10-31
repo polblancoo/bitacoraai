@@ -223,7 +223,7 @@ pub(crate) async fn grant(st: &AppState, user: &AuthUser, task: Id, command: &st
     if command.is_empty() || command.contains('\n') {
         return Err(AppError::bad("falta el comando (una línea), por ejemplo: /permitir cargo build"));
     }
-    limits::max_len("comando", command, 200)?;
+    limits::max_len("comando", command, 1000)?;
     let (target, bot) = grant_target(st, team, task).await?;
     if always {
         let cur: String = sqlx::query_scalar("SELECT allow FROM users WHERE id = ?").bind(bot).fetch_one(&st.db).await?;
