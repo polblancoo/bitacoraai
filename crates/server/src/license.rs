@@ -31,6 +31,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/license", get(status))
         .route("/api/license/settings", put(settings))
         .route("/api/license/plans", get(plans))
+        .route("/api/license/upgrade", get(upgrade))
         .route("/api/license/order", post(order))
         .route("/api/license/order/{id}", get(order_state))
         .route("/api/license/activate", post(activate))
@@ -147,11 +148,15 @@ async fn status(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value
     let info: Value = meta_get(&st.db, "lic_info").await.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(Value::Null);
     let valid = info["hasta"].as_str().and_then(|h| DateTime::parse_from_rfc3339(h).ok()).is_some_and(|h| h.with_timezone(&Utc) > Utc::now());
     let over = humans > FREE_HUMANS || ais > FREE_AIS;
+    // Licencia vigente pero el uso supera lo que incluye el plan: hay que mejorar y pagar la diferencia.
+    let (max_h, max_a) = (info["max_usuarios"].as_i64(), info["max_ias"].as_i64());
+    let exceeds_plan = valid && (max_h.is_some_and(|m| humans > m) || max_a.is_some_and(|m| ais > m));
     Ok(Json(json!({
+        "plan_limits": if valid { json!({ "humans": max_h, "ais": max_a }) } else { Value::Null }, "exceeds_plan": exceeds_plan,
         "humans": humans, "ais": ais, "projects": projects, "teams": teams,
         "free": { "humans": FREE_HUMANS, "ais": FREE_AIS },
         "tipo": tipo, "over": over, "licensed": valid, "license": if valid { info } else { Value::Null },
-        "banner": !valid && (over || tipo.as_deref() == Some("empresa")),
+        "banner": exceeds_plan || (!valid && (over || tipo.as_deref() == Some("empresa"))),
         "telemetry": telemetry_on(&st.db).await, "telemetry_forced_off": telemetry_env_off(),
         "message": meta_get(&st.db, "lic_msg").await.unwrap_or_default(),
         "admin": instance_admin(&st.db, user.id).await, "version": env!("CARGO_PKG_VERSION"),
@@ -181,9 +186,23 @@ async fn settings(State(st): State<AppState>, user: AuthUser, Json(b): Json<Sett
     Ok(Json(json!({ "ok": true })))
 }
 
-async fn plans(State(_st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+#[derive(Deserialize)]
+struct LangQ {
+    lang: Option<String>,
+}
+
+async fn plans(State(st): State<AppState>, user: AuthUser, Query(q): Query<LangQ>) -> Result<Json<Value>> {
     human(&user)?;
-    Ok(Json(call("licencia", json!({ "accion": "planes", "app": APP })).await?))
+    let id = install_id(&st.db).await?;
+    Ok(Json(call("licencia", json!({ "accion": "planes", "app": APP, "id_pc": id, "idioma": q.lang.unwrap_or_default() })).await?))
+}
+
+/// ¿El uso actual supera el plan? A qué plan pasar y cuánto falta pagar.
+async fn upgrade(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+    human(&user)?;
+    let id = install_id(&st.db).await?;
+    let (humans, ais, _, _) = counts(&st.db).await;
+    Ok(Json(call("licencia", json!({ "accion": "mejora_info", "app": APP, "id_pc": id, "usuarios": humans, "ias": ais })).await?))
 }
 
 #[derive(Deserialize)]
@@ -192,6 +211,12 @@ struct OrderBody {
     email: String,
     cripto: String,
     red: String,
+    /// Versión de los términos que la persona aceptó (la que mostró «planes»).
+    accept: String,
+    lang: Option<String>,
+    /// Pagar la diferencia para pasar al plan que cubre el uso actual.
+    #[serde(default)]
+    upgrade: bool,
 }
 
 /// Contenido del QR: en Ethereum la transferencia del token ya armada (EIP-681); en Solana, un pago Solana Pay con el monto y el token; si no, la dirección.
@@ -218,8 +243,10 @@ async fn order(State(st): State<AppState>, user: AuthUser, Json(b): Json<OrderBo
         return Err(AppError::forbidden());
     }
     let id = install_id(&st.db).await?;
+    let (humans, ais, _, _) = counts(&st.db).await;
     let mut v = call("licencia", json!({
         "accion": "crear_pedido", "app": APP, "id_pc": id, "plan": b.plan, "email": b.email.trim(), "cripto": b.cripto, "red": b.red,
+        "acepto": b.accept, "idioma": b.lang.unwrap_or_default(), "mejora": b.upgrade, "usuarios": humans, "ias": ais,
     })).await?;
     let payload = qr_payload(v["red"].as_str().unwrap_or(""), v["direccion"].as_str().unwrap_or(""), v["contrato"].as_str().unwrap_or(""), v["monto"].as_str().unwrap_or("0"));
     v["qr_svg"] = qr_svg(&payload).map(Value::from).unwrap_or(Value::Null);

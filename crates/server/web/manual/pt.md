@@ -261,6 +261,20 @@ O **aviso** no topo aparece com mais de 3 pessoas ou 2 IAs, ou se você declarar
 
 **Aviso de instalação.** Uma vez por dia o servidor envia um código aleatório, a versão, o sistema operacional e quantas pessoas, IAs, projetos e equipes existem. Nunca nomes, e-mails, tarefas nem conteúdo; o IP não é guardado. Desligue com `TM_TELEMETRY=0` ou pela janela Licença.
 
+### Planos e preços (por ano)
+
+| Plano | Inclui | Preço de tabela | Preço fundador |
+|---|---|---|---|
+| **Grátis** (AGPL) | até 3 pessoas e 2 IAs, sem aviso | USD 0 | — |
+| **Equipe** | até 10 pessoas e 10 IAs | **USD 290** | **USD 120** |
+| **Empresa** | até 50 pessoas e 50 IAs, com suporte | **USD 990** | **USD 480** |
+
+- **🎖 Preço fundador:** os **primeiros 10 clientes** pagam o preço fundador e o mantêm nas renovações enquanto a licença não ficar interrompida por mais de 30 dias. O app mostra sozinho enquanto restarem vagas.
+- **Se você crescer:** se, com uma licença vigente, você passar das pessoas ou IAs do plano, o app avisa e aparece **⬆ Melhorar o plano**: você paga só a **diferença** entre o preço do plano novo e o que já pagou, e o vencimento não muda.
+- **Termos:** antes de pagar você lê e aceita os **termos da licença comercial** (no seu idioma). Guardamos a versão que você aceitou e a data. Os termos deixam claro, entre outras coisas, que cada comando ou permissão que você aprova para uma IA é responsabilidade sua e que o software é entregue sem garantias.
+- Os preços são confirmados na tela de compra: o que você vê ali é o que é cobrado.
+
+
 ---
 
 **Algo não ficou claro?** Cada opção de **Configurações** tem um «?» com ajuda. E se encontrar um problema, abra uma [issue](https://github.com/polblancoo/Rust_tuiManager/issues).

@@ -2269,6 +2269,7 @@ const openLicense = guard(async () => {
     kids.push(l.licensed
       ? h("p", { class: "lic-ok" }, `✅ Licencia comercial «${l.license.plan}» vigente hasta ${String(l.license.hasta).slice(0, 10)}.`)
       : h("p", { class: "hint" }, "Rust TUI Manager es software libre (AGPL-3.0-only) y puede usarse gratis cumpliendo esa licencia. La licencia comercial es para quien no quiere cumplirla (por ejemplo, no publicar sus modificaciones)."));
+    if (l.exceeds_plan) kids.push(h("p", { class: "lic-warn" }, `⚠️ Tu plan «${l.license.plan}» incluye hasta ${l.plan_limits.humans ?? "—"} personas y ${l.plan_limits.ais ?? "—"} IAs, y hoy hay ${l.humans} personas y ${l.ais} IAs. Para seguir en regla pasá al plan que corresponde y pagá solo la diferencia.`));
     if (l.message) kids.push(h("p", { class: "hint" }, l.message));
     return kids;
   };
@@ -2305,28 +2306,55 @@ const openLicense = guard(async () => {
     };
     S.licPoll = setInterval(check, 15000);
   };
+  // términos que se aceptan antes de pagar: el texto viene del servicio de licencias y queda registrada la versión aceptada
+  const termsBox = (t) => {
+    if (!t) return { nodes: [h("p", { class: "lic-warn" }, "Los términos todavía no están publicados; no se puede generar el pago.")], ok: () => false };
+    const chk = h("input", { type: "checkbox" });
+    return { nodes: [h("label", {}, "Términos de la licencia comercial (versión " + t.version + ")", h("textarea", { readOnly: true, rows: 9, class: "lic-terms" }, t.texto)),
+      h("label", { class: "row" }, chk, h("span", {}, "Leí y acepto los términos"))], ok: () => chk.checked };
+  };
+  const planText = (p) => `${p.nombre}: hasta ${p.max_usuarios} personas y ${p.max_ias} IAs · USD ${p.precio_usd} por ${p.dias >= 365 ? "año" : p.dias + " días"}` + (p.fundador ? ` · 🎖 precio fundador (lista USD ${p.precio_lista})` : "");
+  const orderBtn = (pl, getBody, terms, email) => h("button", { class: "primary", onclick: guard(async () => {
+    if (!terms.ok()) return toast("Tenés que aceptar los términos", true);
+    const o = await api("POST", "/api/license/order", { ...getBody(), email: email.value, accept: pl.terminos.version, lang: tr.lang });
+    showOrder(o, email.value.trim());
+  }) }, "Generar el pago");
   const buy = async () => {
-    const pl = await api("GET", "/api/license/plans");
+    const pl = await api("GET", "/api/license/plans?lang=" + encodeURIComponent(tr.lang || "es"));
     if (!pl.planes.length || !pl.metodos.length) { body.replaceChildren(h("p", {}, "Todavía no hay planes o formas de pago disponibles. Probá más tarde."), h("button", { onclick: openLicense }, "← Volver")); return; }
     const email = h("input", { type: "email", placeholder: "tu@email.com (acá te llega el código)", maxLength: 120 });
-    const plan = h("select", {}, pl.planes.map((p) => h("option", { value: p.plan }, `${p.nombre}: hasta ${p.max_usuarios} personas · USD ${p.precio_usd} por ${p.dias >= 365 ? "año" : p.dias + " días"}`)));
+    const plan = h("select", {}, pl.planes.map((p) => h("option", { value: p.plan }, planText(p))));
     const met = h("select", {}, pl.metodos.map((m, i) => h("option", { value: i }, `${m.cripto} en ${netName(m.red)}`)));
     const cont = h("small", { class: "hint" });
     const upd = () => { const m = pl.metodos[+met.value]; cont.replaceChildren("Contrato del token: ", h("code", {}, m.contrato), " ", link(m.explorador_token, "ver en el explorador")); };
     met.onchange = upd; upd();
+    const fund = pl.planes.find((p) => p.fundador && p.cupos_restantes > 0);
+    const terms = termsBox(pl.terminos);
     body.replaceChildren(h("h4", {}, "Comprar una licencia comercial"),
+      fund && h("p", { class: "lic-ok" }, `🎖 Precio fundador: quedan ${fund.cupos_restantes} cupos. Se mantiene en las renovaciones mientras la licencia no se interrumpa más de 30 días.`),
       h("label", {}, "Plan", plan), h("label", {}, "Pagar con", met), cont, h("label", {}, "Email", email),
-      h("small", { class: "hint" }, "El email se usa solo para mandarte el código y el comprobante."),
-      h("div", { class: "row" }, h("button", { class: "primary", onclick: guard(async () => {
-        const m = pl.metodos[+met.value];
-        const o = await api("POST", "/api/license/order", { plan: plan.value, email: email.value, cripto: m.cripto, red: m.red });
-        showOrder(o, email.value.trim());
-      }) }, "Generar el pago"), h("button", { onclick: openLicense }, "← Volver")));
+      h("small", { class: "hint" }, "El email se usa solo para mandarte el código y el comprobante. Si después sumás más personas o IAs de las que incluye tu plan, pagás la diferencia con el plan que corresponde."),
+      ...terms.nodes,
+      h("div", { class: "row" }, orderBtn(pl, () => { const m = pl.metodos[+met.value]; return { plan: plan.value, cripto: m.cripto, red: m.red }; }, terms, email), h("button", { onclick: openLicense }, "← Volver")));
+  };
+  const improve = async () => {
+    const [u, pl] = await Promise.all([api("GET", "/api/license/upgrade"), api("GET", "/api/license/plans?lang=" + encodeURIComponent(tr.lang || "es"))]);
+    if (!u.necesita) { toast("Tu uso entra en el plan actual"); return; }
+    if (!u.destino) { body.replaceChildren(h("h4", {}, "Mejorar el plan"), h("p", {}, u.motivo || "Escribinos para un acuerdo a medida."), h("button", { onclick: openLicense }, "← Volver")); return; }
+    const email = h("input", { type: "email", placeholder: "tu@email.com (comprobante)", maxLength: 120 });
+    const met = h("select", {}, pl.metodos.map((m, i) => h("option", { value: i }, `${m.cripto} en ${netName(m.red)}`)));
+    const terms = termsBox(pl.terminos);
+    body.replaceChildren(h("h4", {}, `Pasar al plan ${u.destino.nombre}`),
+      h("p", {}, `Uso actual: ${u.uso.usuarios} personas y ${u.uso.ias} IAs (tu plan incluye ${u.limites.usuarios} y ${u.limites.ias}). El plan ${u.destino.nombre} incluye hasta ${u.destino.max_usuarios} personas y ${u.destino.max_ias} IAs.`),
+      h("p", { class: "lic-ok" }, `Precio del plan USD ${u.precio_destino} − ya pagado USD ${u.pagado} = a pagar ahora USD ${u.diferencia}. Tu vencimiento no cambia.`),
+      h("label", {}, "Pagar con", met), h("label", {}, "Email", email), ...terms.nodes,
+      h("div", { class: "row" }, orderBtn(pl, () => { const m = pl.metodos[+met.value]; return { plan: u.destino.plan, cripto: m.cripto, red: m.red, upgrade: true }; }, terms, email), h("button", { onclick: openLicense }, "← Volver")));
   };
   const code = h("input", { placeholder: "TM-XXXX-XXXX-XXXX", maxLength: 40 });
   const act = guard(async () => { await api("POST", "/api/license/activate", { codigo: code.value }); toast("Licencia activada"); openLicense(); loadLicense(); });
   const main = () => body.replaceChildren(...[...head(), ...settings(),
-    l.admin && h("div", { class: "row" }, h("button", { class: "primary", onclick: guard(buy) }, l.licensed ? "Renovar o cambiar de plan" : "Comprar una licencia comercial")),
+    l.admin && h("div", { class: "row" }, l.exceeds_plan && h("button", { class: "primary", onclick: guard(improve) }, "⬆ Mejorar el plan (pagar la diferencia)"),
+      h("button", { class: l.exceeds_plan ? "" : "primary", onclick: guard(buy) }, l.licensed ? "Renovar o comprar otro plan" : "Comprar una licencia comercial")),
     l.admin && h("label", {}, "¿Ya tenés un código?", h("div", { class: "row" }, code, h("button", { onclick: act }, "Activar")))].filter(Boolean));
   main();
   document.body.append(h("div", { class: "overlay", id: "lic-modal", onmousedown: (e) => e.target.id === "lic-modal" && close() },

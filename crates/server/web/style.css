@@ -487,3 +487,5 @@ ol.guide pre { margin: 4px 0; }
 .ask-ico { font-size: 38px; line-height: 1; }
 .ask-msg { font-size: 15px !important; margin: 4px 0 8px !important; }
 .ask-dlg .row { justify-content: center !important; gap: 10px; }
+.lic-warn { background: rgba(247,118,142,.12); border: 1px solid #f7768e; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.lic-terms { font-size: 12px; line-height: 1.4; white-space: pre-wrap; }

@@ -261,6 +261,20 @@ The **bar** on top appears with more than 3 people or 2 AIs, or if you declare i
 
 **Install ping.** Once a day the server sends a random code, the version, the operating system and how many people, AIs, projects and teams there are. Never names, emails, tasks or content; the IP is not stored. Turn it off with `TM_TELEMETRY=0` or from the License window.
 
+### Plans and prices (per year)
+
+| Plan | Includes | List price | Founder price |
+|---|---|---|---|
+| **Free** (AGPL) | up to 3 people and 2 AIs, no notice | USD 0 | — |
+| **Team** | up to 10 people and 10 AIs | **USD 290** | **USD 120** |
+| **Company** | up to 50 people and 50 AIs, with support | **USD 990** | **USD 480** |
+
+- **🎖 Founder price:** the **first 10 customers** pay the founder price and keep it on renewals as long as the license does not lapse for more than 30 days. The app shows it by itself while spots remain.
+- **If you grow:** if, with a valid license, you go over your plan's people or AIs, the app tells you and **⬆ Upgrade plan** appears: you pay only the **difference** between the new plan's price and what you already paid, and your expiry date does not change.
+- **Terms:** before paying you read and accept the **commercial license terms** (in your language). We keep the version you accepted and the date. Among other things, the terms state that every command or permission you approve for an AI is your responsibility and that the software comes without warranties.
+- Prices are confirmed on the purchase screen: what you see there is what is charged.
+
+
 ---
 
 **Something not clear?** Every option in **Settings** has a «?» with help. And if you find a problem, open an [issue](https://github.com/polblancoo/Rust_tuiManager/issues).
