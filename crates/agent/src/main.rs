@@ -48,6 +48,15 @@ struct Cfg {
     once: bool,
 }
 
+/// `~` y `~/carpeta` se resuelven contra la carpeta personal (el sistema no lo hace fuera de una shell).
+fn expand_home(p: &str) -> PathBuf {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from);
+    match (p.strip_prefix("~/").or_else(|| (p == "~").then_some("")), home) {
+        (Some(rest), Some(h)) => h.join(rest),
+        _ => PathBuf::from(p),
+    }
+}
+
 fn env_num<T: std::str::FromStr>(key: &str, default: T) -> T {
     std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
 }
@@ -63,7 +72,7 @@ impl Cfg {
             poll: env_num("TM_AGENT_POLL", 20).max(2),
             timeout: env_num("TM_AGENT_TIMEOUT", 1800),
             max: env_num("TM_AGENT_MAX", 1usize).max(1),
-            fallback_dir: std::env::var("TM_AGENT_DIR").ok().filter(|d| !d.is_empty()).map(PathBuf::from),
+            fallback_dir: std::env::var("TM_AGENT_DIR").ok().filter(|d| !d.is_empty()).map(|d| expand_home(&d)),
             once: std::env::var("TM_AGENT_ONCE").is_ok_and(|v| v == "1"),
         })
     }
@@ -150,7 +159,7 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path) -> String {
 
 /// Devuelve el `updated_at` de la tarea tras el último cambio, para no reintentarla sin que nadie la toque.
 async fn run(api: &Api, job: &Job) -> Option<String> {
-    let dir = [Some(PathBuf::from(&job.work_dir)).filter(|d| !job.work_dir.is_empty() && d.is_dir()), api.cfg.fallback_dir.clone().filter(|d| d.is_dir())]
+    let dir = [Some(expand_home(&job.work_dir)).filter(|d| !job.work_dir.is_empty() && d.is_dir()), api.cfg.fallback_dir.clone().filter(|d| d.is_dir())]
         .into_iter()
         .flatten()
         .next();
@@ -410,5 +419,17 @@ async fn main() -> Result<()> {
             continue;
         }
         tokio::time::sleep(Duration::from_secs(poll)).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tilde_se_expande() {
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+        assert_eq!(expand_home("~/Backups"), home.join("Backups"));
+        assert_eq!(expand_home("/tmp/x"), PathBuf::from("/tmp/x"));
     }
 }
