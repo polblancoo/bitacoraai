@@ -24,6 +24,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/teams/{id}/bots", get(list_bots).post(create_bot))
         .route("/api/bots/{uid}/token", post(rotate).delete(revoke))
         .route("/api/bots/{uid}", axum::routing::patch(update_bot))
+        .route("/api/commands", get(general_cmds).put(set_general_cmds))
         .route("/api/me/deny", get(my_deny))
         .route("/api/me/allow", get(my_allow))
         .route("/api/tasks/{id}/grant", post(grant_cmd))
@@ -46,6 +47,8 @@ struct UpdateBot {
     model: Option<String>,
     /// Comandos prohibidos para esta IA, uno por línea (por ejemplo `Bash(rm:*)`).
     deny: Option<String>,
+    /// Comandos permitidos de forma permanente para esta IA, uno por línea (por ejemplo `git clone`).
+    allow: Option<String>,
 }
 
 fn new_token() -> String {
@@ -82,7 +85,7 @@ async fn manages_bot(st: &AppState, caller: Id, bot: Id) -> Result<()> {
 async fn list_bots(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
     require(&st, team, user.id, Role::Viewer).await?;
     let rows = sqlx::query(
-        "SELECT u.id, u.username, u.model, u.deny, m.role, m.joined_at, cb.username AS created_by, t.last_used, t.id AS tok \
+        "SELECT u.id, u.username, u.model, u.deny, u.allow, m.role, m.joined_at, cb.username AS created_by, t.last_used, t.id AS tok \
          FROM team_members m JOIN users u ON u.id = m.user_id \
          LEFT JOIN api_tokens t ON t.user_id = u.id LEFT JOIN users cb ON cb.id = t.created_by \
          WHERE m.team_id = ? AND u.is_bot = 1 ORDER BY u.username",
@@ -98,6 +101,7 @@ async fn list_bots(State(st): State<AppState>, user: AuthUser, Path(team): Path<
                     "username": r.get::<String, _>("username"),
                     "model": r.get::<String, _>("model"),
                     "deny": r.get::<String, _>("deny"),
+                    "allow": r.get::<String, _>("allow"),
                     "role": r.get::<String, _>("role"),
                     "joined_at": r.get::<Option<String>, _>("joined_at"),
                     "created_by": r.get::<Option<String>, _>("created_by"),
@@ -166,19 +170,24 @@ async fn update_bot(State(st): State<AppState>, user: AuthUser, Path(uid): Path<
         let clean = deny.lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n");
         sqlx::query("UPDATE users SET deny = ? WHERE id = ?").bind(clean).bind(uid).execute(&st.db).await?;
     }
+    if let Some(allow) = &b.allow {
+        limits::max_len("lista de comandos permitidos", allow, 4000)?;
+        let clean = allow.lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n");
+        sqlx::query("UPDATE users SET allow = ? WHERE id = ?").bind(clean).bind(uid).execute(&st.db).await?;
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// La IA lee su propia lista de comandos prohibidos (la edita un admin desde la app).
 async fn my_deny(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
-    let deny: String = sqlx::query_scalar("SELECT deny FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
-    Ok(Json(json!({ "deny": deny })))
+    let own: String = sqlx::query_scalar("SELECT deny FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
+    Ok(Json(json!({ "deny": join_lines(&general(&st, "cmd_deny").await, &own) })))
 }
 
 /// La IA lee su lista permanente de comandos permitidos (se agrega con «/permitir siempre …» o desde el pedido).
 async fn my_allow(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
-    let allow: String = sqlx::query_scalar("SELECT allow FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
-    Ok(Json(json!({ "allow": allow })))
+    let own: String = sqlx::query_scalar("SELECT allow FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
+    Ok(Json(json!({ "allow": join_lines(&general(&st, "cmd_allow").await, &own) })))
 }
 
 /// Tarea a la que se aplica el permiso (si es un pedido «🙋 Pedido de #N: …», la tarea N) y la IA responsable.
@@ -230,6 +239,19 @@ pub(crate) async fn grant(st: &AppState, user: &AuthUser, task: Id, command: &st
             .await?;
     }
     crate::extras::log_task(st, target, user.id, format!("autorizó «{command}» ({})", if always { "siempre" } else { "una vez" })).await;
+    // si la IA ya había terminado (o fallado) por falta del permiso, la tarea vuelve a «Por hacer» y se reintenta sola
+    let requeued = sqlx::query("UPDATE tasks SET status = 'todo', updated_at = ? WHERE id = ? AND status = 'done'")
+        .bind(chrono::Utc::now())
+        .bind(target)
+        .execute(&st.db)
+        .await?
+        .rows_affected();
+    if requeued > 0 {
+        if let Ok(t) = crate::routes::fetch_task(st, target).await {
+            st.emit(team, tm_core::Event::TaskUpdated(t));
+        }
+        crate::extras::log_task(st, target, user.id, "volvió a «Por hacer» para reintentar con el permiso".to_string()).await;
+    }
     Ok(target)
 }
 
@@ -258,4 +280,41 @@ async fn claim_grants(State(st): State<AppState>, user: AuthUser, Path(task): Pa
     mine.ok_or_else(AppError::forbidden)?;
     let rows: Vec<String> = sqlx::query_scalar("UPDATE task_grants SET used = 1 WHERE task_id = ? AND used = 0 RETURNING pattern").bind(task).fetch_all(&st.db).await?;
     Ok(Json(json!({ "once": rows })))
+}
+
+async fn general(st: &AppState, key: &str) -> String {
+    crate::license::meta_get(&st.db, key).await.unwrap_or_default()
+}
+
+fn join_lines(a: &str, b: &str) -> String {
+    [a, b].iter().flat_map(|x| x.lines()).map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n")
+}
+
+/// Listas de comandos que valen para todas las IAs del servidor (además de la propia de cada una).
+async fn general_cmds(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+    user.human_only()?;
+    Ok(Json(json!({
+        "allow": general(&st, "cmd_allow").await, "deny": general(&st, "cmd_deny").await,
+        "can_edit": crate::license::instance_admin(&st.db, user.id).await,
+    })))
+}
+
+#[derive(Deserialize)]
+struct GeneralCmds {
+    allow: Option<String>,
+    deny: Option<String>,
+}
+
+async fn set_general_cmds(State(st): State<AppState>, user: AuthUser, Json(b): Json<GeneralCmds>) -> Result<StatusCode> {
+    user.human_only()?;
+    if !crate::license::instance_admin(&st.db, user.id).await {
+        return Err(AppError::forbidden());
+    }
+    for (key, v) in [("cmd_allow", &b.allow), ("cmd_deny", &b.deny)] {
+        if let Some(v) = v {
+            limits::max_len("lista de comandos", v, 4000)?;
+            crate::license::meta_set(&st.db, key, &join_lines(v, "")).await?;
+        }
+    }
+    Ok(StatusCode::NO_CONTENT)
 }

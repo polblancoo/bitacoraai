@@ -571,6 +571,10 @@ const botModal = (b) => {
           const f = await form("Comandos prohibidos", [{ name: "deny", label: "Uno por línea, ej. Bash(rm:*) · Bash(git push:*). La IA no puede ejecutarlos; si los necesita, te avisa con una alarma 🙋.", type: "textarea", value: b.deny || "", max: 4000 }], "Guardar"); if (!f) return;
           await api("PATCH", `/api/bots/${b.id}`, { deny: f.deny }); overlay.remove(); await loadBots(); toast("Lista guardada");
         }) }, "🚫 Comandos prohibidos"),
+        admin && h("button", { title: "Comandos que esta IA puede usar sin pedir permiso", onclick: guard(async () => {
+          const f = await form("Comandos permitidos", [{ name: "allow", label: "Uno por línea, ej. git clone · cargo build · Bash(npm test:*). Se suman a la lista base (whitelist.txt) del agente. «/permitir siempre …» en un pedido también los agrega acá. Lo prohibido siempre gana.", type: "textarea", value: b.allow || "", max: 4000 }], "Guardar"); if (!f) return;
+          await api("PATCH", `/api/bots/${b.id}`, { allow: f.allow }); overlay.remove(); await loadBots(); toast("Lista guardada");
+        }) }, "✅ Comandos permitidos"),
         admin && h("button", { onclick: guard(async () => { const r = await api("POST", `/api/bots/${b.id}/token`); overlay.remove(); await loadBots(); showBotToken(b.username, r.token); }) }, "Nuevo token"),
         admin && h("button", { title: "Hacer que el servidor ejecute esta IA, sin comandos", onclick: () => { overlay.remove(); runnerModal(b); } }, "⚙ Ejecución"),
         S.project && can("member") && b.active && h("button", { title: "Le manda una tarea simple a esta IA y espera que la conteste", onclick: guard(async () => { overlay.remove(); await testBot(b); }) }, "🧪 Probar"),
@@ -1405,6 +1409,14 @@ const openSettings = guard(async () => {
         S.project && line(["Exportar las tareas", "export"], h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
           h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
       sec("Licencia",
+        line("Comandos permitidos y prohibidos para todas las IAs", h("button", { onclick: guard(async () => {
+          const g = await api("GET", "/api/commands");
+          if (!g.can_edit) { toast("Solo la primera persona registrada edita las listas generales. Cada IA tiene la suya en su ficha."); return; }
+          const f = await form("Comandos de todas las IAs", [
+            { name: "allow", label: "✅ Permitidos para todas (uno por línea, ej. git clone · cargo build · Bash(npm test:*))", type: "textarea", value: g.allow, max: 4000 },
+            { name: "deny", label: "🚫 Prohibidos para todas (uno por línea, ej. Bash(rm:*)). Lo prohibido siempre gana.", type: "textarea", value: g.deny, max: 4000 }], "Guardar"); if (!f) return;
+          await api("PUT", "/api/commands", { allow: f.allow, deny: f.deny }); toast("Listas guardadas");
+        }) }, "Editar")),
         line("Uso gratis (AGPL-3.0) o licencia comercial para empresas", h("button", { onclick: go(openLicense) }, "🏢 Licencia")),),
       sec("Preferencias",
         line("Idioma / Language", h("select", { onchange: (e) => tr.set(e.target.value) },
