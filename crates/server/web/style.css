@@ -449,3 +449,21 @@ ol.guide pre { margin: 4px 0; }
 #inbox-modal .modal.xmax .inbox-list { max-height: calc(94vh - 120px); }
 .note-row.link { cursor: pointer; }
 .note-row.link:hover { background: var(--hover, rgba(127,127,127,.12)); }
+
+/* guía de inicio */
+.overlay.wiz { background: radial-gradient(circle at 50% 30%, #1d2240ee, #0b0c14f2); z-index: 25; }
+.wiz-card { width: min(640px, 94vw); padding: 18px 22px 16px; border-radius: 20px; box-shadow: 0 20px 60px #000a; }
+.wiz-art svg { width: 100%; height: auto; display: block; border-radius: 16px; box-shadow: 0 6px 24px #0007; }
+.wiz-body h2 { margin: 16px 0 6px; font-size: 22px; }
+.wiz-body p { margin: 0 0 12px; color: var(--dim, #9aa5ce); line-height: 1.5; }
+.wiz-body label { display: block; margin: 8px 0; }
+.wiz-body input:not([type=checkbox]) { width: 100%; margin-top: 4px; }
+.wiz-dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
+.wiz-dot { width: 28px; height: 6px; border-radius: 3px; background: #2f334d; transition: background .2s, width .2s; }
+.wiz-dot.done { background: #9ece6a; }
+.wiz-dot.on { background: #7aa2f7; width: 44px; }
+.wiz-foot { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+
+/* una sola terminal: ocupa todo el alto disponible */
+.tv-grid.one { grid-template-rows: minmax(0, 1fr); align-content: stretch; }
+.tv-grid.one .tv-pane { height: 100%; min-height: 0; }

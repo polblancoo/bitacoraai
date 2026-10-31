@@ -197,7 +197,7 @@ async function boot(first) {
   S.teams = await api("GET", "/api/teams");
   await selectTeam(S.teams.find((t) => t.id === S.team?.id) || S.teams[0] || null);
   connectWs();
-  if (first) { loadInbox(true); loadLicense(); }
+  if (first) { loadInbox(true); loadLicense(); if (!S.teams.length && store.get("wizDone") !== "1") openWizard(); }
 }
 
 // ---------- bandeja y perfil ----------
@@ -1346,6 +1346,7 @@ const CFG_HELP = {
     "Creá una OAuth App en github.com → Settings → Developer settings → OAuth Apps, tildá «Enable Device Flow» y copiá su Client ID (no hace falta el secreto). Arrancá tm-server con TM_GITHUB_CLIENT_ID=<ese id> (por ejemplo en ~/.config/tm-server/github.env). Por defecto se piden los permisos «read:user repo»; TM_GITHUB_SCOPE los cambia."],
   lang: ["Idioma", "Cambia el idioma de la app para vos (español, inglés o portugués). Los demás del equipo siguen con el suyo.", null],
   license: ["Licencia", "La app es software libre (AGPL-3.0): podés usarla gratis cumpliendo esa licencia. Si tu empresa prefiere no cumplirla, existe una licencia comercial anual. Acá ves el estado y, si sos la primera persona registrada, podés comprarla.", null],
+  guide: ["Guía de inicio", "Un asistente corto con dibujos que te lleva a dejar todo andando: equipo, proyecto e IA. Se abre solo la primera vez y la podés repetir cuando quieras.", null],
   cmds: ["Comandos para todas las IAs", "Son los comandos que cualquier IA del servidor puede usar sin pedir permiso (permitidos) y los que nunca puede usar (prohibidos). Se suman a la lista propia de cada IA, que está en su ficha. Lo prohibido siempre gana. Un comando se escribe así: git clone, cargo build o Bash(npm test:*).", "Solo la primera persona registrada edita estas listas. Los archivos whitelist.txt y blacklist.txt del agente son la base; estas listas se suman a ellas."],
   reports: ["Informes automáticos", "Un resumen diario o semanal del equipo: qué terminaron las personas y las IAs, cuánto gastaron las IAs y qué quedó trabado. Te llega a la bandeja y, si querés, por Telegram y email.", null],
   telegram: ["Telegram", "Tocá «Vincular», abrí el bot que se muestra y mandale /start CÓDIGO. Después recibís las novedades en Telegram y podés usar /tareas, /hecho N (marca la tarea N como hecha) y /stop (desvincula).",
@@ -1505,7 +1506,8 @@ const openSettings = guard(async () => {
             S.server = url; store.set("server", url); toast("Servidor guardado: volvé a iniciar sesión"); close(); logout();
           }) }, "Guardar servidor y reiniciar sesión"))),
       sec("Ayuda", line(["Manual con buscador e índice por temas", "manual"], h("button", { onclick: go(() => openManual()) }, "Abrir el manual")),
-        line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos"))),
+        line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos")),
+        line(["Guía de inicio paso a paso", "guide"], h("button", { onclick: go(openWizard) }, "🧭 Guía de inicio"))),
   ].flat(Infinity).filter(Boolean);
   // solapas: cada línea se ubica por su clave; lo que no tiene clave (botones sueltos) queda con la línea anterior
   const TABS = [
@@ -1514,7 +1516,7 @@ const openSettings = guard(async () => {
     ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "project", "duplicate", "export"]],
     ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["licencia", "🏢 Licencia", ["license"]],
-    ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "server", "manual", "shortcuts"]],
+    ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "server", "manual", "shortcuts", "guide"]],
   ];
   const tabOf = new Map(TABS.flatMap(([id, , keys]) => keys.map((k) => [k, id])));
   const groups = Object.fromEntries(TABS.map(([id]) => [id, []]));
@@ -1696,9 +1698,105 @@ document.addEventListener("keydown", (e) => {
   else if (["1", "2", "3", "4", "5"].includes(e.key)) { S.view = ["board", "calendar", "gantt", "canvas", "activity"][+e.key - 1]; render(); }
 });
 
+// ---------- guía de inicio: pasos con ilustraciones para dejar todo andando ----------
+const WIZ_ART = (() => {
+  const wrap = (body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 190" font-family="system-ui,sans-serif">
+    <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a2f4a"/><stop offset="1" stop-color="#171826"/></linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#7aa2f7" stop-opacity=".35"/><stop offset="1" stop-color="#7aa2f7" stop-opacity="0"/></radialGradient></defs>
+    <rect width="560" height="190" rx="16" fill="url(#g1)"/>${body}</svg>`;
+  const card = (x, y, c, w = 70) => `<rect x="${x}" y="${y}" width="${w}" height="22" rx="6" fill="#24283b"/><rect x="${x}" y="${y}" width="4" height="22" rx="2" fill="${c}"/><rect x="${x + 12}" y="${y + 8}" width="${w - 28}" height="5" rx="2.5" fill="#414868"/>`;
+  const col = (x, c, n, cards) => `<rect x="${x}" y="34" width="86" height="136" rx="10" fill="#1a1b26" stroke="#2f334d"/><circle cx="${x + 14}" cy="48" r="4" fill="${c}"/><rect x="${x + 24}" y="45" width="34" height="6" rx="3" fill="#565f89"/>${cards.map((y) => card(x + 8, y, c, 70)).join("")}`;
+  const spokes = [0, 45, 90, 135].map((a) => `<g transform="rotate(${a} 440 95)"><line x1="440" y1="38" x2="440" y2="152" stroke="#e0af68" stroke-width="7" stroke-linecap="round"/><circle cx="440" cy="34" r="8" fill="#bb9af7"/><circle cx="440" cy="156" r="8" fill="#bb9af7"/></g>`).join("");
+  const av = (x, y, c, t) => `<circle cx="${x}" cy="${y}" r="26" fill="${c}"/><text x="${x}" y="${y + 8}" text-anchor="middle" font-size="22" font-weight="700" fill="#15161e">${t}</text>`;
+  const robot = (x, y, s = 1) => `<g transform="translate(${x} ${y}) scale(${s})"><line x1="0" y1="-38" x2="0" y2="-26" stroke="#7dcfff" stroke-width="3"/><circle cx="0" cy="-41" r="5" fill="#f7768e"/><rect x="-30" y="-26" width="60" height="48" rx="14" fill="#7dcfff"/><rect x="-22" y="-16" width="44" height="26" rx="9" fill="#1a1b26"/><circle cx="-10" cy="-3" r="5" fill="#9ece6a"/><circle cx="10" cy="-3" r="5" fill="#9ece6a"/><rect x="-10" y="14" width="20" height="3" rx="1.5" fill="#1a1b26"/></g>`;
+  const chip = (x, y, w, t, c) => `<rect x="${x}" y="${y}" width="${w}" height="26" rx="13" fill="#1a1b26" stroke="${c}"/><text x="${x + w / 2}" y="${y + 17}" text-anchor="middle" font-size="12" fill="${c}">${t}</text>`;
+  return {
+    welcome: wrap(`<circle cx="440" cy="95" r="95" fill="url(#glow)"/>${col(30, "#7aa2f7", "", [62, 90])}${col(126, "#e0af68", "", [62])}${col(222, "#9ece6a", "", [62, 90, 118])}
+      ${spokes}<circle cx="440" cy="95" r="46" fill="none" stroke="#e0af68" stroke-width="9"/><circle cx="440" cy="95" r="15" fill="#e0af68"/><circle cx="440" cy="95" r="6" fill="#1a1b26"/>${robot(525, 150, .45)}`),
+    team: wrap(`<g stroke="#414868" stroke-width="2" stroke-dasharray="5 5" fill="none"><path d="M120 95 C170 60 210 60 250 85"/><path d="M200 140 C230 120 250 110 270 100"/><path d="M440 95 C400 60 360 60 320 85"/><path d="M360 140 C330 120 310 110 295 100"/></g>
+      <rect x="235" y="68" width="90" height="56" rx="14" fill="#24283b" stroke="#7aa2f7" stroke-width="2"/><text x="280" y="102" text-anchor="middle" font-size="15" font-weight="700" fill="#7aa2f7">Equipo</text>
+      ${av(90, 90, "#7aa2f7", "A")}${av(190, 145, "#bb9af7", "M")}${av(470, 90, "#9ece6a", "L")}${robot(370, 140, .8)}${chip(60, 30, 80, "dueño", "#e0af68")}${chip(420, 30, 80, "miembro", "#9ece6a")}`),
+    project: wrap(`<path d="M50 62 h56 l14 16 h90 a10 10 0 0 1 10 10 v70 a10 10 0 0 1 -10 10 h-160 a10 10 0 0 1 -10 -10 v-86 a10 10 0 0 1 10 -10z" fill="#e0af68"/><rect x="40" y="86" width="180" height="72" rx="10" fill="#f0c674"/>
+      <text x="130" y="128" text-anchor="middle" font-size="14" font-weight="700" fill="#3b2f12">~/proyectos/app</text>
+      <g stroke="#7aa2f7" stroke-width="4" fill="none"><path d="M300 150 H500"/><path d="M340 150 C360 150 360 70 390 70 H460"/></g>
+      ${[310, 360, 420, 480].map((x) => `<circle cx="${x}" cy="150" r="9" fill="#9ece6a"/>`).join("")}${[395, 450].map((x) => `<circle cx="${x}" cy="70" r="9" fill="#bb9af7"/>`).join("")}${chip(300, 28, 120, "github.com/tu/repo", "#7dcfff")}`),
+    ia: wrap(`<circle cx="280" cy="95" r="90" fill="url(#glow)"/>${robot(280, 98, 1.5)}
+      <rect x="60" y="40" width="130" height="34" rx="12" fill="#24283b" stroke="#7aa2f7"/><text x="125" y="62" text-anchor="middle" font-size="13" fill="#c0caf5" font-family="monospace">git clone …</text>
+      <rect x="370" y="52" width="130" height="34" rx="12" fill="#24283b" stroke="#9ece6a"/><text x="435" y="74" text-anchor="middle" font-size="13" fill="#c0caf5" font-family="monospace">cargo test ✓</text>
+      ${chip(40, 150, 80, "Claude", "#e0af68")}${chip(130, 150, 80, "Gemini", "#7aa2f7")}${chip(350, 150, 80, "OpenAI", "#9ece6a")}${chip(440, 150, 80, "Local", "#bb9af7")}`),
+    listo: wrap(`<circle cx="280" cy="92" r="88" fill="url(#glow)"/><circle cx="280" cy="92" r="52" fill="#9ece6a"/><path d="M254 94 l18 18 l34 -38" stroke="#15161e" stroke-width="11" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      ${[[70, 40, "#f7768e"], [120, 130, "#e0af68"], [170, 60, "#7aa2f7"], [400, 50, "#bb9af7"], [450, 140, "#7dcfff"], [500, 70, "#f7768e"], [360, 150, "#e0af68"], [210, 150, "#9ece6a"]].map(([x, y, c], i) => (i % 2 ? `<rect x="${x}" y="${y}" width="12" height="12" rx="3" fill="${c}" transform="rotate(${i * 20} ${x} ${y})"/>` : `<circle cx="${x}" cy="${y}" r="6" fill="${c}"/>`)).join("")}`),
+  };
+})();
+// el SVG es texto fijo de esta aplicación (nunca datos de usuarios)
+const wizArt = (name) => { const el = document.createElement("div"); el.className = "wiz-art"; el.append(document.importNode(new DOMParser().parseFromString(WIZ_ART[name], "image/svg+xml").documentElement, true)); return el; };
+
+async function openWizard() {
+  document.getElementById("wiz-modal")?.remove();
+  const W = { i: 0, team: S.team, project: S.project, ai: false };
+  const STEPS = ["welcome", "team", "project", "ia", "listo"];
+  const body = h("div", { class: "wiz-body" }), dots = h("div", { class: "wiz-dots" }), foot = h("div", { class: "wiz-foot" });
+  const close = (done) => { if (done) store.set("wizDone", "1"); document.getElementById("wiz-modal")?.remove(); render(); };
+  const teamIn = h("input", { placeholder: "Ej.: Mi empresa, Backend, Equipo A", maxLength: 60, value: S.team?.name || "" });
+  const projIn = h("input", { placeholder: "Ej.: App de ventas", maxLength: 60 });
+  const dirIn = h("input", { placeholder: "Carpeta del código, en la máquina del servidor (opcional) · /home/ana/app", maxLength: 300 });
+  const sample = h("input", { type: "checkbox", checked: true });
+  const next = async () => {
+    try {
+      if (W.i === 1 && !W.team) {
+        const n = teamIn.value.trim(); if (!n) return toast("Escribí un nombre para el equipo", true);
+        W.team = await api("POST", "/api/teams", { name: n }); S.teams.push(W.team); await selectTeam(W.team);
+      }
+      if (W.i === 2 && !W.project) {
+        const n = projIn.value.trim(); if (!n) return toast("Escribí un nombre para el proyecto", true);
+        W.project = await api("POST", `/api/teams/${W.team.id}/projects`, { name: n, work_dir: dirIn.value.trim(), repo: "" });
+        if (!S.projects.some((x) => x.id === W.project.id)) S.projects.push(W.project);
+        await selectProject(W.project);
+      }
+      if (W.i === STEPS.length - 1) {
+        if (sample.checked && W.project) await api("POST", `/api/projects/${W.project.id}/tasks`, { title: "👋 Mi primera tarea: arrastrame a «En curso»", description: "Las tareas se mueven entre columnas arrastrándolas. Asignala a una persona o a una IA desde acá." }).catch(() => {});
+        if (W.project) await selectProject(W.project);
+        return close(true);
+      }
+      W.i++; paint();
+    } catch (e) { toast(e.message, true); }
+  };
+  const pick = (el) => el;
+  const paint = () => {
+    const k = STEPS[W.i];
+    const T = {
+      welcome: ["Bienvenida/o a " + APP_NAME, "Acá coordinás a tu equipo humano y a tus IAs en un solo tablero: repartís tareas, ves quién hace qué y las IAs trabajan por vos con permisos que controlás. En 4 pasos dejamos todo andando."],
+      team: ["Tu equipo", W.team ? `Ya tenés el equipo «${W.team.name}». Seguimos.` : "Un equipo agrupa a las personas y a las IAs que trabajan juntas. Vos quedás como dueño. Después invitás a quien quieras."],
+      project: ["Tu primer proyecto", W.project ? `Proyecto «${W.project.name}» listo.` : "Un proyecto es un tablero de tareas. Si querés que las IAs trabajen sobre código, indicá la carpeta donde vive (en la máquina del servidor)."],
+      ia: ["Sumá una IA (opcional)", W.ai ? "¡IA creada! Aparece en la barra lateral con su luz 🟢/🔴." : "Una IA es un asistente de código (Claude, Gemini, ChatGPT o un modelo propio) que toma tareas del tablero y pide permiso por la web para lo delicado. Podés hacerlo ahora o más tarde desde «IAs → +»."],
+      listo: ["¡Todo listo!", "Ya podés usar el tablero. Tips: tecla ? muestra los atajos · la campanita 🔔 te lleva a lo nuevo · ⚙ Configuración tiene avisos, informes y comandos de las IAs · «🧭 Guía de inicio» la volvés a abrir cuando quieras."],
+    }[k];
+    const fields = {
+      team: !W.team && h("label", {}, "Nombre del equipo", teamIn),
+      project: !W.project && [h("label", {}, "Nombre del proyecto", projIn), h("label", {}, "Carpeta de trabajo", dirIn)],
+      ia: h("div", { class: "row" }, h("button", { class: W.ai ? "" : "primary", onclick: guard(async () => { const before = (S.bots || []).length; await createBot(); await boot(); W.ai = (S.bots || []).length > before || W.ai; paint(); }) }, W.ai ? "➕ Agregar otra IA" : "🤖 Agregar una IA")),
+      listo: h("label", { class: "row" }, sample, h("span", {}, "Crear una tarea de ejemplo en el tablero")),
+    }[k];
+    body.replaceChildren(wizArt(k), h("h2", {}, T[0]), h("p", {}, T[1]), ...[fields].flat().filter(Boolean));
+    dots.replaceChildren(...STEPS.map((_, n) => h("span", { class: "wiz-dot" + (n === W.i ? " on" : n < W.i ? " done" : "") })));
+    const last = W.i === STEPS.length - 1;
+    foot.replaceChildren(
+      h("button", { class: "ghost", onclick: () => close(true) }, "Saltar la guía"), h("span", { class: "spacer" }),
+      W.i > 0 ? h("button", { onclick: () => { W.i--; paint(); } }, "Atrás") : null,
+      h("button", { class: "primary", onclick: next }, last ? "Empezar 🚀" : k === "ia" && !W.ai ? "Más tarde →" : "Siguiente →"));
+    (teamIn.isConnected ? teamIn : projIn.isConnected ? projIn : null)?.focus();
+  };
+  document.body.append(h("div", { class: "overlay wiz", id: "wiz-modal" }, h("div", { class: "modal wiz-card" }, dots, body, foot)));
+  paint();
+}
+// primera vez: sin ninguna persona registrada la pantalla de entrada invita a crear la cuenta del dueño
+async function checkFirstRun() {
+  try { const r = await fetch(S.server + "/api/setup"); if (r.ok) { S.setup = await r.json(); if (S.setup.first_run && !S.token) { S.register = true; render(); } } } catch {}
+}
+
 if (IS_WEB && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 render();
-if (S.token) boot(true).catch(() => { S.token = null; render(); });
+if (S.token) boot(true).catch(() => { S.token = null; render(); }); else checkFirstRun();
 
 
 // ---------- terminal SSH integrada (solo owners): el servidor abre SSH con clave a la máquina del proyecto ----------
@@ -1885,7 +1983,7 @@ function termsView() {
       h("button", { title: "Cómo llega la terminal a la máquina de este proyecto: por el agente (recomendado) o por SSH", onclick: guard(() => openTerminal({ id: null, project_id: S.tvProject })) }, "⚙ Conexión"),
       h("small", { class: "hint" }, "Hasta 8 a la vez. Lo que hagas queda anotado en .tm/ de la carpeta del proyecto para que la IA retome.")),
     h("div", { class: "tv-body" }, store.get("tvSide") !== "0" && tvSide,
-      h("div", { class: "tv-grid", style: `--cols:${c}` }, PANES.length ? PANES.map((p) => p.el) : h("div", { class: "empty" }, "Tocá «+ Terminal» o elegí una IA de la izquierda."))));
+      h("div", { class: "tv-grid" + (PANES.length === 1 ? " one" : ""), style: `--cols:${c}` }, PANES.length ? PANES.map((p) => p.el) : h("div", { class: "empty" }, "Tocá «+ Terminal» o elegí una IA de la izquierda."))));
 }
 // la terminal de una tarea se abre como un panel de «🖥️ Terminales»: sigue viva aunque mires otra tarea, la configuración o lo que sea
 const paneTitle = (t) => {
@@ -1932,6 +2030,11 @@ function startPanes() {
     Object.assign(p, { term, fit });
     const ws = new WebSocket(S.server.replace(/^http/, "ws") + `/api/projects/${p.pid}/term${p.tid ? "?task=" + p.tid : ""}`); p.ws = ws; ws.binaryType = "arraybuffer";
     ws.onopen = () => { ws.send(JSON.stringify({ token: S.token, cols: term.cols, rows: term.rows })); p.st.textContent = "🟢"; };
+    // por defecto, la terminal de una tarea abre herdr en la carpeta del proyecto (si la máquina lo tiene; se apaga con store autoHerdr=0)
+    if (p.tid && store.get("autoHerdr") !== "0") {
+      let armed = true;
+      setTimeout(() => { if (armed && ws.readyState === 1) { armed = false; ws.send(new TextEncoder().encode("command -v herdr >/dev/null 2>&1 && herdr\r")); } }, 1800);
+    }
     ws.onmessage = (e) => {
       if (typeof e.data !== "string") return term.write(new Uint8Array(e.data));
       const m = JSON.parse(e.data);

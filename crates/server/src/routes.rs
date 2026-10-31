@@ -7,7 +7,7 @@ use crate::{
 use axum::{
     extract::{ConnectInfo, Path, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, patch, post, put},
+    routing::{get, post, put},
     Json, Router,
 };
 use chrono::Utc;
@@ -17,6 +17,7 @@ use tm_core::*;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/api/setup", get(setup_state))
         .route("/api/register", post(register))
         .route("/api/login", post(login))
         .route("/api/logout-all", post(logout_all))
@@ -235,6 +236,12 @@ fn throttle(st: &AppState, headers: &HeaderMap, peer: SocketAddr) -> Result<()> 
 }
 
 // ---------- auth ----------
+
+/// ¿Es la primera vez? (sin ninguna persona registrada): la web ofrece entonces la guía de inicio.
+async fn setup_state(State(st): State<AppState>) -> Result<Json<serde_json::Value>> {
+    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE is_bot = 0").fetch_one(&st.db).await?;
+    Ok(Json(serde_json::json!({ "first_run": n == 0, "version": env!("CARGO_PKG_VERSION") })))
+}
 
 async fn register(
     State(st): State<AppState>,

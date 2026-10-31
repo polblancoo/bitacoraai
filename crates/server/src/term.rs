@@ -397,7 +397,9 @@ async fn run(sock: &mut WebSocket, st: &AppState, project: Id, task: Option<Id>,
     // arranca en la carpeta del proyecto si existe
     let work_dir: String = sqlx::query_scalar("SELECT work_dir FROM projects WHERE id = ?").bind(project).fetch_one(&st.db).await.unwrap_or_default();
     if !work_dir.is_empty() && !work_dir.contains(['\'', '\n', '\r', '\0']) {
-        let _ = ch.data_bytes(format!("cd '{work_dir}' 2>/dev/null && clear\n").into_bytes()).await;
+        // «~/carpeta» entre comillas simples no se expande: se cambia por $HOME
+        let cd = match work_dir.strip_prefix("~/") { Some(rest) => format!("cd \"$HOME\"/'{rest}'"), None if work_dir == "~" => "cd \"$HOME\"".into(), None => format!("cd '{work_dir}'") };
+        let _ = ch.data_bytes(format!("{cd} 2>/dev/null && clear\n").into_bytes()).await;
     }
     let started = chrono::Utc::now();
     let mut transcript: Vec<u8> = Vec::new();

@@ -216,6 +216,12 @@ A manual with **search and a topic index** (button **📖 Manual**), a tooltip o
 **Download**: [latest release](https://github.com/polblancoo/Rust_tuiManager/releases/latest) (Linux: `.deb`, `.rpm`, AppImage and `tar.gz`; **Windows and macOS coming soon**) · Website: https://polblancoo.github.io/rust_tuiManager/
 
 
+**One line (Linux, no sudo)**: downloads `tm-server`, verifies its SHA-256, sets it up as a user service and tells you the URL. The first time you open the page a short illustrated guide walks you through team, project and AI.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh
+```
+
 ```sh
 cargo install rust-tui-manager-server   # installs the `tm-server` binary
 cargo install rust-tui-manager          # terminal client
