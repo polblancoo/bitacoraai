@@ -224,3 +224,11 @@ CREATE TABLE IF NOT EXISTS bot_runners (
     enabled INTEGER NOT NULL DEFAULT 0,
     set_by INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS github_links (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    login TEXT NOT NULL,
+    token TEXT NOT NULL,
+    scope TEXT NOT NULL DEFAULT '',
+    linked_at TEXT NOT NULL
+);

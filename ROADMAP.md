@@ -46,7 +46,7 @@ Un CTO (o varios admins) arma varios proyectos, asigna recursos **humanos e IA**
 - [ ] Documentar la instalación por plataforma (Claude Code, Cursor, Windsurf, Zed, Claude Desktop).
 
 ### Integración con GitHub
-- [ ] Conexión por Device Flow (cada usuario con su cuenta y sus permisos). Client ID ya creado.
+- [x] Conexión por Device Flow (cada usuario con su cuenta y sus permisos): Configuración → GitHub → Conectar.
 - [ ] Notificaciones (PR, issues, menciones, CI fallido) en la bandeja.
 - [ ] Comentar, crear/cerrar issues, aprobar o mergear PR, re-ejecutar workflows (con confirmación).
 - [ ] Crear tarea desde un issue o PR; visor de archivos de solo lectura.

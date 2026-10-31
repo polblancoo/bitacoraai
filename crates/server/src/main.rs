@@ -7,6 +7,7 @@ mod license;
 mod limits;
 mod notify;
 mod extras;
+mod github;
 mod google;
 mod teampanel;
 mod telegram;
@@ -53,6 +54,7 @@ pub struct AppState {
     pub email_limiter: Arc<limits::RateLimiter<Id>>,
     pub telegram: Option<Arc<telegram::Telegram>>,
     pub google: Option<Arc<google::Google>>,
+    pub github: Option<Arc<github::Github>>,
 }
 
 impl AppState {
@@ -193,6 +195,7 @@ async fn main() -> anyhow::Result<()> {
         email_limiter: Default::default(),
         telegram: telegram::Telegram::from_env().await.map(Arc::new),
         google: google::Google::from_env().map(Arc::new),
+        github: github::Github::from_env().map(Arc::new),
     };
     telegram::spawn_poller(state.clone());
     extras::spawn_reminders(state.clone());
@@ -201,7 +204,7 @@ async fn main() -> anyhow::Result<()> {
     schedule::spawn_schedules(state.clone());
     runner::spawn_runners(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(schedule::router()).merge(runner::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(schedule::router()).merge(runner::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

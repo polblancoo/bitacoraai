@@ -1306,6 +1306,8 @@ const CFG_HELP = {
   user: ["Usuario", "Es tu nombre en la app. Tus compañeros te buscan por él cuando un admin te agrega a un equipo.", null],
   email: ["Email para avisos", "Tocá «Configurar», escribí tu email y poné el código de 6 dígitos que te llega. Solo los emails verificados reciben avisos: asignaciones, menciones, recordatorios y mensajes del equipo.",
     "El servidor necesita una cuenta de correo saliente (Gmail, Outlook, Brevo, SendGrid, Mailgun, SES o uno propio). Creá el archivo ~/.config/tm-server/mail.env (permisos 600) con TM_SMTP_URL, TM_SMTP_USER, TM_SMTP_PASSWORD y TM_SMTP_FROM, agregá EnvironmentFile=-%h/.config/tm-server/mail.env al servicio de tm-server y reinicialo. Sin eso el servidor no manda emails y acá no se puede verificar. Los datos de cada proveedor están en el manual."],
+  github: ["GitHub", "Tocá «Conectar», abrí la página que se muestra, escribí el código y autorizá. Queda vinculada tu cuenta, con tus propios permisos: la app no ve nada que vos no puedas ver. Podés desconectar cuando quieras.",
+    "Creá una OAuth App en github.com → Settings → Developer settings → OAuth Apps, tildá «Enable Device Flow» y copiá su Client ID (no hace falta el secreto). Arrancá tm-server con TM_GITHUB_CLIENT_ID=<ese id> (por ejemplo en ~/.config/tm-server/github.env). Por defecto se piden los permisos «read:user repo»; TM_GITHUB_SCOPE los cambia."],
   telegram: ["Telegram", "Tocá «Vincular», abrí el bot que se muestra y mandale /start CÓDIGO. Después recibís las novedades en Telegram y podés usar /tareas, /hecho N (marca la tarea N como hecha) y /stop (desvincula).",
     "Creá un bot con @BotFather en Telegram y arrancá tm-server con TM_TELEGRAM_TOKEN=<token>. No necesita URL pública (usa long polling). Sin el token, esta fila dice «el servidor no tiene el bot configurado»."],
   inbox: ["Bandeja de novedades", "Reúne lo que te pasó: asignaciones, comentarios, menciones (@usuario), recordatorios y mensajes. Se marcan como leídas al cerrarla. También abre con la campana 🔔 o Ctrl+T n.",
@@ -1360,6 +1362,32 @@ const googleHelp = () => {
         h("li", {}, "Arrancá tm-server con ", code("TM_GOOGLE_CLIENT_ID"), ", ", code("TM_GOOGLE_CLIENT_SECRET"), " y ", code("TM_GOOGLE_REDIRECT"), ". El secreto es privado: no lo compartas ni lo subas a git.")),
       h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { class: "primary", onclick: () => document.getElementById("gc-help")?.remove() }, "Entendido")))));
 };
+// GitHub por Device Flow: se muestra un código para escribir en github.com/login/device y se espera la autorización
+const linkGithub = guard(async () => {
+  const d = await api("POST", "/api/github/link");
+  const note = h("p", { class: "hint" }, "Esperando que autorices en GitHub…");
+  let alive = true;
+  const close = () => { alive = false; box.remove(); };
+  const box = h("div", { class: "overlay", onmousedown: (e) => e.target === box && close() },
+    h("div", { class: "modal small" }, h("h3", {}, "Conectar GitHub"),
+      h("p", {}, "1. Abrí esta página e iniciá sesión en GitHub:"),
+      h("p", {}, h("a", { href: d.verification_uri, target: "_blank", rel: "noopener" }, d.verification_uri)),
+      h("p", {}, "2. Escribí este código:"),
+      h("code", { class: "bot-token", style: "font-size:1.6em;letter-spacing:.15em;text-align:center" }, d.user_code),
+      note,
+      h("div", { class: "row" }, h("button", { onclick: () => copy(d.user_code, "Código copiado") }, "Copiar código"), h("span", { class: "spacer" }), h("button", { onclick: close }, "Cancelar"))));
+  document.body.append(box);
+  let wait = Math.max(d.interval, 3) * 1000;
+  const t0 = Date.now();
+  while (alive && Date.now() - t0 < d.expires_in * 1000) {
+    await new Promise((r) => setTimeout(r, wait));
+    if (!alive) return;
+    const r = await api("POST", "/api/github/poll").catch(() => ({ status: "error" }));
+    if (r.status === "linked") { close(); toast("GitHub conectado como @" + r.login); openSettings(); return; }
+    if (r.status === "slow_down") wait += 5000;
+    if (["expired", "denied", "none"].includes(r.status)) { note.textContent = r.status === "denied" ? "❌ Rechazaste el acceso en GitHub." : "⌛ El código venció. Cerrá y volvé a intentar."; return; }
+  }
+});
 const openSettings = guard(async () => {
   document.getElementById("settings-modal")?.remove();
   S.me = await api("GET", "/api/me");
@@ -1377,6 +1405,7 @@ const openSettings = guard(async () => {
   const server = h("input", { value: S.server, disabled: IS_WEB, maxLength: 200 });
   const tgState = !me.telegram_available ? "el servidor no tiene el bot configurado" : me.telegram_linked ? "✓ vinculado" : "sin vincular";
   const gc = await api("GET", "/api/google").catch(() => ({ available: false }));
+  const gh = await api("GET", "/api/github").catch(() => ({ available: false }));
   const gcState = !gc.available ? "el servidor no tiene Google configurado" : gc.linked ? `✓ conectado (${gc.events} tareas con fecha en tu calendario)` : "sin conectar";
   const emailState = !me.email ? "sin cargar" : me.email_verified ? `✓ ${me.email}` : `${me.email} (sin verificar)`;
 
@@ -1389,6 +1418,9 @@ const openSettings = guard(async () => {
         line([`Telegram: ${tgState}`, "telegram"], me.telegram_available && (me.telegram_linked
           ? h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/telegram"); close(); openSettings(); }) }, "Desvincular")
           : h("button", { onclick: () => { close(); linkTelegram(); } }, "Vincular"))),
+        line([`GitHub: ${!gh.available ? "el servidor no tiene GitHub configurado" : gh.linked ? "✓ conectado como @" + gh.login : "sin conectar"}`, "github"], gh.available && (gh.linked
+          ? h("button", { class: "danger", onclick: guard(async () => { if (!confirm("¿Desconectar tu cuenta de GitHub?")) return; await api("DELETE", "/api/github"); close(); openSettings(); }) }, "Desconectar")
+          : h("button", { onclick: () => { close(); linkGithub(); } }, "Conectar"))),
         line([`Google Calendar: ${gcState}`, "google"], gc.available && (gc.linked
           ? [h("button", { onclick: guard(async () => { const r = await api("POST", "/api/google/sync"); toast(`Calendario al día (${r.created} nuevos, ${r.updated} cambiados, ${r.deleted} quitados)`); close(); openSettings(); }) }, "Sincronizar"),
             h("button", { class: "danger", onclick: guard(async () => { if (!confirm("¿Desconectar y quitar de tu calendario los eventos creados por la app?")) return; await api("DELETE", "/api/google"); close(); openSettings(); }) }, "Desconectar")]
