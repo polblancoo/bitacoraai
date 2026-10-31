@@ -1023,7 +1023,7 @@ const openTask = guard(async (task) => {
   const modal = h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
     h("div", { class: "modal task-modal" + (store.get("taskMax") === "1" ? " max" : "") },
       h("h3", { class: "task-head" }, "Tarea ", h("span", { class: "tid" }, "#" + task.id), h("span", { class: "spacer" }),
-        can("owner") && h("button", { class: "ghost", title: "Abre una terminal SSH a la máquina del proyecto, sin salir de la tarea (solo owners)", onclick: guard(() => openTerminal(cur())) }, "💻 Terminal"),
+        can("owner") && h("button", { class: "ghost", title: "Abre una terminal SSH a la máquina del proyecto, sin salir de la tarea (solo owners)", onclick: guard(() => openTaskTerminal(cur())) }, "💻 Terminal"),
         h("button", { class: "ghost max-btn", title: "Maximizar o restaurar la ventana para leer los comentarios más cómodo", onclick: (e) => {
           const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("taskMax", on ? "1" : "0");
           e.currentTarget.textContent = on ? "⤡ Restaurar" : "⤢ Maximizar";
@@ -1163,6 +1163,7 @@ function calendarView() {
 const toggleSide = () => { S.sideOff = !S.sideOff; store.set("sideOff", S.sideOff ? "1" : "0"); render(); setTimeout(() => window.dispatchEvent(new Event("resize")), 50); };
 function appView() {
   const search = h("input", { placeholder: "Buscar…", value: S.query, oninput: (e) => { S.query = e.target.value; render(true); } });
+  const dock = PANES.length > 0 && !S.terms && h("button", { class: "term-dock", title: "Tenés terminales abiertas: tocá para volver a ellas", onclick: () => openTerms() }, `🖥️ Terminales (${PANES.length})`);
   return h("div", { class: "shell" + (S.sideOff ? " side-off" : "") + (S.panel && S.team ? " with-panel" : "") + (S.terms && store.get("tvZen") === "1" ? " tv-zen" : "") },
     h("aside", {},
       h("div", { class: "brand" }, h("img", { src: "icon-192.png", alt: "", width: 22, height: 22, style: "vertical-align:middle;margin-right:6px;border-radius:5px" }), h("span", { class: "brand-name" }, APP_NAME),
@@ -1203,7 +1204,7 @@ function appView() {
         S.project.repo && h("span", { title: "Repositorio" }, "🔗 " + S.project.repo)),
       S.terms ? termsView() : S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
         : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos")),
-    S.panel && S.team && teamPanel());
+    S.panel && S.team && teamPanel(), dock);
 }
 
 function render(keepFocus) {
@@ -1828,6 +1829,7 @@ function termsView() {
   return h("div", { class: "termsv" },
     h("div", { class: "tv-bar" }, h("label", {}, "Proyecto ", proj), h("label", {}, "Vista ", cols),
       h("button", { class: "primary", title: "Abre una terminal SSH nueva en la carpeta de este proyecto, sin crear tarea", onclick: () => addPane(S.tvProject, null, "💻 " + (S.projects.find((p) => p.id === S.tvProject)?.name || "terminal")) }, "+ Terminal"),
+      h("button", { title: "Abre un panel por cada tarea abierta de este proyecto, con el título de la tarea y su responsable", onclick: openProjectPanes }, "📋 Abrir las tareas"),
       h("button", { class: store.get("tvZen") === "1" ? "on" : "", title: "Oculta el menú lateral y el panel del equipo para tener toda la pantalla para las terminales", onclick: () => { store.set("tvZen", store.get("tvZen") === "1" ? "0" : "1"); render(); startPanes(); } }, store.get("tvZen") === "1" ? "⛶ Mostrar barras" : "⛶ Ocultar barras"),
       h("button", { class: store.get("tvSide") === "0" ? "on" : "", title: "Muestra u oculta la lista de IAs de la izquierda", onclick: () => { store.set("tvSide", store.get("tvSide") === "0" ? "1" : "0"); render(); startPanes(); } }, store.get("tvSide") === "0" ? "◧ Mostrar IAs" : "◧ Ocultar IAs"),
       h("button", { title: "Cómo llega la terminal a la máquina de este proyecto: por el agente (recomendado) o por SSH", onclick: guard(() => openTerminal({ id: null, project_id: S.tvProject })) }, "⚙ Conexión"),
@@ -1835,8 +1837,31 @@ function termsView() {
     h("div", { class: "tv-body" }, store.get("tvSide") !== "0" && tvSide,
       h("div", { class: "tv-grid", style: `--cols:${c}` }, PANES.length ? PANES.map((p) => p.el) : h("div", { class: "empty" }, "Tocá «+ Terminal» o elegí una IA de la izquierda."))));
 }
+// la terminal de una tarea se abre como un panel de «🖥️ Terminales»: sigue viva aunque mires otra tarea, la configuración o lo que sea
+const paneTitle = (t) => {
+  const m = (S.members || []).find((x) => x.id === t.assignee_id);
+  return `#${t.id} · ${t.title.length > 42 ? t.title.slice(0, 42) + "…" : t.title} · ${m ? (botInfo(m.username) ? "🤖 " : "👤 ") + m.username : "sin responsable"}`;
+};
+const openTaskTerminal = guard(async (task) => {
+  const c0 = await api("GET", `/api/projects/${task.project_id}/ssh`);
+  if (!c0.host && !c0.agent_id) return openTerminal(task);
+  closeModal(); S.open = null;
+  S.tvProject = task.project_id;
+  await openTerms();
+  await addPane(task.project_id, task.id, paneTitle(task));
+});
+// abre un panel por cada tarea abierta del proyecto (en curso primero), hasta completar 8
+const openProjectPanes = guard(async () => {
+  await loadTermTasks();
+  const list = (S.tvTasks || []).filter((t) => !t.parent_id && t.status !== "done" && !/^🙋 Pedido de #/.test(t.title))
+    .sort((x, y) => (x.status === "doing" ? 0 : 1) - (y.status === "doing" ? 0 : 1));
+  let n = 0;
+  for (const t of list) { if (PANES.length >= 8) break; if (PANES.some((p) => p.tid === t.id)) continue; await addPane(t.project_id, t.id, paneTitle(t)); n++; }
+  toast(n ? `Abiertas ${n} terminales, una por tarea` : "No hay tareas abiertas sin terminal (máximo 8 a la vez)");
+});
 async function addPane(pid, tid, title) {
   if (PANES.length >= 8) return toast("Máximo 8 terminales abiertas", true);
+  if (tid && PANES.some((p) => p.tid === tid)) return toast("Esa tarea ya tiene su terminal abierta acá");
   try {
     const c0 = await api("GET", `/api/projects/${pid}/ssh`); if (!c0.host && !c0.agent_id) { toast("Este proyecto todavía no tiene conexión a su máquina: configurala primero"); return openTerminal({ id: null, project_id: pid }); }
   } catch (e) { return toast(e.message, true); }

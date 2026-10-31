@@ -630,6 +630,8 @@ async fn run_agent(sock: &mut WebSocket, st: &AppState, project: Id, task: Optio
                 Some(Message::Binary(b)) => {
                     transcript.extend_from_slice(&b);
                     if transcript.len() > 400_000 { transcript.drain(..100_000); }
+                    // mientras la IA trabaja en la terminal hay salida: la sesión no se da por inactiva aunque nadie esté mirando
+                    last = Instant::now();
                     if sock.send(Message::Binary(b)).await.is_err() { break; }
                 }
                 Some(Message::Text(t)) => if t.contains("\"exit\"") { break; },
