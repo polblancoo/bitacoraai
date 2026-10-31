@@ -89,6 +89,7 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE tasks ADD COLUMN parent_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE",
         "ALTER TABLE team_members ADD COLUMN role TEXT NOT NULL DEFAULT 'member'",
         "ALTER TABLE users ADD COLUMN email TEXT",
+        "ALTER TABLE activity ADD COLUMN task_id INTEGER",
         "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN email_code_hash TEXT",
         "ALTER TABLE users ADD COLUMN email_code_expires TEXT",

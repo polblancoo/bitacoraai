@@ -175,7 +175,7 @@ const avatar = (name) => h("span", { class: "avatar" + (botInfo(name) ? " bot" :
 
 // ---------- sesión ----------
 const logoutAll = guard(async () => {
-  if (!confirm("¿Cerrar sesión en todos tus dispositivos?")) return;
+  if (!(await ask("¿Cerrar sesión en todos tus dispositivos?"))) return;
   await api("POST", "/api/logout-all");
   logout();
 });
@@ -398,6 +398,21 @@ function form(title, fields, okLabel = "Aceptar") {
         h("div", { class: "row" }, h("button", { onclick: () => done(null) }, "Cancelar"), h("button", { class: "primary", onclick: submit }, okLabel))));
     document.body.append(overlay);
     inputs[0][1].focus();
+  });
+}
+
+// ---------- confirmación propia (en lugar del confirm() del navegador) ----------
+function ask(msg, okLabel) {
+  return new Promise((resolve) => {
+    const danger = /borrar|quitar|salir|desconectar|cerrar sesi/i.test(msg);
+    const done = (v) => { overlay.remove(); resolve(v); };
+    const overlay = h("div", { class: "overlay", style: "z-index:10000", onmousedown: (e) => e.target === overlay && done(false) },
+      h("div", { class: "modal small ask-dlg", onkeydown: (e) => { if (e.key === "Escape") { e.stopPropagation(); done(false); } } },
+        h("div", { class: "ask-ico" + (danger ? " danger" : "") }, danger ? "⚠️" : "❔"),
+        h("p", { class: "ask-msg" }, msg),
+        h("div", { class: "row" }, h("button", { onclick: () => done(false) }, "Cancelar"),
+          h("button", { class: danger ? "danger" : "primary", id: "ask-ok", onclick: () => done(true) }, okLabel || (danger ? "Sí, continuar" : "Aceptar")))));
+    document.body.append(overlay); overlay.querySelector("#ask-ok").focus();
   });
 }
 
@@ -662,7 +677,7 @@ const openTeam = guard(async () => {
         await api("PUT", `/api/teams/${S.team.id}/members/${m.id}`, { role: e.target.value }); refreshMembers();
       }), !manageable, RANK[myRole()]),
       (manageable || (m.id === S.user.id && m.role !== "owner")) && h("button", { class: "ghost danger", title: m.id === S.user.id ? "Salir del equipo" : "Quitar", onclick: guard(async () => {
-        if (!confirm(m.id === S.user.id ? "¿Salir del equipo?" : `¿Quitar a ${m.username}?`)) return;
+        if (!(await ask(m.id === S.user.id ? "¿Salir del equipo?" : `¿Quitar a ${m.username}?`))) return;
         await api("DELETE", `/api/teams/${S.team.id}/members/${m.id}`);
         if (m.id === S.user.id) { document.getElementById("team-modal")?.remove(); await boot(); } else refreshMembers();
       }) }, "✕"));
@@ -758,7 +773,7 @@ function teamPanel() {
     h("div", { class: "tp-line" }, avatar(m.username), h("span", { class: "tp-name grow" }, m.bot ? "🤖 " : "", m.username, m.bot && m.model && h("small", { class: "inl" }, " · " + m.model), m.id === S.user.id && h("small", { class: "inl" }, " (vos)")), rolePick(m),
       ((admin && m.role !== "owner" && RANK[m.role] < RANK[mine]) || (m.id === S.user.id && m.role !== "owner")) &&
         h("button", { class: "ghost danger", title: m.id === S.user.id ? "Salir del equipo" : "Quitar del equipo", onclick: guard(async () => {
-          if (!confirm(m.id === S.user.id ? "¿Salir del equipo?" : `¿Quitar a ${m.username}?`)) return;
+          if (!(await ask(m.id === S.user.id ? "¿Salir del equipo?" : `¿Quitar a ${m.username}?`))) return;
           await api("DELETE", `/api/teams/${o.id}/members/${m.id}`);
           if (m.id === S.user.id) await boot();
         }) }, "✕")),
@@ -798,7 +813,7 @@ function teamPanel() {
     admin && sec(`Invitaciones (${o.invites.length})`, o.invites.length ? h("div", { class: "tp-list" }, o.invites.map(inviteCard)) : h("small", {}, "No hay invitaciones. Generá un código con «Agregar / invitar».")),
     sec("Ajustes",
       h("div", { class: "tp-list" },
-        !owner && h("button", { class: "danger", onclick: guard(async () => { if (!confirm("¿Salir del equipo?")) return; await api("DELETE", `/api/teams/${o.id}/members/${S.user.id}`); await boot(); }) }, "Salir del equipo"),
+        !owner && h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Salir del equipo?"))) return; await api("DELETE", `/api/teams/${o.id}/members/${S.user.id}`); await boot(); }) }, "Salir del equipo"),
         owner && h("button", { onclick: transfer }, "Transferir la propiedad"),
         owner && h("button", { class: "danger", onclick: remove }, "Eliminar el equipo"),
         !admin && h("small", {}, "Solo un admin o el dueño puede cambiar los datos del equipo y gestionar miembros."))));
@@ -1057,7 +1072,7 @@ const openTask = guard(async (task) => {
     closeModal();
   });
   const del = guard(async () => {
-    if (!confirm("¿Borrar la tarea?")) return;
+    if (!(await ask("¿Borrar la tarea?"))) return;
     await api("DELETE", `/api/tasks/${task.id}`);
     S.tasks = S.tasks.filter((t) => t.id !== task.id); closeModal(); render();
   });
@@ -1341,8 +1356,8 @@ function portfolioView() {
     h("div", { class: "pf-grid" }, ps.map(card)),
     h("h3", {}, "🤖 Lo último que hicieron las IAs"),
     S.pf.ai_recent.length === 0 ? h("small", { class: "hint" }, "Todavía no hay actividad de IAs.")
-      : h("div", { class: "act-list" }, S.pf.ai_recent.map((a) => h("div", { class: "act-row" }, avatar(a.who),
-        h("span", { class: "grow" }, h("b", {}, a.who), " ", a.text, h("small", { class: "inl" }, " · " + a.project)), h("small", {}, ago(a.at))))));
+      : h("div", { class: "act-list" }, S.pf.ai_recent.map((a) => h("div", { class: "act-row" + (a.task_id ? " clickable" : ""), title: a.task_id ? "Abrir la tarea y ver toda la conversación" : "", onclick: a.task_id ? guard(async () => openTask(await api("GET", `/api/tasks/${a.task_id}`))) : null }, avatar(a.who),
+        h("span", { class: "grow" }, h("b", {}, a.who), " ", a.text, h("small", { class: "inl" }, " · " + a.project)), h("small", {}, ago(a.at)), a.task_id && h("small", { class: "hint" }, "💬 ver")))));
 }
 
 function activityView() {
@@ -1491,11 +1506,11 @@ const openSettings = guard(async () => {
           ? h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/telegram"); close(); openSettings(); }) }, "Desvincular")
           : h("button", { onclick: () => { close(); linkTelegram(); } }, "Vincular"))),
         line([`GitHub: ${!gh.available ? "el servidor no tiene GitHub configurado" : gh.linked ? "✓ conectado como @" + gh.login : "sin conectar"}`, "github"], gh.available && (gh.linked
-          ? h("button", { class: "danger", onclick: guard(async () => { if (!confirm("¿Desconectar tu cuenta de GitHub?")) return; await api("DELETE", "/api/github"); close(); openSettings(); }) }, "Desconectar")
+          ? h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Desconectar tu cuenta de GitHub?"))) return; await api("DELETE", "/api/github"); close(); openSettings(); }) }, "Desconectar")
           : h("button", { onclick: () => { close(); linkGithub(); } }, "Conectar"))),
         line([`Google Calendar: ${gcState}`, "google"], gc.available && (gc.linked
           ? [h("button", { onclick: guard(async () => { const r = await api("POST", "/api/google/sync"); toast(`Calendario al día (${r.created} nuevos, ${r.updated} cambiados, ${r.deleted} quitados)`); close(); openSettings(); }) }, "Sincronizar"),
-            h("button", { class: "danger", onclick: guard(async () => { if (!confirm("¿Desconectar y quitar de tu calendario los eventos creados por la app?")) return; await api("DELETE", "/api/google"); close(); openSettings(); }) }, "Desconectar")]
+            h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Desconectar y quitar de tu calendario los eventos creados por la app?"))) return; await api("DELETE", "/api/google"); close(); openSettings(); }) }, "Desconectar")]
           : h("button", { onclick: guard(async () => { const l = await api("POST", "/api/google/link"); window.open(l.url, "_blank", "noopener"); toast("Autorizá en la pestaña de Google y después volvé a abrir Configuración"); }) }, "Conectar"))),
         line(["Bandeja de novedades", "inbox"], h("button", { onclick: go(() => loadInbox(false)) }, S.unread ? `Abrir (${S.unread})` : "Abrir")),
         line(["Cerrar sesión en este dispositivo", "logout"], h("button", { onclick: () => { close(); logout(); } }, "Salir")),
@@ -1822,6 +1837,19 @@ async function checkFirstRun() {
 }
 
 if (IS_WEB && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+// ---------- zoom de la letra: A− / A+ flotante en todas las pantallas (se recuerda en este dispositivo) ----------
+(function zoomControl() {
+  const STEPS = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2];
+  let z = +store.get("zoom") || 1;
+  const apply = () => { document.documentElement.style.zoom = z === 1 ? "" : String(z); lbl.textContent = Math.round(z * 100) + "%"; store.set("zoom", String(z)); };
+  const step = (d) => { const i = Math.max(0, STEPS.findIndex((x) => x >= z - 0.001)); z = STEPS[Math.min(STEPS.length - 1, Math.max(0, i + d))]; apply(); };
+  const lbl = h("button", { class: "zoom-lbl", title: "Volver al tamaño normal", onclick: () => { z = 1; apply(); } }, "100%");
+  const box = h("div", { class: "zoom-ctl", title: "Tamaño de la letra (también Ctrl + Alt + rueda del mouse)" },
+    h("button", { title: "Letra más chica", onclick: () => step(-1) }, "A−"), lbl, h("button", { title: "Letra más grande", onclick: () => step(1) }, "A+"));
+  document.addEventListener("wheel", (e) => { if (e.ctrlKey && e.altKey) { e.preventDefault(); step(e.deltaY < 0 ? 1 : -1); } }, { passive: false });
+  document.body.append(box); apply();
+})();
+
 render();
 if (S.token) boot(true).catch(() => { S.token = null; render(); }); else checkFirstRun();
 
@@ -2365,7 +2393,7 @@ const openSchedules = guard(async () => {
     can("member") && h("div", { class: "row" },
       h("button", { title: "Crea la tarea ahora, sin esperar ni mover el próximo horario", onclick: guard(async () => { const r = await api("POST", `/api/schedules/${s.id}/run`); toast(r.task_id ? "Tarea creada" : "No se creó la tarea"); reload(); }) }, "▶ Ejecutar ahora"),
       h("button", { onclick: guard(async () => { await api("PUT", `/api/schedules/${s.id}`, body(s, { active: !s.active })); reload(); }) }, s.active ? "⏸ Pausar" : "▶ Activar"),
-      h("button", { class: "danger", onclick: guard(async () => { if (!confirm("¿Borrar la tarea programada?")) return; await api("DELETE", `/api/schedules/${s.id}`); reload(); }) }, "🗑 Borrar"))));
+      h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Borrar la tarea programada?"))) return; await api("DELETE", `/api/schedules/${s.id}`); reload(); }) }, "🗑 Borrar"))));
   const title = h("input", { placeholder: "Título de la tarea (ej. Chequear resultados)", maxLength: 200 });
   const desc = h("textarea", { placeholder: "Descripción: qué tiene que hacer (opcional)", rows: 3 });
   const who = h("select", {}, h("option", { value: "" }, "Sin asignar"), assignable.map((m) => h("option", { value: m.id }, m.id === S.user?.id && !can("admin") ? `Yo (${m.username})` : label(m.username))));

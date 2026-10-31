@@ -477,3 +477,13 @@ ol.guide pre { margin: 4px 0; }
 .modal.task-modal > .row:last-child { position: sticky; bottom: -22px; background: var(--card); margin: 0 -22px -22px; padding: 10px 22px; border-top: 1px solid var(--line); z-index: 5; }
 .cmdlist { display: grid; gap: 6px; margin-top: 8px; }
 .cmdlist > button.primary { justify-self: start; }
+.act-row.clickable { cursor: pointer; } .act-row.clickable:hover { background: var(--bg2); }
+.zoom-ctl { position: fixed; right: 10px; bottom: 10px; z-index: 9999; display: flex; gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 3px; opacity: .55; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.zoom-ctl:hover { opacity: 1; }
+.zoom-ctl button { padding: 2px 9px; border-radius: 999px; font-size: 13px; background: transparent; border: 0; color: var(--fg); cursor: pointer; }
+.zoom-ctl button:hover { background: var(--bg2); }
+.zoom-ctl .zoom-lbl { color: var(--dim); font-size: 11px; min-width: 40px; }
+.ask-dlg { text-align: center; gap: 10px; }
+.ask-ico { font-size: 38px; line-height: 1; }
+.ask-msg { font-size: 15px !important; margin: 4px 0 8px !important; }
+.ask-dlg .row { justify-content: center !important; gap: 10px; }

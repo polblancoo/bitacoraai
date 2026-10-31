@@ -155,11 +155,16 @@ pub async fn set_done(st: &AppState, actor: Id, id: Id) -> std::result::Result<T
 // ---------- actividad ----------
 
 pub async fn log_project(st: &AppState, project: Id, user: Id, text: String) {
-    let _ = sqlx::query("INSERT INTO activity (project_id, user_id, text, created_at) VALUES (?, ?, ?, ?)")
+    log_project_task(st, project, user, text, None).await;
+}
+
+pub async fn log_project_task(st: &AppState, project: Id, user: Id, text: String, task: Option<Id>) {
+    let _ = sqlx::query("INSERT INTO activity (project_id, user_id, text, created_at, task_id) VALUES (?, ?, ?, ?, ?)")
         .bind(project)
         .bind(user)
         .bind(text.chars().take(300).collect::<String>())
         .bind(Utc::now())
+        .bind(task)
         .execute(&st.db)
         .await;
     let _ = sqlx::query("DELETE FROM activity WHERE project_id = ? AND id NOT IN (SELECT id FROM activity WHERE project_id = ? ORDER BY id DESC LIMIT 500)")
@@ -175,7 +180,7 @@ pub async fn log(st: &AppState, project: Id, user: Id, text: String) {
 
 pub async fn log_task(st: &AppState, task: Id, user: Id, text: String) {
     if let Ok(project) = sqlx::query_scalar::<_, Id>("SELECT project_id FROM tasks WHERE id = ?").bind(task).fetch_one(&st.db).await {
-        log_project(st, project, user, text).await;
+        log_project_task(st, project, user, text, Some(task)).await;
     }
 }
 

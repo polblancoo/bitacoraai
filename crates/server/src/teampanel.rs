@@ -248,8 +248,8 @@ async fn portfolio(State(st): State<AppState>, user: AuthUser, Path(team): Path<
     .fetch_all(&st.db)
     .await?;
     let recent = sqlx::query(
-        "SELECT p.name AS project, u.username, a.text, a.created_at FROM activity a JOIN projects p ON p.id = a.project_id \
-         JOIN users u ON u.id = a.user_id WHERE p.team_id = ? AND u.is_bot = 1 ORDER BY a.id DESC LIMIT 8",
+        "SELECT p.name AS project, u.username, a.text, a.created_at, COALESCE(a.task_id, (SELECT t.id FROM tasks t WHERE t.project_id = a.project_id AND instr(a.text, '«' || t.title || '»') > 0 ORDER BY t.id DESC LIMIT 1)) AS task_id FROM activity a JOIN projects p ON p.id = a.project_id \
+         JOIN users u ON u.id = a.user_id WHERE p.team_id = ? AND u.is_bot = 1 ORDER BY a.id DESC LIMIT 15",
     )
     .bind(team)
     .fetch_all(&st.db)
@@ -292,7 +292,7 @@ async fn portfolio(State(st): State<AppState>, user: AuthUser, Path(team): Path<
         .collect();
     let recent: Vec<Value> = recent
         .iter()
-        .map(|r| json!({ "project": r.get::<String, _>("project"), "who": r.get::<String, _>("username"), "text": r.get::<String, _>("text"), "at": r.get::<String, _>("created_at") }))
+        .map(|r| json!({ "project": r.get::<String, _>("project"), "who": r.get::<String, _>("username"), "text": r.get::<String, _>("text"), "at": r.get::<String, _>("created_at"), "task_id": r.get::<Option<Id>, _>("task_id") }))
         .collect();
     Ok(Json(json!({ "projects": projects, "ai_recent": recent })))
 }
