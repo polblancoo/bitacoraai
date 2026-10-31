@@ -434,6 +434,13 @@ function showBotToken(name, token, cmd) {
         h("button", { class: "primary", onclick: () => overlay.remove() }, "Listo"))));
   document.body.append(overlay);
 }
+setInterval(async () => {
+  if (!S.token || !S.team || document.hidden) return;
+  const next = await api("GET", `/api/teams/${S.team.id}/bots`).catch(() => null);
+  if (!next) return;
+  const sig = (l) => (l || []).map((b) => `${b.id}${b.online}${b.run_on}${b.active}`).join();
+  if (sig(next) !== sig(S.bots)) { S.bots = next; render(); }
+}, 20000);
 const loadBots = async () => { S.bots = await api("GET", `/api/teams/${S.team.id}/bots`).catch(() => []); render(); };
 // Proveedores de IA para el alta: etiqueta, si es paga (pide clave), modelos para elegir y cómo se lanza
 const AI_KINDS = {
@@ -1157,7 +1164,7 @@ function appView() {
           S.projects.map((p) => h("button", { class: p.id === S.project?.id && !S.portfolio && !S.terms ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
           h("span", { class: "dot", style: `background:${p.color}` }), p.name)))),
       S.team && h("div", {}, h("h2", {}, "🤖 IAs", can("admin") && h("button", { class: "ghost", onclick: createBot, title: "Sumar una IA al equipo (crea su token)" }, "+")),
-        h("div", { class: "nav" }, (S.bots || []).map((b) => h("button", { class: b.active ? "" : "revoked", onclick: () => botModal(b), title: b.active ? "Token activo" : "Token revocado" }, "🤖 " + b.username, b.model && h("small", { class: "inl" }, " · " + b.model))),
+        h("div", { class: "nav" }, (S.bots || []).map((b) => h("button", { class: b.active ? "" : "revoked", onclick: () => botModal(b), title: !b.active ? "Token revocado" : b.online ? "Conectada: su agente consultó hace instantes" : b.run_on ? "Activada en el servidor pero sin conectar" : "Sin agente conectado (no trabaja sola)" }, (!b.active ? "⚪ " : b.online ? "🟢 " : b.run_on ? "🔴 " : "⚪ ") + "🤖 " + b.username, b.model && h("small", { class: "inl" }, " · " + b.model))),
           !(S.bots || []).length && h("small", { class: "hint" }, can("admin") ? "Sumá asistentes de código con «+»" : "Sin IAs en este equipo"))),
       h("button", { class: "cfg-btn", onclick: openSettings, title: "Configuración (,)" }, "⚙  Configuración"),
       h("button", { class: "cfg-btn", onclick: () => openManual(), title: "Manual con buscador e índice por temas" }, "📖  Manual"),
@@ -1683,6 +1690,16 @@ async function openTerminal(task) {
     term.onResize(({ cols, rows }) => ws.readyState === 1 && ws.send(JSON.stringify({ resize: [cols, rows] })));
     ro = new ResizeObserver(() => { try { fit.fit(); } catch {} }); ro.observe(box);
     term.focus();
+    // la máquina del proyecto no tiene herdr: se propone instalarlo (el comando queda escrito en la terminal; lo confirma la persona con Enter)
+    const ag = mode.value === "agent" ? (await api("GET", `/api/projects/${pid}/term/agents`).catch(() => [])).find((x) => String(x.id) === agentSel.value) : null;
+    if (ag && ag.online && !ag.herdr && store.get("no_herdr") !== "1") {
+      const bar = h("div", { class: "row", style: "background:var(--bg2);border-radius:8px;padding:8px 10px;margin-top:6px" },
+        h("span", { class: "grow" }, "Esta máquina no tiene herdr: un panel que muestra qué hace cada IA (trabajando, esperando o bloqueada) y deja las sesiones corriendo si cerrás la terminal."),
+        h("button", { class: "primary", onclick: () => { ws.readyState === 1 && ws.send(enc.encode("curl -fsSL https://herdr.dev/install.sh | sh")); bar.remove(); toast("Revisá el comando en la terminal y tocá Enter para instalarlo"); term.focus(); } }, "Instalar"),
+        h("button", { onclick: () => bar.remove() }, "Ahora no"),
+        h("button", { class: "ghost", onclick: () => { store.set("no_herdr", "1"); bar.remove(); } }, "No preguntar más"));
+      box.after(bar);
+    }
     cfg.host_fp = (await api("GET", `/api/projects/${pid}/ssh`)).host_fp; info.textContent = "Huella de la máquina: " + cfg.host_fp;
   });
   const keygen = guard(async () => {

@@ -85,11 +85,12 @@ async fn manages_bot(st: &AppState, caller: Id, bot: Id) -> Result<()> {
 async fn list_bots(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
     require(&st, team, user.id, Role::Viewer).await?;
     let rows = sqlx::query(
-        "SELECT u.id, u.username, u.model, u.deny, u.allow, m.role, m.joined_at, cb.username AS created_by, t.last_used, t.id AS tok \
+        "SELECT u.id, u.username, u.model, u.deny, u.allow, m.role, m.joined_at, cb.username AS created_by, t.last_used, t.id AS tok, COALESCE(t.last_used >= ?, 0) AS online, COALESCE(r.enabled, 0) AS run_on \
          FROM team_members m JOIN users u ON u.id = m.user_id \
-         LEFT JOIN api_tokens t ON t.user_id = u.id LEFT JOIN users cb ON cb.id = t.created_by \
+         LEFT JOIN api_tokens t ON t.user_id = u.id LEFT JOIN users cb ON cb.id = t.created_by LEFT JOIN bot_runners r ON r.user_id = u.id \
          WHERE m.team_id = ? AND u.is_bot = 1 ORDER BY u.username",
     )
+    .bind(chrono::Utc::now() - chrono::Duration::seconds(90))
     .bind(team)
     .fetch_all(&st.db)
     .await?;
@@ -107,6 +108,8 @@ async fn list_bots(State(st): State<AppState>, user: AuthUser, Path(team): Path<
                     "created_by": r.get::<Option<String>, _>("created_by"),
                     "last_used": r.get::<Option<String>, _>("last_used"),
                     "active": r.get::<Option<Id>, _>("tok").is_some(),
+                    "online": r.get::<i64, _>("online") != 0,
+                    "run_on": r.get::<i64, _>("run_on") != 0,
                 })
             })
             .collect(),

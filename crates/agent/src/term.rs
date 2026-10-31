@@ -21,7 +21,7 @@ pub async fn serve(api: Arc<Api>) {
     let active: Arc<Mutex<HashSet<String>>> = Default::default();
     loop {
         tokio::time::sleep(Duration::from_secs(1)).await;
-        let Ok(list) = api.get("/api/agent/term/pending").await else { continue };
+        let Ok(list) = api.get(&format!("/api/agent/term/pending?herdr={}", u8::from(has_herdr()))).await else { continue };
         for job in list.as_array().into_iter().flatten() {
             let Some(sid) = job["sid"].as_str().map(String::from) else { continue };
             if !active.lock().unwrap().insert(sid.clone()) {
@@ -36,6 +36,12 @@ pub async fn serve(api: Arc<Api>) {
             });
         }
     }
+}
+
+/// ¿Está `herdr` instalado en esta máquina? (en el PATH o en ~/.local/bin, donde lo deja su instalador)
+fn has_herdr() -> bool {
+    let local = std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/bin/herdr"));
+    local.is_some_and(|p| p.is_file()) || std::env::var_os("PATH").is_some_and(|p| std::env::split_paths(&p).any(|d| d.join("herdr").is_file()))
 }
 
 async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {

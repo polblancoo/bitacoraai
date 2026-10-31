@@ -44,11 +44,11 @@ struct Pending {
 }
 static PENDING: LazyLock<Mutex<HashMap<String, Pending>>> = LazyLock::new(Default::default);
 /// Última vez que cada agente con terminal habilitada consultó al servidor.
-static AGENTS: LazyLock<Mutex<HashMap<Id, Instant>>> = LazyLock::new(Default::default);
+static AGENTS: LazyLock<Mutex<HashMap<Id, (Instant, bool)>>> = LazyLock::new(Default::default);
 const AGENT_ONLINE: Duration = Duration::from_secs(15);
 
 fn agent_online(id: Id) -> bool {
-    AGENTS.lock().unwrap().get(&id).is_some_and(|t| t.elapsed() < AGENT_ONLINE)
+    AGENTS.lock().unwrap().get(&id).is_some_and(|t| t.0.elapsed() < AGENT_ONLINE)
 }
 const IDLE: Duration = Duration::from_secs(30 * 60);
 
@@ -510,15 +510,16 @@ async fn list_agents(State(st): State<AppState>, user: crate::auth::AuthUser, Pa
         .bind(team)
         .fetch_all(&st.db)
         .await?;
-    Ok(Json(Value::Array(rows.into_iter().map(|(id, name, model)| json!({ "id": id, "name": name, "model": model, "online": agent_online(id) })).collect())))
+    Ok(Json(Value::Array(rows.into_iter().map(|(id, name, model)| json!({ "id": id, "name": name, "model": model, "online": agent_online(id), "herdr": AGENTS.lock().unwrap().get(&id).is_some_and(|t| t.1) })).collect())))
 }
 
 /// El agente pregunta cada segundo si hay una terminal para abrir (así también se sabe que está conectado).
-async fn agent_pending(user: crate::auth::AuthUser) -> Result<Json<Value>> {
+async fn agent_pending(user: crate::auth::AuthUser, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>> {
     if !user.bot {
         return Err(AppError::forbidden());
     }
-    AGENTS.lock().unwrap().insert(user.id, Instant::now());
+    // el agente avisa si la máquina tiene herdr instalado (la web propone instalarlo al abrir la terminal)
+    AGENTS.lock().unwrap().insert(user.id, (Instant::now(), q.get("herdr").is_some_and(|v| v == "1")));
     let list: Vec<Value> = PENDING
         .lock()
         .unwrap()
