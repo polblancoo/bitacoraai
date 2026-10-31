@@ -1005,15 +1005,27 @@ const openTask = guard(async (task) => {
     const askText = (cur().description.match(/LO QUE PIDE\n([\s\S]*?)\n\n/) || [])[1] || "";
     const fenced = [...askText.matchAll(/```[a-z]*\n?([\s\S]*?)```/g)].flatMap((m) => m[1].split("\n")).map((l) => l.replace(/^\$ /, "").trim()).filter((l) => l.length > 1);
     const askCmds = [...new Set(fenced.concat([...askText.replace(/```[\s\S]*?```/g, "").matchAll(/`([^`\n]+)`/g)].map((m) => m[1]).concat([...askText.matchAll(/'([a-z][^'\n]*\s[^'\n]*)'/g)].map((m) => m[1]))))].map((c) => c.trim()).filter(Boolean);
+    // lista de comandos pedidos: se puede quitar los que no querés y permitir todo junto
+    let keep = [...askCmds];
+    const cmdList = h("div", { class: "cmdlist" });
+    const grantAll = guard(async () => {
+      if (!keep.length) return toast("No quedan comandos", true);
+      for (const cmd of keep) await api("POST", `/api/tasks/${task.id}/grant`, { command: cmd, always: true });
+      await reply(`✅ Autorizados (siempre): ${keep.map((c) => "`" + c + "`").join(", ")}. La IA los puede usar en su próxima ejecución.`, true);
+    });
+    const drawCmds = () => {
+      cmdList.replaceChildren(
+        ...keep.map((cmd) => h("div", { class: "cmdbox big" }, h("code", {}, cmd),
+          h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋"),
+          h("button", { class: "danger", title: "Quitar este comando de la lista (no se permite)", onclick: () => { keep = keep.filter((c) => c !== cmd); drawCmds(); } }, "✕"))),
+        keep.length > 0 && can("admin") && h("button", { class: "primary", title: "Agrega todos los comandos de la lista a los permitidos de esta IA, le avisa y marca el pedido como Hecho", onclick: () => grantAll() }, `✅ Permitir ${keep.length > 1 ? "los " + keep.length + " comandos" : "el comando"} siempre`),
+        keep.length < askCmds.length && h("button", { class: "ghost", onclick: () => { keep = [...askCmds]; drawCmds(); } }, "↩ Restaurar quitados"));
+    };
+    drawCmds();
     return h("div", { class: "reqpanel" },
       h("h3", {}, "🙋 Pedido de una IA"),
       askText && h("div", { class: "askbox" }, h("b", {}, "Lo que pide la IA"), h("p", { style: "white-space:pre-wrap;margin:4px 0" }, askText.replace(/```[\s\S]*?```/g, "").replace(/\n{3,}/g, "\n\n").trim() || "(comandos abajo)"),
-        askCmds.map((cmd) => h("div", { class: "cmdbox big" }, h("code", {}, cmd),
-          h("button", { title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar"),
-          can("admin") && h("button", { class: "primary", title: "Lo agrega a la lista de comandos permitidos de esta IA y le avisa, sin salir de acá", onclick: guard(async () => {
-            await api("POST", `/api/tasks/${task.id}/grant`, { command: cmd, always: true });
-            await reply(`✅ Autorizado: \`${cmd}\` (siempre). La IA lo puede usar en su próxima ejecución.`, true);
-          }) }, "✅ Permitir siempre")))),
+        cmdList),
       cmds.length > 0 && h("div", {}, h("b", {}, "1. Copiá y ejecutá en tu terminal:"),
         cmds.map((cmd) => h("div", { class: "cmdbox" }, h("code", {}, cmd),
           h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar")))),
@@ -1053,6 +1065,8 @@ const openTask = guard(async (task) => {
   const modal = h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
     h("div", { class: "modal task-modal" + (store.get("taskMax") === "1" ? " max" : "") },
       h("h3", { class: "task-head" }, "Tarea ", h("span", { class: "tid" }, "#" + task.id), h("span", { class: "spacer" }),
+        h("button", { class: "primary", title: "Guardar los cambios y cerrar", onclick: save }, "💾 Guardar"),
+        can("member") && h("button", { class: "danger", title: "Borrar la tarea", onclick: del }, "🗑 Borrar"),
         can("owner") && h("button", { class: "ghost", title: "Abre una terminal SSH a la máquina del proyecto, sin salir de la tarea (solo owners)", onclick: guard(() => openTaskTerminal(cur())) }, "💻 Terminal"),
         h("button", { class: "ghost max-btn", title: "Maximizar o restaurar la ventana para leer los comentarios más cómodo", onclick: (e) => {
           const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("taskMax", on ? "1" : "0");

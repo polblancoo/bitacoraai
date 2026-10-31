@@ -472,3 +472,8 @@ ol.guide pre { margin: 4px 0; }
 .cmdbox.big { flex-wrap: wrap; }
 .cmdbox.big code { flex: 1 1 100%; min-width: 0; }
 .cmdbox.big button { flex: none; }
+
+.modal.task-modal .task-head { position: sticky; top: -22px; z-index: 5; background: var(--card); margin: -22px -22px 0; padding: 14px 22px 10px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.modal.task-modal > .row:last-child { position: sticky; bottom: -22px; background: var(--card); margin: 0 -22px -22px; padding: 10px 22px; border-top: 1px solid var(--line); z-index: 5; }
+.cmdlist { display: grid; gap: 6px; margin-top: 8px; }
+.cmdlist > button.primary { justify-self: start; }
