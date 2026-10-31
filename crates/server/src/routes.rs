@@ -34,7 +34,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/invites/{id}/accept", post(accept_invite))
         .route("/api/teams/{id}/projects", get(list_projects).post(create_project))
         .route("/api/projects/{id}/tasks", get(list_tasks).post(create_task))
-        .route("/api/tasks/{id}", patch(update_task).delete(delete_task))
+        .route("/api/tasks/{id}", get(get_task).patch(update_task).delete(delete_task))
         .route("/api/tasks/{id}/comments", get(list_comments).post(add_comment))
 }
 
@@ -901,6 +901,13 @@ async fn delete_task(State(st): State<AppState>, user: AuthUser, Path(id): Path<
     st.emit(team, Event::TaskDeleted { id, project_id: project });
     emit_parent(&st, team, parent).await;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Una tarea por id (para llevar a la persona a la tarea de una novedad).
+async fn get_task(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>) -> Result<Json<Task>> {
+    let team = team_of_task(&st, id).await?;
+    ensure_member(&st, team, user.id).await?;
+    Ok(Json(fetch_task(&st, id).await?))
 }
 
 // ---------- comments ----------

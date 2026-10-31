@@ -427,3 +427,25 @@ ol.guide pre { margin: 4px 0; }
 .modal .xbtn { padding: 2px 8px; }
 
 .term-dock { position: fixed; right: 18px; bottom: 18px; z-index: 30; padding: 10px 14px; border-radius: 999px; background: var(--accent, #7aa2f7); color: #0b0d14; font-weight: 600; border: 0; box-shadow: 0 6px 20px #0008; cursor: pointer; }
+
+.modal.settings { width: min(1040px, 96vw); height: min(86vh, 780px); max-height: 92vh; padding: 0; overflow: hidden; display: flex; flex-direction: column; gap: 0; }
+.modal.settings.xmax { height: 94vh; }
+.cfg-head { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.cfg-head h2 { font-size: 18px; margin: 0; }
+.cfg-body { display: grid; grid-template-columns: 230px 1fr; flex: 1; min-height: 0; }
+.cfg-nav { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-right: 1px solid var(--line); background: var(--bg2); overflow: auto; }
+.cfg-tab { text-align: left; padding: 10px 12px; border-radius: 8px; background: transparent; border: 0; color: var(--fg); cursor: pointer; font-size: 14px; }
+.cfg-tab:hover { background: var(--card2, #ffffff10); }
+.cfg-tab.active { background: var(--accent, #7aa2f7); color: #0b0d14; font-weight: 600; }
+.cfg-panel { padding: 18px 24px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.cfg-panel h2 { font-size: 17px; margin: 0 0 4px; }
+.cfg-item { display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--bg2); }
+.cfg-help { color: var(--dim); font-size: 12.5px; line-height: 1.4; }
+@media (max-width: 760px) { .cfg-body { grid-template-columns: 1fr; } .cfg-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); } }
+
+#inbox-modal .modal { width: min(900px, 96vw); }
+#inbox-modal .modal.xmax { width: 96vw; max-width: 96vw; }
+#inbox-modal .inbox-list { max-height: 38vh; overflow: auto; }
+#inbox-modal .modal.xmax .inbox-list { max-height: calc(94vh - 120px); }
+.note-row.link { cursor: pointer; }
+.note-row.link:hover { background: var(--hover, rgba(127,127,127,.12)); }

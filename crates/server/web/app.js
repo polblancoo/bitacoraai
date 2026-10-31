@@ -217,6 +217,22 @@ async function closeInbox() {
   render();
 }
 
+// una novedad lleva a SU tarea (cambia de equipo y de proyecto si hace falta); sin tarea, al equipo
+const jumpToNote = guard(async (n) => {
+  if (n.task_id) {
+    const t = await api("GET", `/api/tasks/${n.task_id}`).catch(() => null);
+    if (!t) { toast("Esa tarea ya no existe", true); return; }
+    const team = S.teams.find((x) => x.id === (n.team_id ?? -1)) || S.team;
+    if (team && team.id !== S.team?.id) await selectTeam(team);
+    const p = S.projects.find((x) => x.id === t.project_id);
+    if (p && (p.id !== S.project?.id || S.portfolio || S.terms)) await selectProject(p);
+    const cur = S.tasks.find((x) => x.id === t.id) || t;
+    openTask(cur);
+  } else if (n.team_id) {
+    const team = S.teams.find((x) => x.id === n.team_id);
+    if (team && team.id !== S.team?.id) await selectTeam(team);
+  }
+});
 const jumpToTask = guard(async (it) => {
   const team = S.teams.find((t) => t.name === it.team);
   if (team && team.id !== S.team?.id) await selectTeam(team);
@@ -231,15 +247,15 @@ function openInbox() {
   const inb = S.inbox; if (!inb) return;
   const KIND = { assigned: "📌", comment: "💬", member_added: "👥", role_changed: "🎖", message: "✉", mention: "@", reminder: "⏰", report: "📊" };
   document.body.append(h("div", { class: "overlay", id: "inbox-modal", onmousedown: (e) => e.target.id === "inbox-modal" && closeInbox() },
-    h("div", { class: "modal" },
-      h("h3", {}, `Novedades${S.unread ? ` (${S.unread} sin leer)` : ""}`),
+    h("div", { class: "modal wide" },
+      h("h3", {}, `Novedades${S.unread ? ` (${S.unread} sin leer)` : ""}`, h("span", { class: "spacer" })),
       h("div", { class: "inbox-list" }, inb.notifications.length === 0 ? h("small", {}, "Nada nuevo.") :
-        inb.notifications.map((n) => h("div", { class: "note-row" + (n.read ? "" : " unread") },
+        inb.notifications.map((n) => h("div", { class: "note-row" + (n.read ? "" : " unread") + (n.task_id || n.team_id ? " link" : ""), title: n.task_id ? "Ir a esta tarea" : n.team_id ? "Ir a este equipo" : "", onclick: (n.task_id || n.team_id) ? async () => { await closeInbox(); jumpToNote(n); } : undefined },
           h("span", {}, KIND[n.kind] || "•"), h("span", { class: "grow", style: "white-space:pre-wrap" }, n.text),
           h("small", {}, new Date(n.created_at).toLocaleString())))),
       h("h3", {}, `Mis tareas abiertas (${inb.tasks.length})`),
       h("div", { class: "inbox-list" }, inb.tasks.length === 0 ? h("small", {}, "No tenés tareas asignadas.") :
-        inb.tasks.map((it) => h("div", { class: "note-row link", onclick: () => { closeInbox(); jumpToTask(it); } },
+        inb.tasks.map((it) => h("div", { class: "note-row link", onclick: async () => { await closeInbox(); jumpToTask(it); } },
           h("span", { class: `pill p${it.task.priority}` }, PRIO[it.task.priority]),
           h("span", { class: "grow" }, it.task.title),
           h("small", {}, `${it.team} / ${it.project}${it.task.due ? " · vence " + new Date(it.task.due).toLocaleDateString() : ""}`)))),
@@ -1327,6 +1343,10 @@ const CFG_HELP = {
     "El servidor necesita una cuenta de correo saliente (Gmail, Outlook, Brevo, SendGrid, Mailgun, SES o uno propio). Creá el archivo ~/.config/tm-server/mail.env (permisos 600) con TM_SMTP_URL, TM_SMTP_USER, TM_SMTP_PASSWORD y TM_SMTP_FROM, agregá EnvironmentFile=-%h/.config/tm-server/mail.env al servicio de tm-server y reinicialo. Sin eso el servidor no manda emails y acá no se puede verificar. Los datos de cada proveedor están en el manual."],
   github: ["GitHub", "Tocá «Conectar», abrí la página que se muestra, escribí el código y autorizá. Queda vinculada tu cuenta, con tus propios permisos: la app no ve nada que vos no puedas ver. Podés desconectar cuando quieras.",
     "Creá una OAuth App en github.com → Settings → Developer settings → OAuth Apps, tildá «Enable Device Flow» y copiá su Client ID (no hace falta el secreto). Arrancá tm-server con TM_GITHUB_CLIENT_ID=<ese id> (por ejemplo en ~/.config/tm-server/github.env). Por defecto se piden los permisos «read:user repo»; TM_GITHUB_SCOPE los cambia."],
+  lang: ["Idioma", "Cambia el idioma de la app para vos (español, inglés o portugués). Los demás del equipo siguen con el suyo.", null],
+  license: ["Licencia", "La app es software libre (AGPL-3.0): podés usarla gratis cumpliendo esa licencia. Si tu empresa prefiere no cumplirla, existe una licencia comercial anual. Acá ves el estado y, si sos la primera persona registrada, podés comprarla.", null],
+  cmds: ["Comandos para todas las IAs", "Son los comandos que cualquier IA del servidor puede usar sin pedir permiso (permitidos) y los que nunca puede usar (prohibidos). Se suman a la lista propia de cada IA, que está en su ficha. Lo prohibido siempre gana. Un comando se escribe así: git clone, cargo build o Bash(npm test:*).", "Solo la primera persona registrada edita estas listas. Los archivos whitelist.txt y blacklist.txt del agente son la base; estas listas se suman a ellas."],
+  reports: ["Informes automáticos", "Un resumen diario o semanal del equipo: qué terminaron las personas y las IAs, cuánto gastaron las IAs y qué quedó trabado. Te llega a la bandeja y, si querés, por Telegram y email.", null],
   telegram: ["Telegram", "Tocá «Vincular», abrí el bot que se muestra y mandale /start CÓDIGO. Después recibís las novedades en Telegram y podés usar /tareas, /hecho N (marca la tarea N como hecha) y /stop (desvincula).",
     "Creá un bot con @BotFather en Telegram y arrancá tm-server con TM_TELEGRAM_TOKEN=<token>. No necesita URL pública (usa long polling). Sin el token, esta fila dice «el servidor no tiene el bot configurado»."],
   inbox: ["Bandeja de novedades", "Reúne lo que te pasó: asignaciones, comentarios, menciones (@usuario), recordatorios y mensajes. Se marcan como leídas al cerrarla. También abre con la campana 🔔 o Ctrl+T n.",
@@ -1412,11 +1432,16 @@ const openSettings = guard(async () => {
   S.me = await api("GET", "/api/me");
   const me = S.me, close = () => document.getElementById("settings-modal")?.remove();
   const go = (fn) => () => { close(); fn(); };
-  const sec = (title, ...kids) => h("section", { class: "cfg-sec" }, h("h3", {}, title), ...kids);
+  const sec = (title, ...kids) => kids;
   const line = (label, ...ctl) => {
     const [text, key] = Array.isArray(label) ? label : [label, null];
-    return h("div", { class: "cfg-line" }, h("span", { class: "grow" }, text),
-      key && h("button", { class: "ghost help", title: "¿Qué es esto?", onclick: () => (key === "google" ? googleHelp() : cfgHelp(key)) }, "?"), ...ctl);
+    const help = key && CFG_HELP[key] ? CFG_HELP[key][1] : "";
+    const el = h("div", { class: "cfg-item" },
+      h("div", { class: "cfg-line" }, h("span", { class: "grow" }, text),
+        key && h("button", { class: "ghost help", title: "Explicación completa", onclick: () => (key === "google" ? googleHelp() : cfgHelp(key)) }, "?"), ...ctl),
+      help && h("small", { class: "cfg-help" }, help.length > 220 ? help.slice(0, 217) + "…" : help));
+    el.dataset.key = key || "";
+    return el;
   };
 
   const view = h("select", { onchange: (e) => { store.set("view", e.target.value); S.view = e.target.value; render(); } },
@@ -1428,9 +1453,8 @@ const openSettings = guard(async () => {
   const gcState = !gc.available ? "el servidor no tiene Google configurado" : gc.linked ? `✓ conectado (${gc.events} tareas con fecha en tu calendario)` : "sin conectar";
   const emailState = !me.email ? "sin cargar" : me.email_verified ? `✓ ${me.email}` : `${me.email} (sin verificar)`;
 
-  document.body.append(h("div", { class: "overlay", id: "settings-modal", onmousedown: (e) => e.target.id === "settings-modal" && close() },
-    h("div", { class: "modal" },
-      h("h2", {}, "Configuración"),
+  const items = [
+      S.team && sec("", line(["Informes automáticos del equipo (resumen diario o semanal)", "reports"], h("button", { onclick: go(openReports) }, "Configurar"))),
       sec("Cuenta",
         line([`Usuario: ${me.username}`, "user"]),
         line([`Email para avisos: ${emailState}`, "email"], h("button", { onclick: go(openProfile) }, "Configurar")),
@@ -1460,7 +1484,7 @@ const openSettings = guard(async () => {
         S.project && line(["Exportar las tareas", "export"], h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
           h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
       sec("Licencia",
-        line("Comandos permitidos y prohibidos para todas las IAs", h("button", { onclick: guard(async () => {
+        line(["Comandos permitidos y prohibidos para todas las IAs", "cmds"], h("button", { onclick: guard(async () => {
           const g = await api("GET", "/api/commands");
           if (!g.can_edit) { toast("Solo la primera persona registrada edita las listas generales. Cada IA tiene la suya en su ficha."); return; }
           const f = await form("Comandos de todas las IAs", [
@@ -1468,9 +1492,9 @@ const openSettings = guard(async () => {
             { name: "deny", label: "🚫 Prohibidos para todas (uno por línea, ej. Bash(rm:*)). Lo prohibido siempre gana.", type: "textarea", value: g.deny, max: 4000 }], "Guardar"); if (!f) return;
           await api("PUT", "/api/commands", { allow: f.allow, deny: f.deny }); toast("Listas guardadas");
         }) }, "Editar")),
-        line("Uso gratis (AGPL-3.0) o licencia comercial para empresas", h("button", { onclick: go(openLicense) }, "🏢 Licencia")),),
+        line(["Uso gratis (AGPL-3.0) o licencia comercial para empresas", "license"], h("button", { onclick: go(openLicense) }, "🏢 Licencia")),),
       sec("Preferencias",
-        line("Idioma / Language", h("select", { onchange: (e) => tr.set(e.target.value) },
+        line(["Idioma / Language", "lang"], h("select", { onchange: (e) => tr.set(e.target.value) },
           Object.entries(tr.langs).map(([k, n]) => h("option", { value: k, selected: tr.lang === k }, n)))),
         line(["Vista inicial", "view"], view),
         line(["Servidor", "server"], server),
@@ -1481,7 +1505,33 @@ const openSettings = guard(async () => {
           }) }, "Guardar servidor y reiniciar sesión"))),
       sec("Ayuda", line(["Manual con buscador e índice por temas", "manual"], h("button", { onclick: go(() => openManual()) }, "Abrir el manual")),
         line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos"))),
-      h("div", { class: "row" }, h("button", { class: "primary", onclick: close }, "Listo")))));
+  ].flat(Infinity).filter(Boolean);
+  // solapas: cada línea se ubica por su clave; lo que no tiene clave (botones sueltos) queda con la línea anterior
+  const TABS = [
+    ["cuenta", "👤 Cuenta", ["user", "inbox", "logout", "logoutAll"]],
+    ["conexiones", "🔔 Avisos y conexiones", ["email", "telegram", "github", "google", "reports"]],
+    ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "project", "duplicate", "export"]],
+    ["ias", "🤖 IAs", ["agents", "cmds"]],
+    ["licencia", "🏢 Licencia", ["license"]],
+    ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "server", "manual", "shortcuts"]],
+  ];
+  const tabOf = new Map(TABS.flatMap(([id, , keys]) => keys.map((k) => [k, id])));
+  const groups = Object.fromEntries(TABS.map(([id]) => [id, []]));
+  let curTab = "cuenta";
+  for (const it of items) { const t = tabOf.get(it.dataset?.key || ""); if (t) curTab = t; groups[curTab].push(it); }
+  let active = store.get("cfgTab"); if (!groups[active]?.length) active = "cuenta";
+  const panel = h("div", { class: "cfg-panel" });
+  const nav = h("div", { class: "cfg-nav" });
+  const show = (id) => {
+    active = id; store.set("cfgTab", id);
+    panel.replaceChildren(h("h2", {}, TABS.find((x) => x[0] === id)[1]), ...groups[id]);
+    nav.replaceChildren(...TABS.filter(([tid]) => groups[tid].length).map(([tid, label]) => h("button", { class: "cfg-tab" + (tid === id ? " active" : ""), onclick: () => show(tid) }, label)));
+  };
+  show(active);
+  document.body.append(h("div", { class: "overlay", id: "settings-modal", onmousedown: (e) => e.target.id === "settings-modal" && close() },
+    h("div", { class: "modal settings" },
+      h("div", { class: "cfg-head" }, h("h2", {}, "Configuración"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: close }, "Listo")),
+      h("div", { class: "cfg-body" }, nav, panel))));
 });
 
 // ---------- ayuda con buscador y atajos de teclado ----------
