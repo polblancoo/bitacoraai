@@ -418,7 +418,7 @@ function agentsGuide() {
       h("div", { class: "row" }, h("button", { onclick: () => copy(agentCmd(), "Comando copiado") }, "Copiar ejemplo"), h("button", { class: "primary", onclick: () => overlay.remove() }, "Cerrar"))));
   document.body.append(overlay);
 }
-function showBotToken(name, token) {
+function showBotToken(name, token, cmd) {
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
     h("div", { class: "modal" },
       h("h3", {}, `🤖 Token de ${name}`),
@@ -435,16 +435,85 @@ function showBotToken(name, token) {
   document.body.append(overlay);
 }
 const loadBots = async () => { S.bots = await api("GET", `/api/teams/${S.team.id}/bots`).catch(() => []); render(); };
+// Proveedores de IA para el alta: etiqueta, si es paga (pide clave), modelos para elegir y cómo se lanza
+const AI_KINDS = {
+  claude: { name: "Claude (Anthropic)", paid: true, key: "ANTHROPIC_API_KEY", models: ["Opus", "Sonnet", "Haiku"],
+    env: (m) => `TM_CLAUDE_MODEL=${m.toLowerCase()}`, cmd: () => "$HOME/.config/tm-agent/run-claude.sh",
+    setup: "# Una vez: copiá run-claude.sh, whitelist.txt y blacklist.txt (carpeta examples/ del repo) a ~/.config/tm-agent/\n# Claude pide permiso por la web (🙋) antes de usar un comando que no esté permitido.\n# Si usás Claude con tu suscripción (claude login), no hace falta ninguna clave." },
+  gemini: { name: "Gemini (Google)", paid: true, key: "GEMINI_API_KEY", models: ["gemini-2.5-pro", "gemini-2.5-flash"],
+    cmd: (m) => `gemini -p "$TM_TASK_PROMPT" -m ${m}` },
+  openai: { name: "ChatGPT / Codex (OpenAI)", paid: true, key: "OPENAI_API_KEY", models: ["gpt-5", "gpt-5-codex"],
+    cmd: (m) => `codex exec "$TM_TASK_PROMPT" -m ${m}` },
+  local: { name: "Modelo propio de la empresa (local)", paid: false, local: true, models: [], cmd: (m) => `codex exec "$TM_TASK_PROMPT" -m ${m}` },
+  otra: { name: "Otra (escribo el comando yo)", paid: false, models: [], cmd: () => `tu-comando "$TM_TASK_PROMPT"` },
+};
+const aiCmd = (token, kind, model, key, url) => {
+  const k = AI_KINDS[kind];
+  return `TM_URL=${S.server} \\\nTM_TOKEN=${token} \\\n` + (k.paid && key ? `${k.key}=${key} \\\n` : "") + (k.env ? `${k.env(model || "opus")} \\\n` : "")
+    + (k.local ? `OPENAI_BASE_URL=${url || "http://servidor-ia:11434/v1"} \\\nOPENAI_API_KEY=${key || "${OPENAI_API_KEY:-sin-clave}"} \\\n` : "") + `TM_AGENT_CMD='${k.cmd(model || "modelo")}' \\\ntm-agent` + (k.setup ? `\n\n${k.setup}` : "") + (k.paid && !key ? `\n\n# Usa la variable ${k.key} de tu máquina. Si no la tenés:\n# export ${k.key}=tu-clave   (agregala a ~/.bashrc para que quede)` : "");
+};
 const createBot = guard(async () => {
-  const f = await form("Nueva IA en el equipo", [
-    { name: "name", label: "Nombre (ej. claude-ana)", max: 32 },
-    { name: "model", label: "IA / modelo (ej. claude:Opus)", placeholder: "claude:Opus", max: 40 },
-    { name: "role", label: "Rol", type: "select", value: "member", options: [["member", "Miembro (crea y edita sus tareas)"], ["viewer", "Lector (solo mira)"]] },
-  ], "Crear"); if (!f) return;
-  const r = await api("POST", `/api/teams/${S.team.id}/bots`, { name: f.name, role: f.role, model: f.model });
-  S.members = await api("GET", `/api/teams/${S.team.id}/members`);
-  await loadBots(); showBotToken(r.user.username, r.token);
+  const kind = h("select", {}, Object.entries(AI_KINDS).map(([v, k]) => h("option", { value: v }, k.name + (k.paid ? " · paga" : ""))));
+  const model = h("select", {});
+  const own = h("input", { placeholder: "Escribí el nombre del modelo", maxLength: 40, style: "display:none" });
+  const key = h("input", { type: "password", placeholder: "Vacío = usa la variable de entorno de tu máquina", autocomplete: "off" });
+  const keyL = h("label", {}, "Clave de la IA ", key, h("small", { class: "hint" }, "Opcional. En Linux/Mac, si ya tenés la variable (ANTHROPIC_API_KEY, GEMINI_API_KEY u OPENAI_API_KEY) exportada, dejá esto vacío: se usa esa. Nunca se guarda en el servidor."));
+  const url = h("input", { placeholder: "Dirección del servidor de IA (ej. http://10.0.0.5:11434/v1)", maxLength: 200 });
+  const urlL = h("label", {}, "Servidor de la IA ", url, h("small", { class: "hint" }, "Te la da el área de IT. Si el servidor pide clave, escribila abajo; si no, dejala vacía."));
+  const name = h("input", { placeholder: "Nombre (ej. claude-ana)", maxLength: 32 });
+  const role = h("select", {}, h("option", { value: "member" }, "Miembro (crea y edita sus tareas)"), h("option", { value: "viewer" }, "Lector (solo mira)"));
+  const sync = () => {
+    const k = AI_KINDS[kind.value];
+    model.replaceChildren(...k.models.map((m) => h("option", { value: m }, m)), h("option", { value: "__otro" }, "✏ Escribir otro…"));
+    keyL.style.display = k.paid || k.local ? "" : "none";
+    urlL.style.display = k.local ? "" : "none";
+    if (k.local) model.value = "__otro";
+    pick();
+  };
+  const pick = () => { own.style.display = model.value === "__otro" ? "" : "none"; };
+  kind.onchange = sync; model.onchange = pick; sync();
+  const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
+    h("div", { class: "modal small" }, h("h3", {}, "Nueva IA en el equipo"),
+      h("label", {}, "Nombre", name, h("small", { class: "hint" }, "Cómo se va a ver en el tablero. Sin espacios, ej. claude-ana.")), h("label", {}, "¿Qué IA es?", kind, h("small", { class: "hint" }, "Elegí la marca. Las pagas necesitan una clave (API key) de tu cuenta. «Modelo propio» es uno que corre en un servidor de tu empresa.")), h("label", {}, "Modelo", model, own, h("small", { class: "hint" }, "Elegí uno de la lista. Si el tuyo no está, tocá «Escribir otro…» y escribí su nombre tal cual lo da el proveedor o IT.")), urlL, keyL, h("label", {}, "Rol", role, h("small", { class: "hint" }, "Miembro: puede crear y editar tareas. Lector: solo mira.")),
+      h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { onclick: () => overlay.remove() }, "Cancelar"),
+        h("button", { class: "primary", onclick: guard(async () => {
+          const m = (model.value === "__otro" ? own.value : model.value).trim();
+          if (!name.value.trim() || !m) { toast("Falta el nombre o el modelo"); return; }
+          const tag = kind.value === "otra" || kind.value === "local" ? "ia" : kind.value;
+          const r = await api("POST", `/api/teams/${S.team.id}/bots`, { name: name.value.trim(), role: role.value, model: `${tag}:${m}` });
+          overlay.remove();
+          S.members = await api("GET", `/api/teams/${S.team.id}/members`);
+          await loadBots(); showBotToken(r.user.username, r.token, aiCmd(r.token, kind.value, m, key.value, url.value.trim()));
+        }) }, "Crear"))));
+  document.body.append(overlay);
 });
+// prueba de conexión: una tarea mínima asignada a la IA; si el agente está conectado, la toma y la termina
+const testBot = async (b) => {
+  const note = h("p", {}, "Enviando la tarea de prueba…");
+  const box = h("div", { class: "overlay", onmousedown: (e) => e.target === box && (stop(), box.remove()) },
+    h("div", { class: "modal small" }, h("h3", {}, `🧪 Prueba de ${b.username}`), note,
+      h("div", { class: "row" }, h("button", { onclick: () => { stop(); box.remove(); } }, "Cerrar"))));
+  let alive = true; const stop = () => { alive = false; };
+  document.body.append(box);
+  const t = await api("POST", `/api/projects/${S.project.id}/tasks`, { title: "🧪 Prueba de conexión", description: "Prueba automática. Respondé solo «OK» con un comentario y marcá la tarea como hecha. No modifiques archivos ni ejecutes comandos.", priority: 0, assignee_id: b.id }).catch((e) => { note.textContent = "No se pudo crear la tarea: " + e.message; return null; });
+  if (!t) return;
+  const t0 = Date.now();
+  while (alive && Date.now() - t0 < 120000) {
+    await new Promise((r) => setTimeout(r, 3000));
+    if (!alive) return;
+    const cur = (await api("GET", `/api/projects/${S.project.id}/tasks`).catch(() => [])).find((x) => x.id === t.id);
+    if (!cur) { note.textContent = "La tarea de prueba se borró."; return; }
+    const secs = Math.round((Date.now() - t0) / 1000);
+    if (cur.status === "done") {
+      const cs = await api("GET", `/api/tasks/${t.id}/comments`).catch(() => []);
+      const last = cs.filter((c) => c.username === b.username).pop();
+      note.textContent = `✅ La IA respondió en ${secs} s` + (last ? `: «${last.body.slice(0, 200)}»` : " (terminó la tarea sin comentario).");
+      return;
+    }
+    note.textContent = cur.status === "doing" ? `⏳ La IA tomó la tarea y la está haciendo… (${secs} s)` : `⌛ Esperando que el agente de ${b.username} la tome… (${secs} s)`;
+  }
+  if (alive) note.textContent = "❌ No respondió en 2 minutos. Revisá que el agente (tm-agent) de esta IA esté corriendo y apunte a este servidor: la tarea de prueba quedó en el tablero.";
+};
 const botModal = (b) => {
   const admin = can("admin");
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
@@ -461,6 +530,7 @@ const botModal = (b) => {
           await api("PATCH", `/api/bots/${b.id}`, { deny: f.deny }); overlay.remove(); await loadBots(); toast("Lista guardada");
         }) }, "🚫 Comandos prohibidos"),
         admin && h("button", { onclick: guard(async () => { const r = await api("POST", `/api/bots/${b.id}/token`); overlay.remove(); await loadBots(); showBotToken(b.username, r.token); }) }, "Nuevo token"),
+        S.project && can("member") && b.active && h("button", { title: "Le manda una tarea simple a esta IA y espera que la conteste", onclick: guard(async () => { overlay.remove(); await testBot(b); }) }, "🧪 Probar"),
         admin && b.active && h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", `/api/bots/${b.id}/token`); overlay.remove(); await loadBots(); toast("Token revocado"); }) }, "Revocar"),
         h("button", { onclick: () => overlay.remove() }, "Cerrar"))));
   document.body.append(overlay);
@@ -1935,8 +2005,8 @@ const openSchedules = guard(async () => {
   sync();
   const add = guard(async () => {
     const [H, M] = (at.value || "09:00").split(":").map(Number);
-    await api("POST", `/api/projects/${S.project.id}/schedules`, { title: title.value, description: desc.value, assignee_id: who.value ? +who.value : null, freq: freq.value, weekday: +wd.value, monthday: +md.value || 1, at_minute: H * 60 + M, tz_offset: -new Date().getTimezoneOffset(), skip_if_open: skip.checked });
-    toast("Tarea programada"); reload();
+    const created = await api("POST", `/api/projects/${S.project.id}/schedules`, { title: title.value, description: desc.value, assignee_id: who.value ? +who.value : null, freq: freq.value, weekday: +wd.value, monthday: +md.value || 1, at_minute: H * 60 + M, tz_offset: -new Date().getTimezoneOffset(), skip_if_open: skip.checked });
+    toast("Tarea programada. Se crea el " + new Date(created.next_run).toLocaleString()); reload();
   });
   document.body.append(h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
     h("div", { class: "modal usage-modal" },

@@ -265,15 +265,33 @@ async fn spawn(st: &AppState, sid: Id, force: bool) -> Result<Option<Id>> {
     }
     let creator: Option<Id> = r.get("created_by");
     let now = Utc::now();
+    // la tarea nace con el día (y la hora, en la descripción) en que se programó, en la zona de quien la creó
+    let local = (now + Duration::minutes(r.get::<i64, _>("tz_offset"))).naive_utc();
+    let day: DateTime<Utc> = DateTime::from_naive_utc_and_offset(local.date().and_hms_opt(12, 0, 0).unwrap_or(local), Utc);
+    let at = r.get::<i64, _>("at_minute");
+    let mut description = r.get::<String, _>("description");
+    if !description.is_empty() {
+        description.push_str("\n\n");
+    }
+    description.push_str(&format!(
+        "⏰ Tarea programada ({}, {:02}:{:02}). Creada el {} a las {}.",
+        label(&r.get::<String, _>("freq")),
+        at / 60,
+        at % 60,
+        local.format("%d/%m/%Y"),
+        local.format("%H:%M")
+    ));
     let tid = sqlx::query(
-        "INSERT INTO tasks (project_id, title, description, priority, assignee_id, created_at, updated_at, created_by, position) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM tasks WHERE project_id = ?))",
+        "INSERT INTO tasks (project_id, title, description, priority, assignee_id, due, start, created_at, updated_at, created_by, position) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM tasks WHERE project_id = ?))",
     )
     .bind(project)
     .bind(r.get::<String, _>("title"))
-    .bind(r.get::<String, _>("description"))
+    .bind(description)
     .bind(r.get::<i64, _>("priority"))
     .bind(assignee)
+    .bind(day)
+    .bind(day)
     .bind(now)
     .bind(now)
     .bind(creator)
