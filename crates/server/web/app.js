@@ -1070,9 +1070,20 @@ const openTask = guard(async (task) => {
       for (const cmd of keep) await api("POST", `/api/tasks/${task.id}/grant`, { command: cmd, always: true });
       await reply(`✅ Autorizados (siempre): ${keep.map((c) => "`" + c + "`").join(", ")}. La IA los puede usar en su próxima ejecución.`, true);
     });
+    // la IA que pidió ayuda y lo que ya tiene permitido: un comando de la lista puede estar ya autorizado y se quita de ahí
+    const whoAsks = (cur().description.match(/La IA «([^»]+)»/) || [])[1];
+    const askBot = () => (S.bots || []).find((x) => x.username === whoAsks);
+    const allowedLines = () => (askBot()?.allow || "").split("\n").map((l) => l.trim()).filter(Boolean);
+    const unallow = guard(async (cmd) => {
+      const b = askBot(); if (!b) return;
+      const rest = allowedLines().filter((l) => l !== cmd);
+      await api("PATCH", `/api/bots/${b.id}`, { allow: rest.join("\n") }); await loadBots();
+      toast("Quitado de la lista de " + b.username); drawCmds();
+    });
     const drawCmds = () => {
       cmdList.replaceChildren(
         ...keep.map((cmd) => h("div", { class: "cmdbox big" }, h("code", {}, cmd),
+          allowedLines().includes(cmd) && can("admin") && h("button", { class: "ghost", title: "Este comando ya está permitido para la IA: sacarlo de su lista de permitidos", onclick: () => unallow(cmd) }, "🗑 Quitar de la lista de la IA"),
           h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋"),
           h("button", { class: "danger", title: "Quitar este comando de la lista (no se permite)", onclick: () => { keep = keep.filter((c) => c !== cmd); drawCmds(); } }, "✕"))),
         keep.length > 0 && can("admin") && h("button", { class: "primary", title: "Agrega todos los comandos de la lista a los permitidos de esta IA, le avisa y marca el pedido como Hecho", onclick: () => grantAll() }, `✅ Permitir ${keep.length > 1 ? "los " + keep.length + " comandos" : "el comando"} siempre`),
@@ -1483,6 +1494,7 @@ const CFG_HELP = {
   perfil: ["Perfil de uso", "Prepara la interfaz según para qué usan el equipo: cambia los nombres de las columnas y oculta lo técnico (terminales, carpeta del código) si no hace falta. «Cargar ejemplo» crea un proyecto de muestra con tareas; «Eliminar ejemplo» lo borra entero y deja todo limpio. No toca tus proyectos reales.", null],
   duplicate: ["Usar como plantilla", "Crea un proyecto nuevo copiando las tareas, etiquetas y dependencias del actual, para repetir un proceso sin armarlo de cero.", null],
   export: ["Exportar", "Descarga todas las tareas del proyecto en CSV (para planilla) o JSON (para copia de seguridad o scripts).", null],
+  herdr: ["Terminal con herdr", "Al abrir la terminal de una tarea se abre herdr (un panel de terminales) en la carpeta del proyecto, si la máquina lo tiene. Apagalo si preferís una terminal común. Se guarda solo en este dispositivo.", null],
   view: ["Vista inicial", "Qué vista se abre primero en este dispositivo: tablero, calendario, Gantt, pizarra o actividad. Se cambia en cualquier momento con las teclas 1 a 5.", null],
   server: ["Servidor", "Es la dirección donde corre tm-server (por ejemplo https://tareas.miempresa.com). En la web propia del servidor no se cambia; en la app de escritorio o la TUI la escribís una vez y volvés a iniciar sesión.",
     "tm-server escucha en TM_ADDR (0.0.0.0:7878 por defecto). Fuera de tu red, ponelo detrás de HTTPS: TM_TLS_CERT y TM_TLS_KEY, o un proxy con TM_TRUSTED_PROXY=1. La web integrada se desactiva con TM_WEB=0."],
@@ -1665,6 +1677,11 @@ const openSettings = guard(async () => {
         line(["Idioma / Language", "lang"], h("select", { onchange: (e) => tr.set(e.target.value) },
           Object.entries(tr.langs).map(([k, n]) => h("option", { value: k, selected: tr.lang === k }, n)))),
         line(["Vista inicial", "view"], view),
+        line(["Abrir herdr al entrar a la terminal de una tarea", "herdr"], (() => {
+          const cb = h("input", { type: "checkbox", checked: store.get("autoHerdr") !== "0" });
+          cb.onchange = () => { store.set("autoHerdr", cb.checked ? "1" : "0"); toast(cb.checked ? "herdr automático: sí" : "herdr automático: no"); };
+          return cb;
+        })()),
         line(["Servidor", "server"], server),
         IS_WEB ? h("small", {}, "Estás usando la web del propio servidor: la dirección no se cambia desde acá.")
           : h("div", { class: "row" }, h("button", { onclick: guard(async () => {
@@ -1682,7 +1699,7 @@ const openSettings = guard(async () => {
     ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export"]],
     ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["licencia", "🏢 Licencia", ["license"]],
-    ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "server", "manual", "shortcuts", "guide"]],
+    ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "herdr", "server", "manual", "shortcuts", "guide"]],
   ];
   const tabOf = new Map(TABS.flatMap(([id, , keys]) => keys.map((k) => [k, id])));
   const groups = Object.fromEntries(TABS.map(([id]) => [id, []]));
