@@ -8,7 +8,7 @@ use crate::{
     AppState,
 };
 use axum::{
-    extract::State,
+    extract::{Path, State},
     routing::{get, post},
     Json, Router,
 };
@@ -58,6 +58,12 @@ pub fn router() -> Router<AppState> {
         .route("/api/github", get(status).delete(unlink))
         .route("/api/github/link", post(link))
         .route("/api/github/poll", post(poll))
+        .route("/api/projects/{id}/github", get(project_repo).put(set_project_repo))
+        .route("/api/projects/{id}/github/issues", get(list_issues))
+        .route("/api/projects/{id}/github/import", post(import_issues))
+        .route("/api/projects/{id}/github/sync", post(sync_issues))
+        .route("/api/tasks/{id}/github", get(task_link))
+        .route("/api/tasks/{id}/github/close", post(close_issue))
 }
 
 fn gh(st: &AppState) -> Result<std::sync::Arc<Github>> {
@@ -166,5 +172,233 @@ async fn unlink(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value
     if let Ok(mut m) = pending().lock() {
         m.remove(&user.id);
     }
+    Ok(Json(json!({ "ok": true })))
+}
+
+// ---- proyectos ↔ repositorios: importar issues como tareas y cerrarlos desde la tarea ----
+
+const IMPORT_MAX: usize = 30;
+
+fn valid_repo(r: &str) -> bool {
+    let mut it = r.split('/');
+    let ok = |p: &str| !p.is_empty() && p.len() <= 100 && p.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+    matches!((it.next(), it.next(), it.next()), (Some(a), Some(b), None) if ok(a) && ok(b))
+}
+
+async fn token_of(st: &AppState, user: Id) -> Result<String> {
+    sqlx::query_scalar("SELECT token FROM github_links WHERE user_id = ?")
+        .bind(user)
+        .fetch_optional(&st.db)
+        .await?
+        .ok_or_else(|| AppError::bad("Primero conectá tu cuenta de GitHub en Configuración → Avisos y conexiones"))
+}
+
+async fn repo_of(st: &AppState, project: Id) -> Result<Option<String>> {
+    Ok(sqlx::query_scalar("SELECT repo FROM project_github WHERE project_id = ?").bind(project).fetch_optional(&st.db).await?)
+}
+
+async fn gh_err(r: reqwest::Response) -> AppError {
+    let status = r.status();
+    let msg = r.json::<Value>().await.ok().and_then(|v| v["message"].as_str().map(|m| m.chars().take(160).collect::<String>())).unwrap_or_default();
+    let why = match status.as_u16() {
+        401 => "tu conexión con GitHub venció: desconectá y volvé a conectar tu cuenta",
+        403 => "GitHub no te deja hacer eso (permisos o límite de uso)",
+        404 => "no encuentro ese repositorio o issue (revisá que esté bien escrito y que tu cuenta tenga acceso)",
+        410 => "ese repositorio tiene los issues desactivados",
+        _ => "respuesta inesperada",
+    };
+    AppError::bad(&format!("GitHub ({}): {why}. {msg}", status.as_u16()))
+}
+
+async fn api_get(g: &Github, token: &str, path: &str) -> Result<Value> {
+    let r = g
+        .http
+        .get(format!("{}{path}", g.api))
+        .bearer_auth(token)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|_| AppError::bad("No pude hablar con GitHub"))?;
+    if !r.status().is_success() {
+        return Err(gh_err(r).await);
+    }
+    r.json().await.map_err(|_| AppError::bad("Respuesta rara de GitHub"))
+}
+
+async fn api_send(g: &Github, token: &str, method: reqwest::Method, path: &str, body: Value) -> Result<()> {
+    let r = g
+        .http
+        .request(method, format!("{}{path}", g.api))
+        .bearer_auth(token)
+        .header("Accept", "application/vnd.github+json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|_| AppError::bad("No pude hablar con GitHub"))?;
+    if r.status().is_success() { Ok(()) } else { Err(gh_err(r).await) }
+}
+
+async fn project_repo(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
+    let team = crate::routes::team_of_project(&st, project).await?;
+    crate::routes::require(&st, team, user.id, tm_core::Role::Viewer).await?;
+    let linked = !user.bot && sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM github_links WHERE user_id = ?").bind(user.id).fetch_one(&st.db).await? > 0;
+    Ok(Json(json!({ "available": st.github.is_some(), "linked": linked, "repo": repo_of(&st, project).await? })))
+}
+
+#[derive(serde::Deserialize)]
+struct RepoBody {
+    repo: String,
+}
+
+async fn set_project_repo(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>, Json(b): Json<RepoBody>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let team = crate::routes::team_of_project(&st, project).await?;
+    crate::routes::ensure_writer(&st, team, user.id).await?;
+    let repo = b.repo.trim().trim_start_matches("https://github.com/").trim_end_matches(".git").trim_matches('/').to_string();
+    if repo.is_empty() {
+        sqlx::query("DELETE FROM project_github WHERE project_id = ?").bind(project).execute(&st.db).await?;
+        return Ok(Json(json!({ "repo": null })));
+    }
+    if !valid_repo(&repo) {
+        return Err(AppError::bad("Escribilo como dueño/repositorio, por ejemplo polblancoo/Rust_tuiManager"));
+    }
+    sqlx::query("INSERT INTO project_github (project_id, repo) VALUES (?, ?) ON CONFLICT(project_id) DO UPDATE SET repo = excluded.repo")
+        .bind(project)
+        .bind(&repo)
+        .execute(&st.db)
+        .await?;
+    Ok(Json(json!({ "repo": repo })))
+}
+
+/// Issues abiertos del repositorio del proyecto, con una marca en los que ya son tarea.
+async fn list_issues(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let team = crate::routes::team_of_project(&st, project).await?;
+    crate::routes::ensure_writer(&st, team, user.id).await?;
+    let g = gh(&st)?;
+    let repo = repo_of(&st, project).await?.ok_or_else(|| AppError::bad("Este proyecto no tiene repositorio: indicá el dueño/repo primero"))?;
+    let token = token_of(&st, user.id).await?;
+    let v = api_get(&g, &token, &format!("/repos/{repo}/issues?state=open&per_page=50")).await?;
+    let done: Vec<i64> = sqlx::query_scalar("SELECT number FROM task_github WHERE repo = ? AND task_id IN (SELECT id FROM tasks WHERE project_id = ?)")
+        .bind(&repo)
+        .bind(project)
+        .fetch_all(&st.db)
+        .await?;
+    let issues: Vec<Value> = v
+        .as_array()
+        .map(|a| a.as_slice())
+        .unwrap_or(&[])
+        .iter()
+        .filter(|i| i.get("pull_request").is_none())
+        .map(|i| {
+            let n = i["number"].as_i64().unwrap_or(0);
+            json!({
+                "number": n,
+                "title": i["title"],
+                "url": i["html_url"],
+                "labels": i["labels"].as_array().map(|l| l.iter().filter_map(|x| x["name"].as_str()).collect::<Vec<_>>()).unwrap_or_default(),
+                "imported": done.contains(&n),
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "repo": repo, "issues": issues })))
+}
+
+#[derive(serde::Deserialize)]
+struct ImportBody {
+    numbers: Vec<i64>,
+}
+
+async fn import_issues(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>, Json(b): Json<ImportBody>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let team = crate::routes::team_of_project(&st, project).await?;
+    crate::routes::ensure_writer(&st, team, user.id).await?;
+    if b.numbers.is_empty() || b.numbers.len() > IMPORT_MAX {
+        return Err(AppError::bad("Elegí entre 1 y 30 issues por vez"));
+    }
+    let g = gh(&st)?;
+    let repo = repo_of(&st, project).await?.ok_or_else(|| AppError::bad("Este proyecto no tiene repositorio"))?;
+    let token = token_of(&st, user.id).await?;
+    let mut created = 0;
+    for n in b.numbers {
+        let taken: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM task_github WHERE repo = ? AND number = ? AND task_id IN (SELECT id FROM tasks WHERE project_id = ?)")
+            .bind(&repo)
+            .bind(n)
+            .bind(project)
+            .fetch_one(&st.db)
+            .await?;
+        if taken > 0 {
+            continue;
+        }
+        let i = api_get(&g, &token, &format!("/repos/{repo}/issues/{n}")).await?;
+        let url = i["html_url"].as_str().unwrap_or("").to_string();
+        let title: String = format!("{} (#{n})", i["title"].as_str().unwrap_or("Issue")).chars().take(crate::limits::TITLE_MAX).collect();
+        let body: String = format!("{}\n\n🔗 {url}", i["body"].as_str().unwrap_or("").trim()).chars().take(crate::limits::DESCRIPTION_MAX).collect();
+        let t = crate::routes::create_task(
+            State(st.clone()),
+            AuthUser { id: user.id, bot: false },
+            Path(project),
+            Json(tm_core::NewTask { title, description: body, priority: 0, assignee_id: None, due: None, parent_id: None, start: None, recurrence: None }),
+        )
+        .await?
+        .0;
+        sqlx::query("INSERT INTO task_github (task_id, repo, number, url) VALUES (?, ?, ?, ?)").bind(t.id).bind(&repo).bind(n).bind(&url).execute(&st.db).await?;
+        created += 1;
+    }
+    Ok(Json(json!({ "created": created })))
+}
+
+/// Pasa a «Hecha» las tareas cuyo issue ya se cerró en GitHub.
+async fn sync_issues(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let team = crate::routes::team_of_project(&st, project).await?;
+    crate::routes::ensure_writer(&st, team, user.id).await?;
+    let g = gh(&st)?;
+    let token = token_of(&st, user.id).await?;
+    let rows: Vec<(Id, String, i64)> = sqlx::query_as(
+        "SELECT g.task_id, g.repo, g.number FROM task_github g JOIN tasks t ON t.id = g.task_id WHERE t.project_id = ? AND t.status != 'done' LIMIT 100",
+    )
+    .bind(project)
+    .fetch_all(&st.db)
+    .await?;
+    let mut closed = 0;
+    for (task, repo, n) in rows {
+        let Ok(i) = api_get(&g, &token, &format!("/repos/{repo}/issues/{n}")).await else { continue };
+        if i["state"].as_str() == Some("closed") {
+            sqlx::query("UPDATE tasks SET status = 'done', updated_at = ? WHERE id = ?").bind(Utc::now()).bind(task).execute(&st.db).await?;
+            if let Ok(t) = crate::routes::fetch_task(&st, task).await {
+                crate::extras::log(&st, project, user.id, format!("«{}» se cerró en GitHub: pasó a Hecha", t.title)).await;
+                st.emit(team, tm_core::Event::TaskUpdated(t));
+            }
+            closed += 1;
+        }
+    }
+    Ok(Json(json!({ "closed": closed })))
+}
+
+async fn task_link(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id>) -> Result<Json<Value>> {
+    let team = crate::routes::team_of_task(&st, task).await?;
+    crate::routes::require(&st, team, user.id, tm_core::Role::Viewer).await?;
+    let row: Option<(String, i64, String)> = sqlx::query_as("SELECT repo, number, url FROM task_github WHERE task_id = ?").bind(task).fetch_optional(&st.db).await?;
+    Ok(Json(match row {
+        Some((repo, number, url)) => json!({ "repo": repo, "number": number, "url": url }),
+        None => json!({ "repo": null }),
+    }))
+}
+
+/// Cierra el issue en GitHub (con un comentario) cuando la tarea está terminada.
+async fn close_issue(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let team = crate::routes::team_of_task(&st, task).await?;
+    crate::routes::ensure_writer(&st, team, user.id).await?;
+    let g = gh(&st)?;
+    let token = token_of(&st, user.id).await?;
+    let (repo, n): (String, i64) = sqlx::query_as("SELECT repo, number FROM task_github WHERE task_id = ?")
+        .bind(task)
+        .fetch_optional(&st.db)
+        .await?
+        .ok_or_else(|| AppError::bad("Esta tarea no viene de un issue de GitHub"))?;
+    let _ = api_send(&g, &token, reqwest::Method::POST, &format!("/repos/{repo}/issues/{n}/comments"), json!({ "body": "Tarea terminada en el gestor de tareas." })).await;
+    api_send(&g, &token, reqwest::Method::PATCH, &format!("/repos/{repo}/issues/{n}"), json!({ "state": "closed" })).await?;
     Ok(Json(json!({ "ok": true })))
 }

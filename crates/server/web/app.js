@@ -987,6 +987,16 @@ const openTask = guard(async (task) => {
     const st = await api("POST", `/api/projects/${S.project.id}/tasks`, { title: newSub.value, parent_id: task.id });
     upsert(st); newSub.value = ""; drawSubs(); render();
   }));
+  // si la tarea viene de un issue de GitHub: enlace y botón para cerrarlo allá
+  const ghBox = h("div", { class: "row" });
+  api("GET", `/api/tasks/${task.id}/github`).then((g) => {
+    if (!g.repo) return;
+    ghBox.append(h("a", { href: g.url, target: "_blank", rel: "noopener" }, `🐙 ${g.repo}#${g.number}`), h("span", { class: "spacer" }),
+      can("member") && h("button", { onclick: guard(async () => {
+        if (!(await ask("Se cierra el issue en GitHub (con un comentario). ¿Cerrarlo?", "Cerrar issue"))) return;
+        await api("POST", `/api/tasks/${task.id}/github/close`); toast("Issue cerrado en GitHub");
+      }) }, "Cerrar el issue en GitHub"));
+  }).catch(() => {});
   // dependencias: esta tarea no puede empezar hasta que terminen las listadas
   const depBox = h("div", { class: "subs" });
   const drawDeps = () => {
@@ -1177,6 +1187,7 @@ const openTask = guard(async (task) => {
         h("label", {}, "Estado", status), h("label", {}, "Prioridad", prio),
         h("label", {}, "Responsable", who), h("label", {}, "Empieza", start),
         h("label", {}, "Vence", due), h("label", {}, "Repetición", rec), h("small", { class: "hint" }, whoHint)),
+      ghBox,
       h("h3", {}, "Depende de"), depBox, depAdd,
       h("h3", {}, "Adjuntos"), attBox, attAdd,
       h("h3", {}, "Comentarios"),
@@ -1305,6 +1316,29 @@ const toggleSide = () => { S.sideOff = !S.sideOff; store.set("sideOff", S.sideOf
 function appView() {
   const search = h("input", { placeholder: "Buscar…", value: S.query, oninput: (e) => { S.query = e.target.value; render(true); } });
   const dock = PANES.length > 0 && !S.terms && h("button", { class: "term-dock", title: "Tenés terminales abiertas: tocá para volver a ellas", onclick: () => openTerms() }, `🖥️ Terminales (${PANES.length})`);
+  // la barra se parte en dos grupos (botones de acciones; vistas y buscador) que se pueden poner arriba o abajo (Preferencias)
+  const barActs = [
+        // el nombre del proyecto ya se ve resaltado en la barra lateral: arriba se deja el lugar a los botones
+        (S.terms || S.portfolio || !S.project) ? h("h1", {}, S.terms ? "🖥️ Terminales" : S.portfolio ? "📊 Portafolio" : S.team ? "Sin proyectos" : "Creá un equipo para empezar") : h("span", { class: "grow" }),
+        h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
+        S.project && !S.portfolio && !S.terms && h("button", { onclick: openSchedules, title: "Tareas que se crean solas a una hora fija: cada día, semana o mes" }, "⏰ Programadas"),
+        S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
+        S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
+        S.project && !S.portfolio && !S.terms && can("admin") && S.reviews && h("button", { class: S.reviews.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA da por terminado queda «en revisión» hasta que una persona lo apruebe (planes Equipo y Empresa)", onclick: toggleReview }, "🔎 Revisión: " + (S.reviews.enabled ? "sí" : "no")),
+        S.project && !S.portfolio && !S.terms && can("member") && h("button", { onclick: githubProject, title: "Traer los issues abiertos del repositorio como tareas, y cerrarlos desde la tarea" }, "🐙 GitHub"),
+        S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
+        S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
+        S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
+  ];
+  const barViews = [
+        !S.portfolio && !S.terms && h("div", { class: "seg" },
+          [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"], ["activity", "Actividad"]].map(([v, l]) =>
+            h("button", { class: S.view === v ? "on" : "", onclick: () => { S.view = v; render(); } }, l))),
+        search
+  ];
+  const posActs = store.get("barActs") === "bottom" ? "bottom" : "top", posViews = store.get("barViews") === "bottom" ? "bottom" : "top";
+  const barTop = [...(posActs === "top" ? barActs : []), ...(posViews === "top" ? barViews : [])];
+  const barBottom = [...(posActs === "bottom" ? barActs : []), ...(posViews === "bottom" ? barViews : [])];
   return h("div", { class: "shell" + (S.sideOff ? " side-off" : "") + (S.panel && S.team ? " with-panel" : "") + (S.terms && store.get("tvZen") === "1" ? " tv-zen" : "") },
     h("aside", {},
       h("div", { class: "brand" }, h("img", { src: "icon-192.png", alt: "", width: 22, height: 22, style: "vertical-align:middle;margin-right:6px;border-radius:5px" }), h("span", { class: "brand-name" }, APP_NAME),
@@ -1327,26 +1361,13 @@ function appView() {
         h("button", { class: "ghost", onclick: logout }, "Salir"),
         h("button", { class: "ghost", onclick: logoutAll, title: "Cierra la sesión en todos los dispositivos" }, "⏻"))),
     h("main", {},
-      h("div", { class: "top" },
-        // el nombre del proyecto ya se ve resaltado en la barra lateral: arriba se deja el lugar a los botones
-        (S.terms || S.portfolio || !S.project) ? h("h1", {}, S.terms ? "🖥️ Terminales" : S.portfolio ? "📊 Portafolio" : S.team ? "Sin proyectos" : "Creá un equipo para empezar") : h("span", { class: "grow" }),
-        h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
-        S.project && !S.portfolio && !S.terms && h("button", { onclick: openSchedules, title: "Tareas que se crean solas a una hora fija: cada día, semana o mes" }, "⏰ Programadas"),
-        S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
-        S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
-        S.project && !S.portfolio && !S.terms && can("admin") && S.reviews && h("button", { class: S.reviews.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA da por terminado queda «en revisión» hasta que una persona lo apruebe (planes Equipo y Empresa)", onclick: toggleReview }, "🔎 Revisión: " + (S.reviews.enabled ? "sí" : "no")),
-        S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
-        S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
-        S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
-        !S.portfolio && !S.terms && h("div", { class: "seg" },
-          [["board", "Tablero"], ["calendar", "Calendario"], ["gantt", "Gantt"], ["canvas", "Pizarra"], ["activity", "Actividad"]].map(([v, l]) =>
-            h("button", { class: S.view === v ? "on" : "", onclick: () => { S.view = v; render(); } }, l))),
-        search),
+      h("div", { class: "top" }, barTop),
       S.project && !S.portfolio && !S.terms && (S.project.work_dir || S.project.repo) && h("div", { class: "proj-meta" },
         S.project.work_dir && h("span", { title: "Carpeta de trabajo" }, "📁 " + S.project.work_dir),
         S.project.repo && h("span", { title: "Repositorio" }, "🔗 " + S.project.repo)),
       S.terms ? termsView() : S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
-        : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos")),
+        : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos"),
+      barBottom.filter(Boolean).length > 0 && h("div", { class: "top bottom" }, barBottom)),
     S.panel && S.team && teamPanel(), dock);
 }
 
@@ -1494,6 +1515,7 @@ const CFG_HELP = {
   perfil: ["Perfil de uso", "Prepara la interfaz según para qué usan el equipo: cambia los nombres de las columnas y oculta lo técnico (terminales, carpeta del código) si no hace falta. «Cargar ejemplo» crea un proyecto de muestra con tareas; «Eliminar ejemplo» lo borra entero y deja todo limpio. No toca tus proyectos reales.", null],
   duplicate: ["Usar como plantilla", "Crea un proyecto nuevo copiando las tareas, etiquetas y dependencias del actual, para repetir un proceso sin armarlo de cero.", null],
   export: ["Exportar", "Descarga todas las tareas del proyecto en CSV (para planilla) o JSON (para copia de seguridad o scripts).", null],
+  bars: ["Posición de los botones", "Elegí si los botones del proyecto (Programadas, Consumo, GitHub, Proyecto, Equipo…) y las vistas con el buscador (Tablero, Calendario, Gantt…) van arriba o abajo de la pantalla. Se guarda solo en este dispositivo.", null],
   herdr: ["Terminal con herdr", "Al abrir la terminal de una tarea se abre herdr (un panel de terminales) en la carpeta del proyecto, si la máquina lo tiene. Apagalo si preferís una terminal común. Se guarda solo en este dispositivo.", null],
   view: ["Vista inicial", "Qué vista se abre primero en este dispositivo: tablero, calendario, Gantt, pizarra o actividad. Se cambia en cualquier momento con las teclas 1 a 5.", null],
   server: ["Servidor", "Es la dirección donde corre tm-server (por ejemplo https://tareas.miempresa.com). En la web propia del servidor no se cambia; en la app de escritorio o la TUI la escribís una vez y volvés a iniciar sesión.",
@@ -1558,6 +1580,50 @@ const linkGithub = guard(async () => {
     if (["expired", "denied", "none"].includes(r.status)) { note.textContent = r.status === "denied" ? "❌ Rechazaste el acceso en GitHub." : "⌛ El código venció. Cerrá y volvé a intentar."; return; }
   }
 });
+// GitHub por proyecto: se indica el repositorio y se traen sus issues abiertos como tareas
+const githubProject = guard(async () => {
+  const p = S.project; if (!p) return;
+  const info = await api("GET", `/api/projects/${p.id}/github`);
+  if (!info.available) { toast("El servidor no tiene GitHub configurado (TM_GITHUB_CLIENT_ID)", true); return; }
+  if (!info.linked) { toast("Primero conectá tu cuenta en Configuración → Avisos y conexiones → GitHub", true); return; }
+  const close = () => box.remove();
+  // si el proyecto ya tiene «Repositorio» cargado en ⚙ Proyecto, se usa ese (usuario/repo o URL de GitHub)
+  const fromProject = (p.repo || "").trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
+  if (info.repo !== fromProject && /^[\w.-]+\/[\w.-]+$/.test(fromProject)) {
+    await api("PUT", `/api/projects/${p.id}/github`, { repo: fromProject }); info.repo = fromProject;
+  }
+  const repo = h("input", { value: info.repo || "", placeholder: "dueño/repositorio, ej. polblancoo/Rust_tuiManager", maxLength: 200 });
+  const list = h("div", { class: "subs" });
+  const picked = new Set();
+  const load = guard(async () => {
+    list.replaceChildren(h("small", { class: "hint" }, "Buscando issues abiertos…"));
+    const r = await api("GET", `/api/projects/${p.id}/github/issues`);
+    if (!r.issues.length) { list.replaceChildren(h("small", { class: "hint" }, "No hay issues abiertos en " + r.repo)); return; }
+    list.replaceChildren(...r.issues.map((i) => h("label", { class: "sub" },
+      h("input", { type: "checkbox", disabled: i.imported, onchange: (e) => (e.target.checked ? picked.add(i.number) : picked.delete(i.number)) }),
+      h("span", {}, `#${i.number} ${i.title}` + (i.imported ? " (ya es tarea)" : "")))));
+  });
+  const box = h("div", { class: "overlay", onmousedown: (e) => e.target === box && close() },
+    h("div", { class: "modal" }, h("h3", {}, `GitHub · ${p.name}`),
+      h("label", {}, "Repositorio de este proyecto", repo),
+      h("div", { class: "row" },
+        h("button", { onclick: guard(async () => { await api("PUT", `/api/projects/${p.id}/github`, { repo: repo.value }); toast(repo.value.trim() ? "Repositorio guardado" : "Repositorio quitado"); if (repo.value.trim()) load(); else list.replaceChildren(); }) }, "Guardar"),
+        h("button", { onclick: guard(async () => { await api("PUT", `/api/projects/${p.id}/github`, { repo: repo.value }); load(); }) }, "Ver issues abiertos")),
+      list,
+      h("div", { class: "row" },
+        h("button", { onclick: guard(async () => {
+          if (!picked.size) { toast("Tildá al menos un issue", true); return; }
+          const r = await api("POST", `/api/projects/${p.id}/github/import`, { numbers: [...picked] });
+          S.tasks = await api("GET", `/api/projects/${p.id}/tasks`); render(); close(); toast(`${r.created} tarea(s) creadas desde GitHub`);
+        }) }, "Traer los tildados como tareas"),
+        h("button", { onclick: guard(async () => {
+          const r = await api("POST", `/api/projects/${p.id}/github/sync`);
+          S.tasks = await api("GET", `/api/projects/${p.id}/tasks`); render(); toast(r.closed ? `${r.closed} tarea(s) pasaron a Hecha porque su issue se cerró` : "Todo al día: ningún issue importado se cerró");
+        }) }, "Actualizar estados"),
+        h("span", { class: "spacer" }), h("button", { onclick: close }, "Cerrar"))));
+  document.body.append(box);
+  if (info.repo) load();
+});
 const openSettings = guard(async () => {
   document.getElementById("settings-modal")?.remove();
   S.me = await api("GET", "/api/me");
@@ -1617,6 +1683,14 @@ const openSettings = guard(async () => {
         line(["Bandeja de novedades", "inbox"], h("button", { onclick: go(() => loadInbox(false)) }, S.unread ? `Abrir (${S.unread})` : "Abrir")),
         line(["Cerrar sesión en este dispositivo", "logout"], h("button", { onclick: () => { close(); logout(); } }, "Salir")),
         line(["Cerrar sesión en todos los dispositivos", "logoutAll"], h("button", { class: "danger", onclick: () => { close(); logoutAll(); } }, "Cerrar todas"))),
+      S.team && sec("Proyecto",
+        line([S.project ? `Proyecto actual: ${S.project.name}` + (S.project.repo ? ` · 🔗 ${S.project.repo}` : " · sin repositorio") + (S.project.work_dir ? ` · 📁 ${S.project.work_dir}` : "") : "Sin proyectos", "project"],
+          h("button", { onclick: go(createProject) }, "Nuevo proyecto"),
+          S.project && can("admin") && h("button", { onclick: go(editProject), title: "Nombre, carpeta de trabajo y repositorio" }, "⚙ Datos del proyecto"),
+          S.project && can("member") && h("button", { onclick: go(githubProject), title: "Traer los issues abiertos del repositorio como tareas" }, "🐙 Traer issues")),
+        S.project && can("member") && line(["Usar como plantilla (copia tareas, etiquetas y dependencias)", "duplicate"], h("button", { onclick: go(duplicateProject) }, "Duplicar")),
+        S.project && line(["Exportar las tareas", "export"], h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
+          h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
       S.team && sec(`Equipo «${S.team.name}»`,
         line([`Tu rol: ${ROLES.find(([r]) => r === myRole())?.[1]}`, "role"]),
         can("member") && line(["Enviar un mensaje al equipo", "message"], h("button", { onclick: go(sendTeamMessage) }, "Escribir")),
@@ -1658,11 +1732,6 @@ const openSettings = guard(async () => {
                 toast("Equipo de ejemplo creado. Para volver al tuyo: Configuración → Equipo y proyecto → «Volver a mi equipo»");
               }) }, "Crear ejemplo")];
             })())),
-      S.team && sec("Proyecto",
-        line([S.project ? `Proyecto actual: ${S.project.name}` : "Sin proyectos", "project"], h("button", { onclick: go(createProject) }, "Nuevo proyecto")),
-        S.project && can("member") && line(["Usar como plantilla (copia tareas, etiquetas y dependencias)", "duplicate"], h("button", { onclick: go(duplicateProject) }, "Duplicar")),
-        S.project && line(["Exportar las tareas", "export"], h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
-          h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
       sec("Licencia",
         line(["Comandos permitidos y prohibidos para todas las IAs", "cmds"], h("button", { onclick: guard(async () => {
           const g = await api("GET", "/api/commands");
@@ -1677,6 +1746,16 @@ const openSettings = guard(async () => {
         line(["Idioma / Language", "lang"], h("select", { onchange: (e) => tr.set(e.target.value) },
           Object.entries(tr.langs).map(([k, n]) => h("option", { value: k, selected: tr.lang === k }, n)))),
         line(["Vista inicial", "view"], view),
+        line(["Dónde van los botones (Programadas, Consumo, GitHub, Proyecto…)", "bars"], (() => {
+          const sel = h("select", { onchange: (e) => { store.set("barActs", e.target.value); render(); } },
+            [["top", "Arriba"], ["bottom", "Abajo"]].map(([v, l]) => h("option", { value: v, selected: (store.get("barActs") === "bottom" ? "bottom" : "top") === v }, l)));
+          return sel;
+        })()),
+        line(["Dónde van Tablero / Calendario / Gantt y el buscador", "bars"], (() => {
+          const sel = h("select", { onchange: (e) => { store.set("barViews", e.target.value); render(); } },
+            [["top", "Arriba"], ["bottom", "Abajo"]].map(([v, l]) => h("option", { value: v, selected: (store.get("barViews") === "bottom" ? "bottom" : "top") === v }, l)));
+          return sel;
+        })()),
         line(["Abrir herdr al entrar a la terminal de una tarea", "herdr"], (() => {
           const cb = h("input", { type: "checkbox", checked: store.get("autoHerdr") !== "0" });
           cb.onchange = () => { store.set("autoHerdr", cb.checked ? "1" : "0"); toast(cb.checked ? "herdr automático: sí" : "herdr automático: no"); };
@@ -1699,7 +1778,7 @@ const openSettings = guard(async () => {
     ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export"]],
     ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["licencia", "🏢 Licencia", ["license"]],
-    ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "herdr", "server", "manual", "shortcuts", "guide"]],
+    ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "bars", "herdr", "server", "manual", "shortcuts", "guide"]],
   ];
   const tabOf = new Map(TABS.flatMap(([id, , keys]) => keys.map((k) => [k, id])));
   const groups = Object.fromEntries(TABS.map(([id]) => [id, []]));

@@ -277,3 +277,15 @@ CREATE TABLE IF NOT EXISTS team_profile (
     team_id INTEGER PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE,
     profile TEXT NOT NULL
 );
+
+-- Proyecto ↔ repositorio de GitHub, y tarea ↔ issue de donde se importó
+CREATE TABLE IF NOT EXISTS project_github (
+    project_id INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    repo TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS task_github (
+    task_id INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    repo TEXT NOT NULL,
+    number INTEGER NOT NULL,
+    url TEXT NOT NULL
+);
