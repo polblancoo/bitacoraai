@@ -1,6 +1,7 @@
-//! Perfil de uso del equipo («Desarrollo de software», «Contenido y redes», «Fábrica de apps», «Otros / equipo general»)
-//! y proyecto de ejemplo. El perfil cambia lo que se ve por defecto (nombres de las columnas, vista inicial, lo técnico);
-//! el ejemplo es un proyecto de muestra marcado para poder borrarlo entero con un botón y dejar todo limpio.
+//! Perfil de uso del equipo («Desarrollo de software», «Contenido y redes», «Fábrica de apps», «Oficina», «Otros»).
+//! El perfil cambia lo que se ve por defecto (nombres de las columnas, vista inicial, lo técnico).
+//! El ejemplo es un EQUIPO aparte («Ejemplo · …», marcado `is_example`) con proyectos de muestra: así el equipo real
+//! nunca se toca, se vuelve a él con un clic y el ejemplo se borra entero con un botón.
 use crate::{auth::AuthUser, error::{AppError, Result}, routes, AppState};
 use axum::{
     extract::{Path, State},
@@ -10,24 +11,35 @@ use axum::{
 use chrono::{Duration, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tm_core::{Event, Id, NewProject, NewTask, Role, Status};
+use tm_core::{Id, NewProject, NewTask, NewTeam, Role, Status};
 
 const PROFILES: [&str; 5] = ["dev", "content", "factory", "office", "other"];
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/teams/{id}/profile", get(get_profile).put(put_profile))
-        .route("/api/teams/{id}/example", post(add_example).delete(remove_example))
+        .route("/api/examples", post(add_example))
+        .route("/api/examples/{id}", axum::routing::delete(remove_example))
 }
 
-async fn has_example(st: &AppState, team: Id) -> bool {
-    sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM projects WHERE team_id = ? AND is_example = 1").bind(team).fetch_one(&st.db).await.unwrap_or(0) > 0
+async fn is_example(st: &AppState, team: Id) -> bool {
+    sqlx::query_scalar::<_, i64>("SELECT is_example FROM teams WHERE id = ?").bind(team).fetch_optional(&st.db).await.ok().flatten().unwrap_or(0) != 0
+}
+
+fn profile_name(profile: &str) -> &'static str {
+    match profile {
+        "content" => "Contenido y redes",
+        "factory" => "Fábrica de apps",
+        "office" => "Oficina y estudios",
+        "other" => "Equipo general",
+        _ => "Desarrollo de software",
+    }
 }
 
 async fn get_profile(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
     routes::ensure_member(&st, team, user.id).await?;
     let profile: Option<String> = sqlx::query_scalar("SELECT profile FROM team_profile WHERE team_id = ?").bind(team).fetch_optional(&st.db).await?;
-    Ok(Json(json!({ "profile": profile, "has_example": has_example(&st, team).await })))
+    Ok(Json(json!({ "profile": profile, "is_example": is_example(&st, team).await })))
 }
 
 #[derive(Deserialize)]
@@ -129,25 +141,28 @@ fn example_for(profile: &str) -> Vec<Ex> {
     }
 }
 
-async fn add_example(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>, Json(b): Json<ProfileBody>) -> Result<Json<Value>> {
+/// Crea un equipo de ejemplo (de la persona que lo pide) con los proyectos de muestra del perfil.
+async fn add_example(State(st): State<AppState>, user: AuthUser, Json(b): Json<ProfileBody>) -> Result<Json<Value>> {
     user.human_only()?;
-    routes::require(&st, team, user.id, Role::Member).await?;
     if !PROFILES.contains(&b.profile.as_str()) {
         return Err(AppError::bad("perfil inválido"));
     }
-    if has_example(&st, team).await {
-        return Err(AppError::bad("ya hay un ejemplo cargado: eliminalo primero"));
+    let name = format!("Ejemplo · {}", profile_name(&b.profile));
+    let dup: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM teams WHERE owner_id = ? AND is_example = 1 AND name = ?").bind(user.id).bind(&name).fetch_one(&st.db).await?;
+    if dup > 0 {
+        return Err(AppError::bad("ya tenés un equipo de ejemplo de ese perfil: abrilo o eliminalo primero"));
     }
-    let mut created = Vec::new();
+    let Json(team) = routes::create_team(State(st.clone()), AuthUser { id: user.id, bot: false }, Json(NewTeam { name })).await?;
+    sqlx::query("UPDATE teams SET is_example = 1 WHERE id = ?").bind(team.id).execute(&st.db).await?;
+    sqlx::query("INSERT INTO team_profile (team_id, profile) VALUES (?, ?)").bind(team.id).bind(&b.profile).execute(&st.db).await?;
     for ex in example_for(&b.profile) {
         let Json(p) = routes::create_project(
             State(st.clone()),
             AuthUser { id: user.id, bot: false },
-            Path(team),
+            Path(team.id),
             Json(NewProject { name: ex.project.into(), description: String::new(), color: Some(ex.color.into()), work_dir: String::new(), repo: String::new() }),
         )
         .await?;
-        sqlx::query("UPDATE projects SET is_example = 1 WHERE id = ?").bind(p.id).execute(&st.db).await?;
         for (title, desc, status, prio, days) in ex.tasks {
             let Json(t) = routes::create_task(
                 State(st.clone()),
@@ -158,24 +173,19 @@ async fn add_example(State(st): State<AppState>, user: AuthUser, Path(team): Pat
             .await?;
             if *status != Status::Todo {
                 sqlx::query("UPDATE tasks SET status = ? WHERE id = ?").bind(status.as_str()).bind(t.id).execute(&st.db).await?;
-                if let Ok(t) = routes::fetch_task(&st, t.id).await {
-                    st.emit(team, Event::TaskUpdated(t));
-                }
             }
         }
-        created.push(p.id);
     }
-    Ok(Json(json!({ "projects": created })))
+    Ok(Json(json!({ "team": team })))
 }
 
-/// Borra todos los proyectos de ejemplo del equipo (con sus tareas).
+/// Borra un equipo de ejemplo entero (proyectos y tareas incluidos). Solo si está marcado como ejemplo y la persona es su dueña.
 async fn remove_example(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
     user.human_only()?;
-    routes::require(&st, team, user.id, Role::Admin).await?;
-    let ids: Vec<Id> = sqlx::query_scalar("SELECT id FROM projects WHERE team_id = ? AND is_example = 1").bind(team).fetch_all(&st.db).await?;
-    for id in &ids {
-        sqlx::query("DELETE FROM projects WHERE id = ?").bind(id).execute(&st.db).await?;
-        st.emit(team, Event::ProjectDeleted { id: *id, team_id: team });
+    routes::require(&st, team, user.id, Role::Owner).await?;
+    if !is_example(&st, team).await {
+        return Err(AppError::bad("este equipo no es un ejemplo: para borrarlo usá «Eliminar equipo»"));
     }
-    Ok(Json(json!({ "deleted": ids.len() })))
+    sqlx::query("DELETE FROM teams WHERE id = ?").bind(team).execute(&st.db).await?;
+    Ok(Json(json!({ "deleted": team })))
 }

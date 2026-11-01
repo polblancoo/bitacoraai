@@ -97,6 +97,7 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE activity ADD COLUMN task_id INTEGER",
         "ALTER TABLE projects ADD COLUMN require_review INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE projects ADD COLUMN is_example INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE teams ADD COLUMN is_example INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE notifications ADD COLUMN ext_pending INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN email_code_hash TEXT",

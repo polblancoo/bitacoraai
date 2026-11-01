@@ -312,7 +312,7 @@ async function selectTeam(team) {
       api("GET", `/api/teams/${team.id}/labels`), api("GET", `/api/teams/${team.id}/bots`).catch(() => []),
     ]);
     const pr = await api("GET", `/api/teams/${team.id}/profile`).catch(() => ({}));
-    S.hasExample = !!pr.has_example; applyProfile(pr.profile);
+    S.isExample = !!pr.is_example; applyProfile(pr.profile);
     if (profileOf().view && !store.get("view")) S.view = profileOf().view;
     await selectProject(S.projects[0] || null);
     loadOverview();
@@ -1621,25 +1621,31 @@ const openSettings = guard(async () => {
               await api("PUT", `/api/teams/${S.team.id}/profile`, { profile: sel.value }); applyProfile(sel.value);
               if (PROFILES[sel.value].view) S.view = PROFILES[sel.value].view;
               close(); render(); toast(`Perfil «${PROFILES[sel.value].name}» aplicado. ${PROFILES[sel.value].desc}`);
-              if (!S.hasExample && can("member") && (await ask(`Perfil «${PROFILES[sel.value].name}» aplicado. ¿Querés cargar un proyecto de ejemplo para ver cómo se usa? Después lo borrás con «Eliminar ejemplo» y tus proyectos no se tocan.`, "Cargar ejemplo"))) {
-                await api("POST", `/api/teams/${S.team.id}/example`, { profile: sel.value });
-                S.projects = await api("GET", `/api/teams/${S.team.id}/projects`); S.hasExample = true;
-                await selectProject(S.projects[S.projects.length - 1]);
-              }
             });
             return sel;
           })()),
-        can("member") && S.profile && !S.hasExample && line(["Cargar un proyecto de ejemplo del perfil", "perfil"], h("button", { onclick: guard(async () => {
-          await api("POST", `/api/teams/${S.team.id}/example`, { profile: S.profile });
-          S.projects = await api("GET", `/api/teams/${S.team.id}/projects`); S.hasExample = true;
-          close(); await selectProject(S.projects[S.projects.length - 1]); toast("Ejemplo cargado: probalo y después «Eliminar ejemplo»");
-        }) }, "Cargar ejemplo")),
-        can("admin") && S.hasExample && line(["Hay un ejemplo cargado: borrarlo deja todo limpio", "perfil"], h("button", { class: "danger", onclick: guard(async () => {
-          if (!(await ask("Se borran los proyectos de ejemplo con todas sus tareas. Tus proyectos reales no se tocan. ¿Eliminar el ejemplo?", "Eliminar ejemplo"))) return;
-          await api("DELETE", `/api/teams/${S.team.id}/example`);
-          S.projects = await api("GET", `/api/teams/${S.team.id}/projects`); S.hasExample = false;
-          close(); await selectProject(S.projects[0] || null); toast("Ejemplo eliminado");
-        }) }, "Eliminar ejemplo"))),
+        S.isExample
+          ? line(["Este es un equipo de ejemplo: borrarlo deja todo limpio. Tu equipo real no se toca", "perfil"],
+              h("button", { onclick: guard(async () => {
+                const real = S.teams.find((t) => t.id !== S.team.id && !t.is_example && !t.name.startsWith("Ejemplo · "));
+                if (real) { close(); await selectTeam(real); toast("Volviste a tu equipo"); }
+                else toast("No tenés otro equipo todavía: creá uno desde «Crear un equipo nuevo»", true);
+              }) }, "Volver a mi equipo"),
+              can("owner") && h("button", { class: "danger", onclick: guard(async () => {
+                if (!(await ask("Se borra este equipo de ejemplo con sus proyectos y tareas. Tus otros equipos no se tocan. ¿Eliminar el ejemplo?", "Eliminar ejemplo"))) return;
+                const id = S.team.id;
+                await api("DELETE", `/api/examples/${id}`);
+                S.teams = S.teams.filter((t) => t.id !== id); close();
+                await selectTeam(S.teams[0] || null); toast("Ejemplo eliminado");
+              }) }, "Eliminar ejemplo"))
+          : can("member") && line(["Ver un equipo de ejemplo ya armado (separado del tuyo, se borra con un botón)", "perfil"], (() => {
+              const sel = h("select", {}, Object.entries(PROFILES).map(([id, p]) => h("option", { value: id, selected: S.profile === id }, p.name)));
+              return [sel, h("button", { onclick: guard(async () => {
+                const r = await api("POST", "/api/examples", { profile: sel.value });
+                S.teams = await api("GET", "/api/teams"); close(); await selectTeam(S.teams.find((t) => t.id === r.team.id) || S.teams[S.teams.length - 1]);
+                toast("Equipo de ejemplo creado. Para volver al tuyo: Configuración → Equipo y proyecto → «Volver a mi equipo»");
+              }) }, "Crear ejemplo")];
+            })())),
       S.team && sec("Proyecto",
         line([S.project ? `Proyecto actual: ${S.project.name}` : "Sin proyectos", "project"], h("button", { onclick: go(createProject) }, "Nuevo proyecto")),
         S.project && can("member") && line(["Usar como plantilla (copia tareas, etiquetas y dependencias)", "duplicate"], h("button", { onclick: go(duplicateProject) }, "Duplicar")),
@@ -1910,9 +1916,9 @@ async function openWizard() {
       if (STEPS[W.i] === "perfil" && W.team && profSel.value && profSel.value !== S.profile) {
         await api("PUT", `/api/teams/${W.team.id}/profile`, { profile: profSel.value }); applyProfile(profSel.value);
       }
-      if (STEPS[W.i] === "perfil" && W.team && profSel.value && profEx.checked && !S.hasExample) {
-        await api("POST", `/api/teams/${W.team.id}/example`, { profile: profSel.value });
-        S.projects = await api("GET", `/api/teams/${W.team.id}/projects`); S.hasExample = true;
+      if (STEPS[W.i] === "perfil" && profSel.value && profEx.checked && !W.exampleDone) {
+        const r = await api("POST", "/api/examples", { profile: profSel.value });
+        S.teams = await api("GET", "/api/teams"); W.exampleDone = true; render();
       }
       if (STEPS[W.i] === "team" && !W.team) {
         const n = teamIn.value.trim(); if (!n) return toast("Escribí un nombre para el equipo", true);
@@ -1945,7 +1951,7 @@ async function openWizard() {
     }[k];
     const fields = {
       team: !W.team && h("label", {}, "Nombre del equipo", teamIn),
-      perfil: [h("label", {}, "Perfil de uso", profSel, profNote), h("label", { class: "row" }, profEx, h("span", {}, "Cargar un proyecto de ejemplo (se borra con un botón)"))],
+      perfil: [h("label", {}, "Perfil de uso", profSel, profNote), h("label", { class: "row" }, profEx, h("span", {}, "Crear también un equipo de ejemplo ya armado (separado del tuyo, se borra con un botón)"))],
       project: !W.project && [h("label", {}, "Nombre del proyecto", projIn), h("label", {}, "Carpeta de trabajo", dirIn)],
       ia: h("div", { class: "row" }, h("button", { class: W.ai ? "" : "primary", onclick: guard(async () => { const before = (S.bots || []).length; await createBot(); await boot(); W.ai = (S.bots || []).length > before || W.ai; paint(); }) }, W.ai ? "➕ Agregar otra IA" : "🤖 Agregar una IA")),
       listo: h("label", { class: "row" }, sample, h("span", {}, "Crear una tarea de ejemplo en el tablero")),

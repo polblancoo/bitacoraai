@@ -327,7 +327,7 @@ async fn list_teams(State(st): State<AppState>, user: AuthUser) -> Result<Json<V
     Ok(Json(rows.iter().map(|r| Team { id: r.get("id"), name: r.get("name"), owner_id: r.get("owner_id") }).collect()))
 }
 
-async fn create_team(State(st): State<AppState>, user: AuthUser, Json(n): Json<NewTeam>) -> Result<Json<Team>> {
+pub(crate) async fn create_team(State(st): State<AppState>, user: AuthUser, Json(n): Json<NewTeam>) -> Result<Json<Team>> {
     if n.name.trim().is_empty() {
         return Err(AppError::bad("nombre requerido"));
     }
