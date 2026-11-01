@@ -1218,7 +1218,8 @@ function column(s) {
   const tasks = S.tasks
     .filter((t) => !t.parent_id && t.status === s.id && (!q || t.title.toLowerCase().includes(q) || (t.assignee || "").toLowerCase().includes(q)
       || t.labels.some((l) => l.name.toLowerCase().includes(q))))
-    .sort(byOrder);
+    // en «Hecho» lo último que se terminó va arriba; en las demás, el orden manual
+    .sort(s.id === "done" ? (a, b) => String(b.updated_at).localeCompare(String(a.updated_at)) : byOrder);
   const col = h("section", { class: "col" },
     h("header", {}, h("span", { class: "bar", style: `background:${s.color}` }), s.label, h("span", { class: "count" }, tasks.length)),
     h("div", { class: "cards" }, tasks.map(taskCard)),
@@ -1288,7 +1289,8 @@ function appView() {
         h("button", { class: "ghost", onclick: logoutAll, title: "Cierra la sesión en todos los dispositivos" }, "⏻"))),
     h("main", {},
       h("div", { class: "top" },
-        h("h1", {}, S.terms ? "🖥️ Terminales" : S.portfolio ? "📊 Portafolio" : S.project ? S.project.name : S.team ? "Sin proyectos" : "Creá un equipo para empezar"),
+        // el nombre del proyecto ya se ve resaltado en la barra lateral: arriba se deja el lugar a los botones
+        (S.terms || S.portfolio || !S.project) ? h("h1", {}, S.terms ? "🖥️ Terminales" : S.portfolio ? "📊 Portafolio" : S.team ? "Sin proyectos" : "Creá un equipo para empezar") : h("span", { class: "grow" }),
         h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openSchedules, title: "Tareas que se crean solas a una hora fija: cada día, semana o mes" }, "⏰ Programadas"),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),

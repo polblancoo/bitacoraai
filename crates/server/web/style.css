@@ -493,3 +493,9 @@ ol.guide pre { margin: 4px 0; }
 .reviewpanel { border: 1px solid #e0af68; border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
 .reviewpanel[hidden] { display: none; }
 .rv-row { padding: 4px 0; border-top: 1px solid var(--line); font-size: 13px; }
+
+/* barra de arriba: si los botones no entran, se desplaza hacia los costados en vez de cortarlos */
+.top { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.top > * { flex-shrink: 0; }
+.top > .grow { flex: 1 1 0; min-width: 0; }
+.top h1 { flex: 1 0 auto; }
