@@ -998,6 +998,22 @@ async fn add_comment(
     let row = sqlx::query(sqlx::AssertSqlSafe(format!("{COMMENT_SELECT} WHERE c.id = ?"))).bind(id).fetch_one(&st.db).await?;
     let c = comment_from_row(&row);
     st.emit(team, Event::CommentAdded(c.clone()));
+    // un comentario de una persona en una tarea ya terminada de una IA la reabre (Por hacer) para que la retome leyéndolo;
+    // las tareas programadas funcionan igual. Los comandos «/…» no reabren.
+    if !user.bot && !n.body.trim_start().starts_with('/') {
+        let reopen: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM tasks WHERE id = ? AND status = 'done' AND assignee_id IN (SELECT user_id FROM api_tokens)",
+        )
+        .bind(task)
+        .fetch_optional(&st.db)
+        .await?;
+        if reopen.is_some() {
+            sqlx::query("UPDATE tasks SET status = 'todo', updated_at = ? WHERE id = ?").bind(Utc::now()).bind(task).execute(&st.db).await?;
+            let t = fetch_task(&st, task).await?;
+            st.emit(team, Event::TaskUpdated(t.clone()));
+            crate::extras::log_task(&st, task, user.id, format!("reabrió «{}» con un comentario", t.title)).await;
+        }
+    }
     // una respuesta en la tarea de pedido («🙋 Pedido de #N: …») se copia a la tarea N, que es la que la IA está leyendo
     if !user.bot {
         let title: Option<String> = sqlx::query_scalar("SELECT title FROM tasks WHERE id = ?").bind(task).fetch_optional(&st.db).await?;
