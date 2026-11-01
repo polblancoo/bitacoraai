@@ -6,6 +6,7 @@ mod canvas;
 mod license;
 mod license_token;
 mod pro;
+mod digest;
 mod review;
 mod limits;
 mod notify;
@@ -94,6 +95,7 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE users ADD COLUMN email TEXT",
         "ALTER TABLE activity ADD COLUMN task_id INTEGER",
         "ALTER TABLE projects ADD COLUMN require_review INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE notifications ADD COLUMN ext_pending INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN email_code_hash TEXT",
         "ALTER TABLE users ADD COLUMN email_code_expires TEXT",
@@ -212,8 +214,9 @@ async fn main() -> anyhow::Result<()> {
     schedule::spawn_schedules(state.clone());
     runner::spawn_runners(state.clone());
     report::spawn_reports(state.clone());
+    digest::spawn(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(pro::router()).merge(review::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(pro::router()).merge(digest::router()).merge(review::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

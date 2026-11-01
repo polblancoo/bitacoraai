@@ -1433,6 +1433,7 @@ const CFG_HELP = {
   license: ["Licencia", "La app es software libre (AGPL-3.0): podés usarla gratis cumpliendo esa licencia. Si tu empresa prefiere no cumplirla, existe una licencia comercial anual. Acá ves el estado y, si sos la primera persona registrada, podés comprarla.", null],
   guide: ["Guía de inicio", "Un asistente corto con dibujos que te lleva a dejar todo andando: equipo, proyecto e IA. Se abre solo la primera vez y la podés repetir cuando quieras.", null],
   cmds: ["Comandos para todas las IAs", "Son los comandos que cualquier IA del servidor puede usar sin pedir permiso (permitidos) y los que nunca puede usar (prohibidos). Se suman a la lista propia de cada IA, que está en su ficha. Lo prohibido siempre gana. Un comando se escribe así: git clone, cargo build o Bash(npm test:*).", "Solo la primera persona registrada edita estas listas. Los archivos whitelist.txt y blacklist.txt del agente son la base; estas listas se suman a ellas."],
+  digest: ["Cómo recibís los avisos", "Elegí si los avisos por Telegram y email llegan uno por uno, o juntos en un solo mensaje por día a la hora que quieras (lo normal: 09:00, en tu zona horaria). La bandeja de la app siempre se actualiza al instante, y los pedidos de ayuda de una IA (🙋) salen siempre al momento.", null],
   reports: ["Informes automáticos", "Un resumen diario o semanal del equipo: qué terminaron las personas y las IAs, cuánto gastaron las IAs y qué quedó trabado. Te llega a la bandeja y, si querés, por Telegram y email.", null],
   telegram: ["Telegram", "Tocá «Vincular», abrí el bot que se muestra y mandale /start CÓDIGO. Después recibís las novedades en Telegram y podés usar /tareas, /hecho N (marca la tarea N como hecha) y /stop (desvincula).",
     "Creá un bot con @BotFather en Telegram y arrancá tm-server con TM_TELEGRAM_TOKEN=<token>. No necesita URL pública (usa long polling). Sin el token, esta fila dice «el servidor no tiene el bot configurado»."],
@@ -1540,6 +1541,20 @@ const openSettings = guard(async () => {
   const gcState = !gc.available ? "el servidor no tiene Google configurado" : gc.linked ? `✓ conectado (${gc.events} tareas con fecha en tu calendario)` : "sin conectar";
   const emailState = !me.email ? "sin cargar" : me.email_verified ? `✓ ${me.email}` : `${me.email} (sin verificar)`;
 
+  // cómo llegan los avisos por Telegram y email: resumen a una hora fija (lo normal) o uno por uno
+  const np = S.notifyPrefs || { mode: "digest", hour: 9 };
+  if (!S.notifyPrefs) api("GET", "/api/me/notify-prefs").then((v) => { S.notifyPrefs = v; if (document.getElementById("settings-modal")) openSettings(); }).catch(() => {});
+  const saveNp = guard(async (mode, hour) => {
+    S.notifyPrefs = { mode, hour };
+    await api("PUT", "/api/me/notify-prefs", { mode, hour, tz_offset: -new Date().getTimezoneOffset() });
+    toast(mode === "digest" ? `Resumen diario a las ${String(hour).padStart(2, "0")}:00` : "Avisos uno por uno"); 
+  });
+  const npMode = h("select", { onchange: (e) => saveNp(e.target.value, +npHour.value) },
+    h("option", { value: "digest", selected: np.mode === "digest" }, "Un resumen por día"), h("option", { value: "instant", selected: np.mode === "instant" }, "Uno por uno, al instante"));
+  const npHour = h("select", { disabled: np.mode === "instant", onchange: (e) => saveNp(npMode.value, +e.target.value) },
+    Array.from({ length: 24 }, (_, i) => h("option", { value: i, selected: i === np.hour }, String(i).padStart(2, "0") + ":00")));
+  npMode.addEventListener("change", () => { npHour.disabled = npMode.value === "instant"; });
+
   const items = [
       S.team && sec("", line(["Informes automáticos del equipo (resumen diario o semanal)", "reports"], h("button", { onclick: go(openReports) }, "Configurar"))),
       sec("Cuenta",
@@ -1548,6 +1563,7 @@ const openSettings = guard(async () => {
         line([`Telegram: ${tgState}`, "telegram"], me.telegram_available && (me.telegram_linked
           ? h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/telegram"); close(); openSettings(); }) }, "Desvincular")
           : h("button", { onclick: () => { close(); linkTelegram(); } }, "Vincular"))),
+        line(["Cómo recibís los avisos (Telegram y email)", "digest"], npMode, npHour),
         line([`GitHub: ${!gh.available ? "el servidor no tiene GitHub configurado" : gh.linked ? "✓ conectado como @" + gh.login : "sin conectar"}`, "github"], gh.available && (gh.linked
           ? h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Desconectar tu cuenta de GitHub?"))) return; await api("DELETE", "/api/github"); close(); openSettings(); }) }, "Desconectar")
           : h("button", { onclick: () => { close(); linkGithub(); } }, "Conectar"))),
@@ -1597,7 +1613,7 @@ const openSettings = guard(async () => {
   // solapas: cada línea se ubica por su clave; lo que no tiene clave (botones sueltos) queda con la línea anterior
   const TABS = [
     ["cuenta", "👤 Cuenta", ["user", "inbox", "logout", "logoutAll"]],
-    ["conexiones", "🔔 Avisos y conexiones", ["email", "telegram", "github", "google", "reports"]],
+    ["conexiones", "🔔 Avisos y conexiones", ["email", "telegram", "digest", "github", "google", "reports"]],
     ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "project", "duplicate", "export"]],
     ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["licencia", "🏢 Licencia", ["license"]],

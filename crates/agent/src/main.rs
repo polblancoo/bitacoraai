@@ -242,6 +242,10 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
             api.set_status(job.id, "todo").await.ok();
             None
         }
+        Ok(_) if run_ok && wrote_while_working(api, job.id, claimed["updated_at"].as_str().unwrap_or("")).await => {
+            api.say(job.id, "🔁 Mientras trabajaba escribieron comentarios nuevos: la retomo leyéndolos.").await;
+            api.set_status(job.id, "todo").await.ok().and_then(|t| t["updated_at"].as_str().map(String::from))
+        }
         Ok(o) if run_ok => {
             api.say(job.id, &format!("✅ Terminé.\n\n{}", tail(&ok_text(&o), 1800))).await;
             log(&format!("✅ #{} hecha", job.id));
@@ -298,15 +302,37 @@ fn parse_usage(stdout: &str) -> Option<Usage> {
     Some(u)
 }
 
-async fn pending(api: &Api, me: i64, skip: &HashMap<i64, String>, running: &HashSet<i64>) -> Result<Vec<Job>> {
+/// ¿Una persona comentó mientras yo trabajaba? (no cuentan las respuestas a pedidos, autorizaciones ni notas automáticas, que ya leí)
+async fn wrote_while_working(api: &Api, task: i64, since: &str) -> bool {
+    let Ok(me) = api.get("/api/me").await else { return false };
+    let me = me["id"].as_i64();
+    let auto = ["↪", "✅", "📤", "❌", "📝", "🙋", "🔁", "▶"];
+    api.get(&format!("/api/tasks/{task}/comments")).await.ok().and_then(|c| c.as_array().cloned()).is_some_and(|a| {
+        a.iter().any(|c| c["user_id"].as_i64() != me && c["created_at"].as_str().unwrap_or("") > since && !auto.iter().any(|p| c["body"].as_str().unwrap_or("").starts_with(p)))
+    })
+}
+
+/// ¿El último comentario de la tarea es de otra persona (no mío)? Entonces me están esperando.
+async fn waiting_for_me(api: &Api, task: i64, me: i64) -> bool {
+    api.get(&format!("/api/tasks/{task}/comments")).await.ok().and_then(|c| c.as_array().and_then(|a| a.last().cloned())).is_some_and(|c| c["user_id"].as_i64() != Some(me))
+}
+
+/// Tareas para esta IA: las de «Por hacer» y, como red de seguridad, las que quedaron en «En curso» sin que yo las esté
+/// corriendo: al arrancar (el proceso anterior se cortó a la mitad) o cuando alguien comentó después de mi último mensaje.
+async fn pending(api: &Api, me: i64, skip: &HashMap<i64, String>, running: &HashSet<i64>, first: bool) -> Result<Vec<Job>> {
     let mut jobs = Vec::new();
     for team in api.get("/api/teams").await?.as_array().cloned().unwrap_or_default() {
         for p in api.get(&format!("/api/teams/{}/projects", team["id"])).await?.as_array().cloned().unwrap_or_default() {
             let tasks = api.get(&format!("/api/projects/{}/tasks", p["id"])).await?;
             for t in tasks.as_array().cloned().unwrap_or_default() {
                 let id = t["id"].as_i64().unwrap_or(0);
-                if t["assignee_id"].as_i64() != Some(me) || t["status"] != "todo" || running.contains(&id) {
+                if t["assignee_id"].as_i64() != Some(me) || running.contains(&id) {
                     continue;
+                }
+                match t["status"].as_str() {
+                    Some("todo") => {}
+                    Some("doing") if first || waiting_for_me(api, id, me).await => {}
+                    _ => continue,
                 }
                 if skip.get(&id).is_some_and(|u| Some(u.as_str()) == t["updated_at"].as_str()) {
                     continue;
@@ -390,10 +416,15 @@ async fn main() -> Result<()> {
     let sem = Arc::new(Semaphore::new(max));
     let running: Arc<Mutex<HashSet<i64>>> = Default::default();
     let skip: Arc<Mutex<HashMap<i64, String>>> = Default::default();
+    let mut first = true;
     loop {
         let (skip_now, running_now) = (skip.lock().unwrap().clone(), running.lock().unwrap().clone());
         let mut started = 0;
-        match pending(&api, my_id, &skip_now, &running_now).await {
+        let result = pending(&api, my_id, &skip_now, &running_now, first).await;
+        if result.is_ok() {
+            first = false;
+        }
+        match result {
             Ok(jobs) => {
                 for job in jobs {
                     let Ok(permit) = sem.clone().try_acquire_owned() else { break };

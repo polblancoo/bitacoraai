@@ -262,3 +262,12 @@ CREATE TABLE IF NOT EXISTS task_reviews (
     decided_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_task_reviews_task ON task_reviews(task_id, id);
+
+-- Cómo recibe cada persona los avisos por Telegram y email: uno por uno, o un resumen a una hora fija (por defecto, diario a las 9)
+CREATE TABLE IF NOT EXISTS notif_prefs (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    mode TEXT NOT NULL DEFAULT 'digest',
+    hour INTEGER NOT NULL DEFAULT 9,
+    tz_offset INTEGER,
+    last_digest TEXT
+);
