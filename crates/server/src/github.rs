@@ -21,8 +21,8 @@ pub struct Github {
     client_id: String,
     scope: String,
     base: String,
-    api: String,
-    http: reqwest::Client,
+    pub(crate) api: String,
+    pub(crate) http: reqwest::Client,
 }
 
 struct Pending {
@@ -66,7 +66,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/tasks/{id}/github/close", post(close_issue))
 }
 
-fn gh(st: &AppState) -> Result<std::sync::Arc<Github>> {
+pub(crate) fn gh(st: &AppState) -> Result<std::sync::Arc<Github>> {
     st.github.clone().ok_or_else(|| AppError::bad("GitHub no está configurado en este servidor"))
 }
 
@@ -155,7 +155,7 @@ async fn poll(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>>
     )
     .bind(user.id)
     .bind(login)
-    .bind(token)
+    .bind(st.cred.seal(token))
     .bind(v["scope"].as_str().unwrap_or(""))
     .bind(Utc::now())
     .execute(&st.db)
@@ -179,21 +179,22 @@ async fn unlink(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value
 
 const IMPORT_MAX: usize = 30;
 
-fn valid_repo(r: &str) -> bool {
+pub(crate) fn valid_repo(r: &str) -> bool {
     let mut it = r.split('/');
     let ok = |p: &str| !p.is_empty() && p.len() <= 100 && p.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
     matches!((it.next(), it.next(), it.next()), (Some(a), Some(b), None) if ok(a) && ok(b))
 }
 
-async fn token_of(st: &AppState, user: Id) -> Result<String> {
-    sqlx::query_scalar("SELECT token FROM github_links WHERE user_id = ?")
+pub(crate) async fn token_of(st: &AppState, user: Id) -> Result<String> {
+    let stored: String = sqlx::query_scalar("SELECT token FROM github_links WHERE user_id = ?")
         .bind(user)
         .fetch_optional(&st.db)
         .await?
-        .ok_or_else(|| AppError::bad("Primero conectá tu cuenta de GitHub en Configuración → Avisos y conexiones"))
+        .ok_or_else(|| AppError::bad("Primero conectá tu cuenta de GitHub en Configuración → Avisos y conexiones"))?;
+    st.cred.open(&stored).ok_or_else(|| AppError::bad("No pude leer tu conexión con GitHub: desconectá y volvé a conectar tu cuenta"))
 }
 
-async fn repo_of(st: &AppState, project: Id) -> Result<Option<String>> {
+pub(crate) async fn repo_of(st: &AppState, project: Id) -> Result<Option<String>> {
     Ok(sqlx::query_scalar("SELECT repo FROM project_github WHERE project_id = ?").bind(project).fetch_optional(&st.db).await?)
 }
 
@@ -210,7 +211,7 @@ async fn gh_err(r: reqwest::Response) -> AppError {
     AppError::bad(&format!("GitHub ({}): {why}. {msg}", status.as_u16()))
 }
 
-async fn api_get(g: &Github, token: &str, path: &str) -> Result<Value> {
+pub(crate) async fn api_get(g: &Github, token: &str, path: &str) -> Result<Value> {
     let r = g
         .http
         .get(format!("{}{path}", g.api))
@@ -225,7 +226,24 @@ async fn api_get(g: &Github, token: &str, path: &str) -> Result<Value> {
     r.json().await.map_err(|_| AppError::bad("Respuesta rara de GitHub"))
 }
 
-async fn api_send(g: &Github, token: &str, method: reqwest::Method, path: &str, body: Value) -> Result<()> {
+/// POST/PATCH que devuelve el JSON de GitHub (crear issue o Pull Request).
+pub(crate) async fn api_json(g: &Github, token: &str, method: reqwest::Method, path: &str, body: Value) -> Result<Value> {
+    let r = g
+        .http
+        .request(method, format!("{}{path}", g.api))
+        .bearer_auth(token)
+        .header("Accept", "application/vnd.github+json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|_| AppError::bad("No pude hablar con GitHub"))?;
+    if !r.status().is_success() {
+        return Err(gh_err(r).await);
+    }
+    r.json().await.map_err(|_| AppError::bad("Respuesta rara de GitHub"))
+}
+
+pub(crate) async fn api_send(g: &Github, token: &str, method: reqwest::Method, path: &str, body: Value) -> Result<()> {
     let r = g
         .http
         .request(method, format!("{}{path}", g.api))
@@ -379,10 +397,12 @@ async fn sync_issues(State(st): State<AppState>, user: AuthUser, Path(project): 
 async fn task_link(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id>) -> Result<Json<Value>> {
     let team = crate::routes::team_of_task(&st, task).await?;
     crate::routes::require(&st, team, user.id, tm_core::Role::Viewer).await?;
-    let row: Option<(String, i64, String)> = sqlx::query_as("SELECT repo, number, url FROM task_github WHERE task_id = ?").bind(task).fetch_optional(&st.db).await?;
+    let project: Id = sqlx::query_scalar("SELECT project_id FROM tasks WHERE id = ?").bind(task).fetch_one(&st.db).await?;
+    let project_repo = repo_of(&st, project).await?;
+    let row: Option<(String, i64, String, Option<i64>, String)> = sqlx::query_as("SELECT repo, number, url, pr_number, pr_state FROM task_github WHERE task_id = ?").bind(task).fetch_optional(&st.db).await?;
     Ok(Json(match row {
-        Some((repo, number, url)) => json!({ "repo": repo, "number": number, "url": url }),
-        None => json!({ "repo": null }),
+        Some((repo, number, url, pr, pr_state)) => json!({ "repo": repo, "number": number, "url": url, "pr": pr, "pr_state": pr_state, "project_repo": project_repo }),
+        None => json!({ "repo": null, "project_repo": project_repo }),
     }))
 }
 

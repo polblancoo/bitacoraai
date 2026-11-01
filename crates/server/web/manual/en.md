@@ -298,6 +298,15 @@ Pick what your team uses CrewHelm for and the interface sets itself up: *Softwar
 
 If the team handles confidential information (for example a law firm), turn on the project's **human review**, don't load data you don't want an AI to see, and remember that task text reaches whichever model you use; for very sensitive data, use a company-owned model.
 
+### GitHub per project (🐙 GitHub button, top bar)
+
+1. In **⚙ Settings → Alerts and connections → GitHub** connect your account (once). The server admin must have set `TM_GITHUB_CLIENT_ID`.
+2. In **⚙ Project details** enter the repository (`owner/repo` or the URL). Then click **🐙 GitHub** (top bar, next to ⚙ Project): list the open issues and **import the ticked ones as tasks**.
+3. **GitHub settings for this project** has one checkbox per feature, each switching on or off by itself: **check every 5 minutes** (moves a task to *Done* when its issue is closed or its Pull Request is merged, and shows the PR state), **sync comments** between the task and the issue (on a public repository anyone can read them), **publish new tasks as issues**, **notify when an AI finishes** so you open the Pull Request, **CI status** with ✅/❌ next to the button, **log commits** in Activity, and **webhook** (instant updates; the server must be reachable from the internet; the box shows the URL and the secret to paste in GitHub).
+4. In a task: **🐙 Publish as issue**, **Open Pull Request** (from branch `tm/tarea-N` or another you choose; it is always your decision) and **Close issue**.
+
+GitHub and Google tokens are stored **encrypted** (AES-256-GCM) in the database; the key lives in `~/.config/tm-server/credenciales.key` (or `TM_KEY_FILE`). Back it up with your other backups: without it you must reconnect the accounts.
+
 ---
 
 # Guide: let an AI work on its own with `tm-agent`
@@ -441,3 +450,9 @@ When the AI asks, the server also **creates a request task** for a person (the t
 | Comment «work folder … does not exist» | The project's path does not exist on that machine: fix it in ⚙ Project or use `TM_AGENT_DIR`. |
 | The task returns to To do with an error | Read the comment: it is the agent's output. Fix it and touch the task again. |
 | Nothing happens when assigning | Is the task in **To do** and assigned to *that* AI? Is `tm-agent` running? |
+
+## Common commands and full authorization
+
+- **📋 Common commands** (AI profile, admins only): lists what that AI **asked for before** in its 🙋 requests (by how many times), plus a catalog of common commands (Git, Rust, Node, Python, files, system). Tick and press **✅ Add to allowed**. Below, a list of **dangerous** commands (`rm -rf`, `sudo`, `git push`, `git reset --hard`…) can be added to **🚫 prohibited** in one click.
+- **🔒 Full authorization** (AI profile): "allow everything except this". The AI may run any command except those in **🚫 Prohibited commands** (the AI's own, the general ones and `blacklist.txt`). Prohibited always wins. It applies from the AI's next task. Review the prohibited list before turning it on.
+- Works with the `run-claude.sh` script (Claude Code). If you use **your own copy** of the script, add this line before `exec claude`: `[ "$TM_ALLOW_ALL" = "1" ] && ALLOW="Bash$(printf '\t')$ALLOW"`. `tm-agent` passes `TM_ALLOW_ALL=1` when the AI has full authorization.

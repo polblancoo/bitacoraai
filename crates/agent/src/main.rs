@@ -189,7 +189,10 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     // Lista de comandos prohibidos que un admin edita desde la app (ficha de la IA).
     let deny = api.get("/api/me/deny").await.ok().and_then(|v| v["deny"].as_str().map(String::from)).unwrap_or_default();
     // Comandos permitidos: los permanentes de la IA («/permitir siempre») y los de «una vez» de esta tarea, que se consumen al empezar.
-    let mut allow = api.get("/api/me/allow").await.ok().and_then(|v| v["allow"].as_str().map(String::from)).unwrap_or_default();
+    let me_allow = api.get("/api/me/allow").await.ok();
+    let mut allow = me_allow.as_ref().and_then(|v| v["allow"].as_str().map(String::from)).unwrap_or_default();
+    // «Autorización total»: la IA puede todo salvo lo prohibido (TM_DENY siempre gana)
+    let allow_all = me_allow.as_ref().and_then(|v| v["full"].as_bool()).unwrap_or(false);
     if let Ok(v) = api.call(Method::POST, &format!("/api/tasks/{}/grants/claim", job.id), None).await {
         for c in v["once"].as_array().into_iter().flatten().filter_map(|c| c.as_str()) {
             allow.push('\n');
@@ -202,6 +205,7 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
         .env("TM_TASK_PROMPT", &prompt)
         .env("TM_DENY", deny)
         .env("TM_ALLOW", allow)
+        .env("TM_ALLOW_ALL", if allow_all { "1" } else { "0" })
         .env("TM_TASK_ID", job.id.to_string())
         .env("TM_TASK_TITLE", &job.title)
         .env("TM_PROJECT_ID", job.project_id.to_string())

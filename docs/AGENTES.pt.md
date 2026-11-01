@@ -141,3 +141,9 @@ Quando a IA pergunta, o servidor também **cria uma tarefa de pedido** para uma 
 | Comentário «a pasta de trabalho … não existe» | O caminho do projeto não existe nessa máquina: corrija em ⚙ Projeto ou use `TM_AGENT_DIR`. |
 | A tarefa volta para A fazer com um erro | Veja o comentário: é a saída do agente. Corrija e toque na tarefa de novo. |
 | Nada acontece ao atribuir | A tarefa está em **A fazer** e atribuída a *essa* IA? O `tm-agent` está rodando? |
+
+## Comandos habituais e autorização total
+
+- **📋 Comandos habituais** (ficha da IA, só admins): lista o que essa IA **pediu antes** nos pedidos 🙋 (por quantidade de vezes), mais um catálogo de comandos comuns (Git, Rust, Node, Python, arquivos, sistema). Marque e toque em **✅ Adicionar aos permitidos**. Abaixo, uma lista de comandos **perigosos** (`rm -rf`, `sudo`, `git push`, `git reset --hard`…) para somar aos **🚫 proibidos** com um clique.
+- **🔒 Autorização total** (ficha da IA): «autorizo tudo, menos isto». A IA pode executar qualquer comando exceto os de **🚫 Comandos proibidos** (os da IA, os gerais e `blacklist.txt`). O proibido sempre vence. Vale a partir da próxima tarefa da IA. Antes de ativar, revise a lista de proibidos.
+- Funciona com o script `run-claude.sh` (Claude Code). Se você usa **sua própria cópia** do script, adicione esta linha antes de `exec claude`: `[ "$TM_ALLOW_ALL" = "1" ] && ALLOW="Bash$(printf '\t')$ALLOW"`. O `tm-agent` passa `TM_ALLOW_ALL=1` quando a IA tem autorização total.

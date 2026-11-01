@@ -508,3 +508,15 @@ ol.guide pre { margin: 4px 0; }
 
 /* barra inferior (cuando la persona mueve los botones abajo): deja libre el control de zoom de la esquina */
 .top.bottom { border-bottom: 0; border-top: 1px solid var(--line); padding-right: 150px; }
+
+/* ventana de la tarea: más ancha por defecto (hay mucha información); el botón de maximizar sigue disponible */
+.modal.task-modal:not(.max) { width: min(920px, 96vw); }
+.modal.task-modal:not(.max) .grid2 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 760px) { .modal.task-modal:not(.max) .grid2 { grid-template-columns: 1fr 1fr; } }
+
+/* ajustes de GitHub por proyecto */
+.gh-cfg { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.gh-cfg summary { cursor: pointer; font-weight: 600; }
+.modal .gh-cfg label.row { display: flex; align-items: center; justify-content: flex-start; text-align: left; gap: 8px; flex-wrap: wrap; margin-top: 8px; color: var(--fg); font-size: 14px; }
+.modal .gh-cfg label.row input[type="checkbox"] { flex: none; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--green); }
+.modal .gh-cfg label.row small { flex-basis: 100%; margin: 0 0 0 24px; text-align: left; }

@@ -298,6 +298,15 @@ Elegí para qué usa el equipo CrewHelm y la interfaz se prepara sola: *Desarrol
 
 Si el equipo maneja información confidencial (por ejemplo, un estudio jurídico), activá la **revisión humana** del proyecto, no cargues datos que no quieras que vea una IA y recordá que el texto de las tareas llega al modelo que uses; para datos muy sensibles, usá un modelo propio de la empresa.
 
+### GitHub por proyecto (botón 🐙 GitHub, arriba)
+
+1. En **⚙ Configuración → Avisos y conexiones → GitHub** conectá tu cuenta (una vez). El administrador del servidor tiene que haber puesto `TM_GITHUB_CLIENT_ID`.
+2. En **⚙ Datos del proyecto** cargá el repositorio (`dueño/repo` o la URL). Después tocá **🐙 GitHub** (arriba, junto a ⚙ Proyecto): ahí listás los issues abiertos y **traés los tildados como tareas**.
+3. En **Ajustes de GitHub para este proyecto** hay una casilla por función; cada una se prende o se apaga sola: **revisar cada 5 minutos** (pasa a *Hecha* la tarea cuyo issue se cerró o cuyo Pull Request se integró, y muestra el estado del PR), **pasar comentarios** entre la tarea y el issue (si el repositorio es público, esos comentarios los ve cualquiera), **publicar como issue** las tareas nuevas, **avisar cuando una IA termina** para que vos abras el Pull Request, **estado de las pruebas (CI)** con ✅/❌ junto al botón, **anotar los commits** en Actividad y **webhook** (aviso al instante; el servidor debe ser alcanzable desde internet; el cuadro te muestra la URL y el *secret* para pegar en GitHub).
+4. En la ficha de una tarea: **🐙 Publicar como issue**, **Abrir Pull Request** (de la rama `tm/tarea-N` u otra que indiques, siempre lo decidís vos) y **Cerrar issue**.
+
+Los tokens de GitHub y de Google se guardan **cifrados** (AES-256-GCM) en la base; la clave está en `~/.config/tm-server/credenciales.key` (o `TM_KEY_FILE`). Guardala junto con tus copias de seguridad: sin ella hay que volver a conectar las cuentas.
+
 ---
 
 # Instructivo: que una IA trabaje sola con `tm-agent`
@@ -448,3 +457,9 @@ Si el código del proyecto está en la **misma máquina** que `tm-server`, no ha
 - La clave de la IA se toma de las variables del entorno del servidor (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`) o de la sesión iniciada de `claude`; no se guarda en la base.
 - Cada arranque emite un token nuevo para la IA: el anterior deja de valer.
 - Si el servidor está en la nube y el código en las PCs del equipo, usá el instructivo de arriba (`cargo install rust-tui-manager-agent` y el comando que muestra la app al crear la IA).
+
+## Comandos habituales y autorización total
+
+- **📋 Comandos habituales** (ficha de la IA, para admins): lista lo que esa IA **pidió antes** en sus pedidos 🙋 (ordenado por cuántas veces), más un catálogo de comandos comunes (Git, Rust, Node, Python, archivos, sistema). Tildás y tocás **✅ Agregar a permitidos**. Abajo hay una lista de comandos **peligrosos** (`rm -rf`, `sudo`, `git push`, `git reset --hard`…) para sumarlos a **🚫 prohibidos** de un clic.
+- **🔒 Autorización total** (ficha de la IA): «autorizo todo, menos esto». La IA puede ejecutar cualquier comando salvo los de **🚫 Comandos prohibidos** (los de la IA, los generales y `blacklist.txt`). Lo prohibido siempre gana. Vale desde la próxima tarea de la IA. Antes de activarla revisá la lista de prohibidos.
+- Funciona con el script `run-claude.sh` (Claude Code). Si usás **tu propia copia** del script, agregá esta línea antes de `exec claude`: `[ "$TM_ALLOW_ALL" = "1" ] && ALLOW="Bash$(printf '\t')$ALLOW"`. `tm-agent` pasa `TM_ALLOW_ALL=1` cuando la IA tiene autorización total.

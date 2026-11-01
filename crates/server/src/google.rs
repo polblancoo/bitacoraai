@@ -164,7 +164,7 @@ async fn callback(State(st): State<AppState>, Query(p): Query<CallbackParams>) -
     let Some(refresh) = reply.refresh_token else { return page(false, "Google no entregó permiso permanente: quitá el acceso de la app en tu cuenta y reintentá") };
     let saved = sqlx::query("INSERT INTO google_links (user_id, refresh_token, linked_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET refresh_token = excluded.refresh_token, linked_at = excluded.linked_at")
         .bind(claims.sub)
-        .bind(&refresh)
+        .bind(st.cred.seal(&refresh))
         .bind(Utc::now())
         .execute(&st.db)
         .await;
@@ -243,7 +243,7 @@ pub async fn sync_user(st: &AppState, user: Id) -> std::result::Result<(usize, u
     let g = st.google.clone().ok_or("Google no configurado")?;
     let _guard = g.lock.lock().await;
     let db_err = |e: sqlx::Error| e.to_string();
-    let Some(refresh): Option<String> = sqlx::query_scalar("SELECT refresh_token FROM google_links WHERE user_id = ?").bind(user).fetch_optional(&st.db).await.map_err(db_err)? else {
+    let Some(refresh): Option<String> = sqlx::query_scalar::<_, String>("SELECT refresh_token FROM google_links WHERE user_id = ?").bind(user).fetch_optional(&st.db).await.map_err(db_err)?.and_then(|s| st.cred.open(&s)) else {
         return Ok((0, 0, 0));
     };
     let want = wanted(st, user).await.map_err(|e| e.1)?;
@@ -321,7 +321,7 @@ pub async fn sync_user(st: &AppState, user: Id) -> std::result::Result<(usize, u
 async fn purge(st: &AppState, user: Id) -> std::result::Result<(), String> {
     let g = st.google.clone().ok_or("Google no configurado")?;
     let _guard = g.lock.lock().await;
-    let refresh: Option<String> = sqlx::query_scalar("SELECT refresh_token FROM google_links WHERE user_id = ?").bind(user).fetch_optional(&st.db).await.map_err(|e| e.to_string())?;
+    let refresh: Option<String> = sqlx::query_scalar::<_, String>("SELECT refresh_token FROM google_links WHERE user_id = ?").bind(user).fetch_optional(&st.db).await.map_err(|e| e.to_string())?.and_then(|s| st.cred.open(&s));
     let Some(refresh) = refresh else { return Ok(()) };
     let access = g.access_token(&refresh).await?;
     let ids: Vec<String> = sqlx::query_scalar("SELECT event_id FROM google_events WHERE user_id = ?").bind(user).fetch_all(&st.db).await.map_err(|e| e.to_string())?;

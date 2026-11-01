@@ -298,6 +298,15 @@ Escolha para que a equipe usa o CrewHelm e a interface se prepara sozinha: *Dese
 
 Se a equipe lida com informação confidencial (por exemplo, um escritório de advocacia), ative a **revisão humana** do projeto, não carregue dados que não quer que uma IA veja e lembre que o texto das tarefas chega ao modelo que você usar; para dados muito sensíveis, use um modelo próprio da empresa.
 
+### GitHub por projeto (botão 🐙 GitHub, no topo)
+
+1. Em **⚙ Configurações → Avisos e conexões → GitHub** conecte sua conta (uma vez). O administrador do servidor precisa ter definido `TM_GITHUB_CLIENT_ID`.
+2. Em **⚙ Dados do projeto** informe o repositório (`dono/repo` ou a URL). Depois toque em **🐙 GitHub** (no topo, ao lado de ⚙ Projeto): liste os issues abertos e **traga os marcados como tarefas**.
+3. Em **Ajustes do GitHub para este projeto** há uma caixa por função; cada uma liga ou desliga sozinha: **verificar a cada 5 minutos** (passa para *Feito* a tarefa cujo issue foi fechado ou cujo Pull Request foi integrado, e mostra o estado do PR), **passar comentários** entre a tarefa e o issue (em repositório público, qualquer pessoa os vê), **publicar como issue** as tarefas novas, **avisar quando uma IA termina** para você abrir o Pull Request, **estado dos testes (CI)** com ✅/❌ ao lado do botão, **registrar os commits** em Atividade e **webhook** (aviso na hora; o servidor precisa ser alcançável pela internet; a caixa mostra a URL e o *secret* para colar no GitHub).
+4. Na ficha de uma tarefa: **🐙 Publicar como issue**, **Abrir Pull Request** (da branch `tm/tarea-N` ou outra que você indicar; a decisão é sempre sua) e **Fechar issue**.
+
+Os tokens do GitHub e do Google ficam **criptografados** (AES-256-GCM) no banco; a chave fica em `~/.config/tm-server/credenciales.key` (ou `TM_KEY_FILE`). Guarde-a junto com seus backups: sem ela é preciso reconectar as contas.
+
 ---
 
 # Guia: fazer uma IA trabalhar sozinha com o `tm-agent`
@@ -441,3 +450,9 @@ Quando a IA pergunta, o servidor também **cria uma tarefa de pedido** para uma 
 | Comentário «a pasta de trabalho … não existe» | O caminho do projeto não existe nessa máquina: corrija em ⚙ Projeto ou use `TM_AGENT_DIR`. |
 | A tarefa volta para A fazer com um erro | Veja o comentário: é a saída do agente. Corrija e toque na tarefa de novo. |
 | Nada acontece ao atribuir | A tarefa está em **A fazer** e atribuída a *essa* IA? O `tm-agent` está rodando? |
+
+## Comandos habituais e autorização total
+
+- **📋 Comandos habituais** (ficha da IA, só admins): lista o que essa IA **pediu antes** nos pedidos 🙋 (por quantidade de vezes), mais um catálogo de comandos comuns (Git, Rust, Node, Python, arquivos, sistema). Marque e toque em **✅ Adicionar aos permitidos**. Abaixo, uma lista de comandos **perigosos** (`rm -rf`, `sudo`, `git push`, `git reset --hard`…) para somar aos **🚫 proibidos** com um clique.
+- **🔒 Autorização total** (ficha da IA): «autorizo tudo, menos isto». A IA pode executar qualquer comando exceto os de **🚫 Comandos proibidos** (os da IA, os gerais e `blacklist.txt`). O proibido sempre vence. Vale a partir da próxima tarefa da IA. Antes de ativar, revise a lista de proibidos.
+- Funciona com o script `run-claude.sh` (Claude Code). Se você usa **sua própria cópia** do script, adicione esta linha antes de `exec claude`: `[ "$TM_ALLOW_ALL" = "1" ] && ALLOW="Bash$(printf '\t')$ALLOW"`. O `tm-agent` passa `TM_ALLOW_ALL=1` quando a IA tem autorização total.

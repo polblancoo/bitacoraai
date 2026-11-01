@@ -40,6 +40,7 @@ rustls = "0.23.46"
 sha2 = "0.11.1"
 ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 getrandom = "0.3"
+aes-gcm = "0.10"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "aws-lc-rs", "hostname", "webpki-roots"] }

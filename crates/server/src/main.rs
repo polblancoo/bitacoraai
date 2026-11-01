@@ -12,7 +12,9 @@ mod review;
 mod limits;
 mod notify;
 mod extras;
+mod crypt;
 mod github;
+mod gh_sync;
 mod google;
 mod teampanel;
 mod telegram;
@@ -61,6 +63,7 @@ pub struct AppState {
     pub telegram: Option<Arc<telegram::Telegram>>,
     pub google: Option<Arc<google::Google>>,
     pub github: Option<Arc<github::Github>>,
+    pub cred: Arc<crypt::Cred>,
 }
 
 impl AppState {
@@ -114,6 +117,11 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE team_members ADD COLUMN invite_id INTEGER",
         "ALTER TABLE teams ADD COLUMN description TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE tasks ADD COLUMN created_by INTEGER",
+        "ALTER TABLE users ADD COLUMN full_access INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE task_github ADD COLUMN pr_number INTEGER",
+        "ALTER TABLE task_github ADD COLUMN pr_state TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE task_github ADD COLUMN last_gh_comment INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE task_github ADD COLUMN last_pushed_comment INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE projects ADD COLUMN work_dir TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE projects ADD COLUMN repo TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE users ADD COLUMN model TEXT NOT NULL DEFAULT ''",
@@ -194,6 +202,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let secret = jwt_secret(&db).await?;
+    let cred = Arc::new(crypt::init(&db).await?);
     let (tx, _) = broadcast::channel(256);
     let state = AppState {
         db,
@@ -209,17 +218,19 @@ async fn main() -> anyhow::Result<()> {
         telegram: telegram::Telegram::from_env().await.map(Arc::new),
         google: google::Google::from_env().map(Arc::new),
         github: github::Github::from_env().map(Arc::new),
+        cred,
     };
     telegram::spawn_poller(state.clone());
     extras::spawn_reminders(state.clone());
     google::spawn_sync(state.clone());
+    gh_sync::spawn(state.clone());
     license::spawn_ping(state.clone());
     schedule::spawn_schedules(state.clone());
     runner::spawn_runners(state.clone());
     report::spawn_reports(state.clone());
     digest::spawn(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(gh_sync::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

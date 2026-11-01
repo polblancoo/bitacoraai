@@ -27,6 +27,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/commands", get(general_cmds).put(set_general_cmds))
         .route("/api/me/deny", get(my_deny))
         .route("/api/me/allow", get(my_allow))
+        .route("/api/bots/{uid}/suggest", get(suggest_cmds))
         .route("/api/tasks/{id}/grant", post(grant_cmd))
         .route("/api/tasks/{id}/grants", get(task_grants))
         .route("/api/tasks/{id}/grants/claim", post(claim_grants))
@@ -49,6 +50,8 @@ struct UpdateBot {
     deny: Option<String>,
     /// Comandos permitidos de forma permanente para esta IA, uno por línea (por ejemplo `git clone`).
     allow: Option<String>,
+    /// Autorización total: la IA puede ejecutar todo salvo lo prohibido (las listas de prohibidos siempre ganan).
+    full_access: Option<bool>,
 }
 
 fn new_token() -> String {
@@ -85,7 +88,7 @@ async fn manages_bot(st: &AppState, caller: Id, bot: Id) -> Result<()> {
 async fn list_bots(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
     require(&st, team, user.id, Role::Viewer).await?;
     let rows = sqlx::query(
-        "SELECT u.id, u.username, u.model, u.deny, u.allow, m.role, m.joined_at, cb.username AS created_by, t.last_used, t.id AS tok, COALESCE(t.last_used >= ?, 0) AS online, COALESCE(r.enabled, 0) AS run_on \
+        "SELECT u.id, u.username, u.model, u.deny, u.allow, u.full_access, m.role, m.joined_at, cb.username AS created_by, t.last_used, t.id AS tok, COALESCE(t.last_used >= ?, 0) AS online, COALESCE(r.enabled, 0) AS run_on \
          FROM team_members m JOIN users u ON u.id = m.user_id \
          LEFT JOIN api_tokens t ON t.user_id = u.id LEFT JOIN users cb ON cb.id = t.created_by LEFT JOIN bot_runners r ON r.user_id = u.id \
          WHERE m.team_id = ? AND u.is_bot = 1 ORDER BY u.username",
@@ -103,6 +106,7 @@ async fn list_bots(State(st): State<AppState>, user: AuthUser, Path(team): Path<
                     "model": r.get::<String, _>("model"),
                     "deny": r.get::<String, _>("deny"),
                     "allow": r.get::<String, _>("allow"),
+                    "full_access": r.get::<i64, _>("full_access") != 0,
                     "role": r.get::<String, _>("role"),
                     "joined_at": r.get::<Option<String>, _>("joined_at"),
                     "created_by": r.get::<Option<String>, _>("created_by"),
@@ -173,6 +177,9 @@ async fn update_bot(State(st): State<AppState>, user: AuthUser, Path(uid): Path<
         let clean = deny.lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n");
         sqlx::query("UPDATE users SET deny = ? WHERE id = ?").bind(clean).bind(uid).execute(&st.db).await?;
     }
+    if let Some(full) = b.full_access {
+        sqlx::query("UPDATE users SET full_access = ? WHERE id = ?").bind(full).bind(uid).execute(&st.db).await?;
+    }
     if let Some(allow) = &b.allow {
         limits::max_len("lista de comandos permitidos", allow, 4000)?;
         let clean = allow.lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n");
@@ -190,7 +197,8 @@ async fn my_deny(State(st): State<AppState>, user: AuthUser) -> Result<Json<Valu
 /// La IA lee su lista permanente de comandos permitidos (se agrega con «/permitir siempre …» o desde el pedido).
 async fn my_allow(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
     let own: String = sqlx::query_scalar("SELECT allow FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
-    Ok(Json(json!({ "allow": join_lines(&general(&st, "cmd_allow").await, &own) })))
+    let full: i64 = sqlx::query_scalar("SELECT full_access FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
+    Ok(Json(json!({ "allow": join_lines(&general(&st, "cmd_allow").await, &own), "full": full != 0 })))
 }
 
 /// Tarea a la que se aplica el permiso (si es un pedido «🙋 Pedido de #N: …», la tarea N) y la IA responsable.
@@ -320,4 +328,78 @@ async fn set_general_cmds(State(st): State<AppState>, user: AuthUser, Json(b): J
         }
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Comandos mencionados en lo que pide una IA: líneas de bloques de código, `comandos` entre acentos graves y 'comandos con espacios' entre comillas simples.
+fn commands_in(ask: &str) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    let mut rest = String::new();
+    let mut in_block = false;
+    for line in ask.lines() {
+        if line.trim_start().starts_with("```") {
+            in_block = !in_block;
+            continue;
+        }
+        if in_block {
+            out.push(line.trim().trim_start_matches("$ ").trim().to_string());
+        } else {
+            rest.push_str(line);
+            rest.push('\n');
+        }
+    }
+    for (i, part) in rest.split('`').enumerate() {
+        if i % 2 == 1 && !part.contains('\n') {
+            out.push(part.trim().to_string());
+        }
+    }
+    out.into_iter()
+        .map(|c| match c.split_once("&&") {
+            Some((a, b)) if a.trim_start().starts_with("cd ") => b.trim().to_string(),
+            _ => c,
+        })
+        .filter(|c| c.len() > 1 && c.len() <= 200 && !c.contains('\n'))
+        .collect()
+}
+
+/// Lo que esta IA pidió antes en sus pedidos «🙋», del más repetido al menos: sirve para proponerlos a la lista de permitidos.
+async fn suggest_cmds(State(st): State<AppState>, user: AuthUser, Path(uid): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    manages_bot(&st, user.id, uid).await?;
+    let name: String = sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(uid).fetch_one(&st.db).await?;
+    let own: String = sqlx::query_scalar("SELECT allow FROM users WHERE id = ?").bind(uid).fetch_one(&st.db).await?;
+    let allowed = join_lines(&general(&st, "cmd_allow").await, &own);
+    let descs: Vec<String> = sqlx::query_scalar(
+        "SELECT t.description FROM tasks t JOIN projects p ON p.id = t.project_id \
+         WHERE t.title LIKE '🙋 Pedido de #%' AND p.team_id IN (SELECT team_id FROM team_members WHERE user_id = ?) AND t.description LIKE ? \
+         ORDER BY t.id DESC LIMIT 300",
+    )
+    .bind(uid)
+    .bind(format!("%La IA «{name}»%"))
+    .fetch_all(&st.db)
+    .await?;
+    let mut count: std::collections::HashMap<String, usize> = Default::default();
+    for d in &descs {
+        let ask = d.split("LO QUE PIDE\n").nth(1).and_then(|r| r.split("\n\n").next()).unwrap_or("");
+        let mut seen = std::collections::HashSet::new();
+        for c in commands_in(ask) {
+            if seen.insert(c.clone()) {
+                *count.entry(c).or_default() += 1;
+            }
+        }
+    }
+    let mut list: Vec<(String, usize)> = count.into_iter().collect();
+    list.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let asked: Vec<Value> = list.into_iter().take(40).map(|(c, n)| json!({ "cmd": c, "count": n, "allowed": allowed.lines().any(|l| l.trim() == c) })).collect();
+    Ok(Json(json!({ "asked": asked, "requests": descs.len() })))
+}
+
+#[cfg(test)]
+mod suggest_tests {
+    use super::commands_in;
+
+    #[test]
+    fn saca_comandos_de_un_pedido() {
+        let ask = "Necesito compilar:\n```bash\n$ cd /x/y && cargo build --release\ngit status\n```\ny también `npm test` por favor";
+        assert_eq!(commands_in(ask), vec!["cargo build --release", "git status", "npm test"]);
+    }
 }

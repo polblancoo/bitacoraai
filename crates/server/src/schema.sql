@@ -289,3 +289,22 @@ CREATE TABLE IF NOT EXISTS task_github (
     number INTEGER NOT NULL,
     url TEXT NOT NULL
 );
+
+-- Ajustes de GitHub por proyecto (cada casilla se prende o se apaga sola) y estado de la última sincronización
+CREATE TABLE IF NOT EXISTS project_github_cfg (
+    project_id INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    owner_user INTEGER NOT NULL,
+    auto_sync INTEGER NOT NULL DEFAULT 0,
+    sync_comments INTEGER NOT NULL DEFAULT 0,
+    publish_issues INTEGER NOT NULL DEFAULT 0,
+    publish_since TEXT NOT NULL DEFAULT '',
+    ai_pr INTEGER NOT NULL DEFAULT 0,
+    ci_status INTEGER NOT NULL DEFAULT 0,
+    activity INTEGER NOT NULL DEFAULT 0,
+    webhook INTEGER NOT NULL DEFAULT 0,
+    webhook_secret TEXT NOT NULL DEFAULT '',
+    last_sha TEXT NOT NULL DEFAULT '',
+    ci_state TEXT NOT NULL DEFAULT '',
+    last_sync TEXT NOT NULL DEFAULT '',
+    last_msg TEXT NOT NULL DEFAULT ''
+);

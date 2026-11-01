@@ -321,6 +321,8 @@ async function selectTeam(team) {
 
 async function selectProject(p) {
   S.portfolio = false; S.terms = false; S.project = p; S.canvas = null; S.reviews = null; S.tasks = p ? await api("GET", `/api/projects/${p.id}/tasks`) : [];
+  S.ghCi = "";
+  if (p) api("GET", `/api/projects/${p.id}/github/settings`).then((c) => { if (c.ci_status && S.project?.id === p.id) { S.ghCi = c.ci_state; render(); } }).catch(() => {});
   render();
   loadReviews();
 }
@@ -644,12 +646,65 @@ const runnerModal = async (b) => {
           h("button", { onclick: () => box.remove() }, "Cerrar"), h("button", { class: "primary", onclick: save(true) }, cur.enabled ? "Guardar y reiniciar" : "Activar"))]));
   document.body.append(box);
 };
+// Comandos habituales: lo que la IA pidió antes y un catálogo común, para sumar a permitidos; y los peligrosos, para prohibir
+const CMD_CATALOG = {
+  "Git (solo mirar)": ["git status", "git diff", "git log", "git show", "git branch", "git fetch"],
+  "Git (cambios locales)": ["git add", "git checkout", "git switch", "git stash", "git restore"],
+  "Rust": ["cargo check", "cargo build", "cargo test", "cargo fmt", "cargo clippy", "cargo run"],
+  "Node": ["npm test", "npm run build", "npm run lint", "npm install", "node --check", "npx tsc --noEmit"],
+  "Python": ["python3 -m pytest", "python3 -m py_compile", "python3 --version", "pip list"],
+  "Archivos (leer y crear)": ["ls", "cat", "head", "tail", "grep", "find", "wc", "tree", "diff", "mkdir", "touch", "cp", "mv"],
+  "Sistema (solo mirar)": ["pwd", "which", "date", "echo", "uname", "df", "ps"],
+};
+const CMD_DANGER = ["Bash(rm -rf:*)", "Bash(sudo:*)", "Bash(git push:*)", "Bash(git push --force:*)", "Bash(git reset --hard:*)", "Bash(git clean:*)", "Bash(git commit:*)",
+  "Bash(chmod -R:*)", "Bash(chown:*)", "Bash(dd:*)", "Bash(mkfs:*)", "Bash(systemctl:*)", "Bash(shutdown:*)", "Bash(reboot:*)", "Bash(kill:*)", "Bash(pkill:*)",
+  "Bash(curl:*)", "Bash(wget:*)", "Bash(ssh:*)", "Bash(scp:*)", "Bash(npm publish:*)", "Bash(cargo publish:*)"];
+const mergeLines = (cur, add) => [...new Set([...(cur || "").split("\n").map((l) => l.trim()).filter(Boolean), ...add])].join("\n");
+const commandsDialog = guard(async (b) => {
+  const sug = await api("GET", `/api/bots/${b.id}/suggest`).catch(() => ({ asked: [], requests: 0 }));
+  const allowed = new Set((b.allow || "").split("\n").map((l) => l.trim()).filter(Boolean));
+  const denied = new Set((b.deny || "").split("\n").map((l) => l.trim()).filter(Boolean));
+  const closeIt = () => box.remove();
+  const picks = (items, on) => items.map((c) => {
+    const cb = h("input", { type: "checkbox", checked: on && !allowed.has(c) });
+    return { c, cb, row: h("label", { class: "sub" }, cb, h("code", {}, c), allowed.has(c) && h("small", { class: "hint" }, "ya permitido")) };
+  });
+  const asked = picks(sug.asked.filter((x) => !x.allowed).map((x) => x.cmd), true);
+  const askedRows = sug.asked.filter((x) => !x.allowed).map((x, i) => { asked[i].row.append(h("small", { class: "hint" }, `pedido ${x.count} ${x.count === 1 ? "vez" : "veces"}`)); return asked[i].row; });
+  const catalog = Object.entries(CMD_CATALOG).map(([g, list]) => ({ g, items: picks(list, false) }));
+  const danger = CMD_DANGER.map((c) => { const cb = h("input", { type: "checkbox", checked: !denied.has(c) && ["Bash(rm -rf:*)", "Bash(sudo:*)", "Bash(git push:*)", "Bash(git reset --hard:*)", "Bash(git clean:*)"].includes(c) });
+    return { c, cb, row: h("label", { class: "sub" }, cb, h("code", {}, c), denied.has(c) && h("small", { class: "hint" }, "ya prohibido")) }; });
+  const chosen = (arr) => arr.filter((x) => x.cb.checked).map((x) => x.c);
+  const saveAllow = guard(async () => {
+    const add = [...chosen(asked), ...catalog.flatMap((g) => chosen(g.items))];
+    if (!add.length) { toast("Tildá al menos un comando", true); return; }
+    await api("PATCH", `/api/bots/${b.id}`, { allow: mergeLines(b.allow, add) }); await loadBots();
+    toast(`${add.length} comando(s) agregados a lo permitido de ${b.username}`); closeIt();
+  });
+  const saveDeny = guard(async () => {
+    const add = chosen(danger);
+    if (!add.length) { toast("Tildá al menos un comando", true); return; }
+    await api("PATCH", `/api/bots/${b.id}`, { deny: mergeLines(b.deny, add) }); await loadBots();
+    toast(`${add.length} comando(s) agregados a lo prohibido de ${b.username}`); closeIt();
+  });
+  const box = h("div", { class: "overlay", onmousedown: (e) => e.target === box && closeIt() },
+    h("div", { class: "modal wide" }, h("h3", {}, `📋 Comandos de ${b.username}`),
+      h("h4", {}, `Lo que pidió antes (${sug.requests} pedido${sug.requests === 1 ? "" : "s"} revisados)`),
+      askedRows.length ? h("div", { class: "subs" }, askedRows) : h("small", { class: "hint" }, "Todavía no pidió comandos nuevos, o ya los tenés todos permitidos."),
+      h("h4", {}, "Comandos comunes (tildá los que quieras permitir)"),
+      catalog.map((g) => h("details", {}, h("summary", {}, g.g), h("div", { class: "subs" }, g.items.map((x) => x.row)))),
+      h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { class: "primary", onclick: saveAllow }, "✅ Agregar a permitidos")),
+      h("h4", {}, "Peligrosos: conviene prohibirlos (siempre ganan sobre lo permitido)"),
+      h("div", { class: "subs" }, danger.map((x) => x.row)),
+      h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { onclick: closeIt }, "Cerrar"), h("button", { class: "danger", onclick: saveDeny }, "🚫 Agregar a prohibidos"))));
+  document.body.append(box);
+});
 const botModal = (b) => {
   const admin = can("admin");
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
     h("div", { class: "modal ia" },
       h("h3", {}, `🤖 ${b.username}`, b.model && h("small", { class: "inl" }, " · " + b.model)),
-      h("p", {}, `${b.role === "viewer" ? "Lector" : "Miembro"} · token ${b.active ? "activo" : "revocado"} · ${b.last_used ? "último uso " + new Date(b.last_used).toLocaleString() : "sin usar"}${b.created_by ? " · creada por " + b.created_by : ""}`),
+      h("p", {}, `${b.role === "viewer" ? "Lector" : "Miembro"} · token ${b.active ? "activo" : "revocado"} · ${b.last_used ? "último uso " + new Date(b.last_used).toLocaleString() : "sin usar"}${b.created_by ? " · creada por " + b.created_by : ""}${b.full_access ? " · 🔓 autorización total (solo rige lo prohibido)" : ""}`),
       h("div", { class: "row botonera" },
         admin && h("button", { onclick: guard(async () => {
           const f = await form("IA / modelo", [{ name: "model", label: "Qué IA es (ej. claude:Opus)", value: b.model, max: 40 }], "Guardar"); if (!f) return;
@@ -660,6 +715,12 @@ const botModal = (b) => {
           await api("PATCH", `/api/bots/${b.id}`, { deny: f.deny }); overlay.remove(); await loadBots(); toast("Lista guardada");
         }) }, "🚫 Comandos prohibidos"),
         admin && h("button", { title: "Comandos que esta IA puede usar sin pedir permiso", onclick: guard(async () => { await editAllow(b); overlay.remove(); }) }, "✅ Comandos permitidos"),
+        admin && h("button", { title: "Lo que esta IA suele pedir y un catálogo de comandos comunes para sumar a lo permitido", onclick: () => { overlay.remove(); commandsDialog(b); } }, "📋 Comandos habituales"),
+        admin && h("button", { class: b.full_access ? "danger" : "", title: "Permitir todo menos lo que figura en 🚫 Comandos prohibidos", onclick: guard(async () => {
+          if (!b.full_access && !(await ask(`«${b.username}» podrá ejecutar CUALQUIER comando salvo los de 🚫 Comandos prohibidos (de la IA y generales). Antes de activarlo revisá esa lista: git push, rm -rf, sudo, systemctl… ¿Activar autorización total?`, "Activar"))) return;
+          await api("PATCH", `/api/bots/${b.id}`, { full_access: !b.full_access }); overlay.remove(); await loadBots();
+          toast(b.full_access ? "Autorización total apagada" : "Autorización total activada: vale desde la próxima tarea de la IA");
+        }) }, b.full_access ? "🔓 Autorización total: SÍ" : "🔒 Autorización total"),
         admin && h("button", { onclick: guard(async () => { const r = await api("POST", `/api/bots/${b.id}/token`); overlay.remove(); await loadBots(); showBotToken(b.username, r.token); }) }, "Nuevo token"),
         admin && h("button", { title: "Hacer que el servidor ejecute esta IA, sin comandos", onclick: () => { overlay.remove(); runnerModal(b); } }, "⚙ Ejecución"),
         S.project && can("member") && b.active && h("button", { title: "Le manda una tarea simple a esta IA y espera que la conteste", onclick: guard(async () => { overlay.remove(); await testBot(b); }) }, "🧪 Probar"),
@@ -989,13 +1050,25 @@ const openTask = guard(async (task) => {
   }));
   // si la tarea viene de un issue de GitHub: enlace y botón para cerrarlo allá
   const ghBox = h("div", { class: "row" });
+  const PR_LABEL = { open: "abierto", draft: "borrador", merged: "integrado ✅", closed: "cerrado sin integrar" };
   api("GET", `/api/tasks/${task.id}/github`).then((g) => {
-    if (!g.repo) return;
-    ghBox.append(h("a", { href: g.url, target: "_blank", rel: "noopener" }, `🐙 ${g.repo}#${g.number}`), h("span", { class: "spacer" }),
-      can("member") && h("button", { onclick: guard(async () => {
-        if (!(await ask("Se cierra el issue en GitHub (con un comentario). ¿Cerrarlo?", "Cerrar issue"))) return;
-        await api("POST", `/api/tasks/${task.id}/github/close`); toast("Issue cerrado en GitHub");
-      }) }, "Cerrar el issue en GitHub"));
+    if (g.repo) {
+      ghBox.append(h("a", { href: g.url, target: "_blank", rel: "noopener" }, `🐙 ${g.repo}#${g.number}`),
+        g.pr && h("span", { class: "pill", title: "Pull Request que menciona este issue" }, `PR #${g.pr}: ${PR_LABEL[g.pr_state] || g.pr_state}`));
+    } else if (!g.project_repo) return;
+    ghBox.append(h("span", { class: "spacer" }));
+    if (!can("member")) return;
+    if (!g.repo) ghBox.append(h("button", { onclick: guard(async () => {
+      const r = await api("POST", `/api/tasks/${task.id}/github/publish`); toast(`Publicada como issue #${r.number}`); closeModal(); openTask(await api("GET", `/api/tasks/${task.id}`));
+    }) }, "🐙 Publicar como issue"));
+    ghBox.append(h("button", { title: "Crea el Pull Request de la rama tm/tarea-" + task.id + " (o la que indiques)", onclick: guard(async () => {
+      const f = await form("Abrir Pull Request", [{ name: "branch", label: "Rama ya subida a GitHub", value: "tm/tarea-" + task.id, max: 120 }], "Abrir"); if (!f) return;
+      const r = await api("POST", `/api/tasks/${task.id}/github/pr`, { branch: f.branch }); toast(`Pull Request #${r.number} abierto`); window.open(r.url, "_blank", "noopener");
+    }) }, "Abrir Pull Request"));
+    if (g.repo) ghBox.append(h("button", { onclick: guard(async () => {
+      if (!(await ask("Se cierra el issue en GitHub (con un comentario). ¿Cerrarlo?", "Cerrar issue"))) return;
+      await api("POST", `/api/tasks/${task.id}/github/close`); toast("Issue cerrado en GitHub");
+    }) }, "Cerrar issue"));
   }).catch(() => {});
   // dependencias: esta tarea no puede empezar hasta que terminen las listadas
   const depBox = h("div", { class: "subs" });
@@ -1325,7 +1398,7 @@ function appView() {
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
         S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
         S.project && !S.portfolio && !S.terms && can("admin") && S.reviews && h("button", { class: S.reviews.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA da por terminado queda «en revisión» hasta que una persona lo apruebe (planes Equipo y Empresa)", onclick: toggleReview }, "🔎 Revisión: " + (S.reviews.enabled ? "sí" : "no")),
-        S.project && !S.portfolio && !S.terms && can("member") && h("button", { onclick: githubProject, title: "Traer los issues abiertos del repositorio como tareas, y cerrarlos desde la tarea" }, "🐙 GitHub"),
+        S.project && !S.portfolio && !S.terms && can("member") && h("button", { onclick: githubProject, title: "GitHub: traer issues como tareas, estado de PR y pruebas, ajustes del proyecto" }, "🐙 GitHub" + ({ success: " ✅", failure: " ❌", pending: " ⏳" }[S.ghCi] || "")),
         S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
         S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
@@ -1603,13 +1676,46 @@ const githubProject = guard(async () => {
       h("input", { type: "checkbox", disabled: i.imported, onchange: (e) => (e.target.checked ? picked.add(i.number) : picked.delete(i.number)) }),
       h("span", {}, `#${i.number} ${i.title}` + (i.imported ? " (ya es tarea)" : "")))));
   });
+  // ajustes del proyecto: cada casilla prende o apaga una función; lo automático usa tu conexión de GitHub
+  const cfg = await api("GET", `/api/projects/${p.id}/github/settings`).catch(() => ({}));
+  const OPTS = [
+    ["auto_sync", "Revisar GitHub cada 5 minutos", "Pasa a Hecha la tarea cuando se cierra su issue o se integra su Pull Request, y muestra el estado del PR."],
+    ["sync_comments", "Pasar comentarios entre la tarea y el issue", "Lo que se escribe en uno aparece en el otro. Ojo: si el repositorio es público, esos comentarios los ve cualquiera."],
+    ["publish_issues", "Publicar como issue las tareas nuevas", "Desde que prendas esto, cada tarea nueva se crea también como issue en el repositorio."],
+    ["ai_pr", "Avisarme cuando una IA termina para abrir el Pull Request", "La IA trabaja en la rama tm/tarea-N. Nunca se abre un PR sin que lo toques vos."],
+    ["ci_status", "Mostrar si las pruebas (CI) pasan", "Un ✅ o ❌ junto al botón 🐙 GitHub, y un aviso si fallan."],
+    ["activity", "Anotar los commits en Actividad", "Cada commit nuevo del repositorio queda en la bitácora del proyecto."],
+    ["webhook", "Avisos al instante (webhook)", "GitHub avisa en el acto en vez de esperar 5 minutos. Solo sirve si tu servidor es alcanzable desde internet."],
+  ];
+  const checks = Object.fromEntries(OPTS.map(([k]) => [k, h("input", { type: "checkbox", checked: !!cfg[k], disabled: !can("admin") })]));
+  const hookInfo = h("small", { class: "hint" });
+  const drawHook = () => {
+    hookInfo.textContent = checks.webhook.checked && cfg.webhook_secret
+      ? `En GitHub: Settings → Webhooks → Add webhook. URL: ${location.origin}${cfg.webhook_path} · tipo application/json · Secret: ${cfg.webhook_secret} · eventos: issues, pull requests, comments, push y check runs.`
+      : "";
+  };
+  checks.webhook.onchange = drawHook; drawHook();
+  const settingsBox = h("details", { class: "gh-cfg", open: Object.keys(checks).some((k) => checks[k].checked) },
+    h("summary", {}, "Ajustes de GitHub para este proyecto" + (cfg.last_sync ? ` · última revisión ${new Date(cfg.last_sync).toLocaleString()}` : "")),
+    OPTS.map(([k, l, d]) => h("label", { class: "row", title: d }, checks[k], h("span", {}, l), h("small", { class: "hint" }, d))),
+    hookInfo,
+    can("admin") && h("div", { class: "row" },
+      h("button", { class: "primary", onclick: guard(async () => {
+        const r = await api("PUT", `/api/projects/${p.id}/github/settings`, Object.fromEntries(OPTS.map(([k]) => [k, checks[k].checked])));
+        Object.assign(cfg, r); drawHook(); S.ghCi = r.ci_status ? r.ci_state : ""; render(); toast("Ajustes de GitHub guardados");
+      }) }, "Guardar ajustes"),
+      h("button", { onclick: guard(async () => {
+        const r = await api("POST", `/api/projects/${p.id}/github/now`);
+        S.tasks = await api("GET", `/api/projects/${p.id}/tasks`); render(); toast("Sincronizado: " + (r.summary || "sin cambios"));
+      }) }, "Sincronizar ahora")));
   const box = h("div", { class: "overlay", onmousedown: (e) => e.target === box && close() },
-    h("div", { class: "modal" }, h("h3", {}, `GitHub · ${p.name}`),
+    h("div", { class: "modal wide" }, h("h3", {}, `GitHub · ${p.name}`),
       h("label", {}, "Repositorio de este proyecto", repo),
       h("div", { class: "row" },
         h("button", { onclick: guard(async () => { await api("PUT", `/api/projects/${p.id}/github`, { repo: repo.value }); toast(repo.value.trim() ? "Repositorio guardado" : "Repositorio quitado"); if (repo.value.trim()) load(); else list.replaceChildren(); }) }, "Guardar"),
         h("button", { onclick: guard(async () => { await api("PUT", `/api/projects/${p.id}/github`, { repo: repo.value }); load(); }) }, "Ver issues abiertos")),
       list,
+      settingsBox,
       h("div", { class: "row" },
         h("button", { onclick: guard(async () => {
           if (!picked.size) { toast("Tildá al menos un issue", true); return; }

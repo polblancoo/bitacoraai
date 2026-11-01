@@ -909,6 +909,7 @@ async fn update_task(
         crate::review::request(&st, team, &t, user.id).await;
     }
     crate::extras::after_update(&st, team, user.id, &cur, &t).await;
+    crate::gh_sync::after_update(&st, &user, &cur, &t).await;
     Ok(Json(t))
 }
 
