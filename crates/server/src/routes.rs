@@ -875,13 +875,19 @@ async fn update_task(
     };
     // si cambia el vencimiento o el responsable, los recordatorios vuelven a empezar
     let reminders_reset = due != cur.due || assignee != cur.assignee_id;
+    // proyecto con revisión humana: lo que una IA da por terminado queda en revisión en vez de pasar a Hecha
+    let mut new_status = p.status.unwrap_or(cur.status);
+    let held = crate::review::holds(&st, &user, &cur, new_status).await;
+    if held {
+        new_status = if cur.status == Status::Todo { Status::Doing } else { cur.status };
+    }
     sqlx::query(
         "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, position = ?, assignee_id = ?, due = ?, start = ?, recurrence = ?, \
          remind_state = CASE WHEN ? THEN 0 ELSE remind_state END, updated_at = ? WHERE id = ?",
     )
     .bind(p.title.as_deref().map(str::trim).filter(|s| !s.is_empty()).unwrap_or(&cur.title))
     .bind(p.description.as_deref().unwrap_or(&cur.description))
-    .bind(p.status.unwrap_or(cur.status).as_str())
+    .bind(new_status.as_str())
     .bind(p.priority.map(|v| v.clamp(0, 3)).unwrap_or(cur.priority))
     .bind(p.position.filter(|v| v.is_finite()).unwrap_or(cur.position))
     .bind(assignee)
@@ -898,6 +904,9 @@ async fn update_task(
     emit_parent(&st, team, t.parent_id).await;
     if t.assignee_id != cur.assignee_id {
         notify_assigned(&st, team, user.id, &t).await;
+    }
+    if held {
+        crate::review::request(&st, team, &t, user.id).await;
     }
     crate::extras::after_update(&st, team, user.id, &cur, &t).await;
     Ok(Json(t))

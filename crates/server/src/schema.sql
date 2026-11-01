@@ -248,3 +248,17 @@ CREATE TABLE IF NOT EXISTS report_subs (
     PRIMARY KEY (user_id, team_id)
 );
 CREATE INDEX IF NOT EXISTS report_subs_due ON report_subs (active, next_run);
+
+-- Revisión humana del trabajo de las IAs (una fila por pedido de revisión; la última de cada tarea es la vigente)
+CREATE TABLE IF NOT EXISTS task_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    requested_by INTEGER NOT NULL,
+    reviewer_id INTEGER,
+    state TEXT NOT NULL DEFAULT 'pending',
+    note TEXT NOT NULL DEFAULT '',
+    requested_at TEXT NOT NULL,
+    decided_by INTEGER,
+    decided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_task_reviews_task ON task_reviews(task_id, id);

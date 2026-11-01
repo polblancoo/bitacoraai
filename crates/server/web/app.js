@@ -303,9 +303,22 @@ async function selectTeam(team) {
 }
 
 async function selectProject(p) {
-  S.portfolio = false; S.terms = false; S.project = p; S.canvas = null; S.tasks = p ? await api("GET", `/api/projects/${p.id}/tasks`) : [];
+  S.portfolio = false; S.terms = false; S.project = p; S.canvas = null; S.reviews = null; S.tasks = p ? await api("GET", `/api/projects/${p.id}/tasks`) : [];
   render();
+  loadReviews();
 }
+// revisión humana del trabajo de las IAs (función de los planes pagos): interruptor del proyecto y tareas esperando revisión
+async function loadReviews() {
+  const id = S.project?.id; if (!id) return;
+  try { const r = await api("GET", `/api/projects/${id}/reviews`); if (S.project?.id === id) { S.reviews = r; render(); } } catch {}
+}
+const toggleReview = guard(async () => {
+  const on = !S.reviews.enabled;
+  if (!(await ask(on ? "¿Exigir revisión humana en este proyecto? Cuando una IA termine una tarea, quedará «en revisión» y una persona tendrá que aprobarla o pedir cambios." : "¿Dejar de exigir revisión en este proyecto? Las IAs volverán a poder pasar tareas a Hecha solas."))) return;
+  await api("PUT", `/api/projects/${S.project.id}/reviews`, { enabled: on });
+  toast(on ? "Revisión humana activada" : "Revisión humana apagada"); loadReviews();
+});
+const inReview = (taskId) => !!S.reviews?.pending?.some((r) => r.task_id === taskId);
 
 // ---------- tiempo real ----------
 function connectWs() {
@@ -325,6 +338,7 @@ function onEvent({ type, data }) {
     if (data.project_id === S.project?.id) {
       const i = S.tasks.findIndex((t) => t.id === data.id);
       i >= 0 ? (S.tasks[i] = data) : S.tasks.push(data);
+      if (S.reviews) { clearTimeout(onEvent.rv); onEvent.rv = setTimeout(loadReviews, 600); }
     }
   } else if (type === "label_created") {
     if (data.team_id === S.team?.id && !S.labels.some((l) => l.id === data.id)) S.labels.push(data);
@@ -1061,6 +1075,32 @@ const openTask = guard(async (task) => {
       h("small", { class: "hint" }, "«Autorizar» es para decisiones (¿puedo borrar X?). Si la IA no puede ejecutar un comando porque está bloqueado, ejecutalo vos y enviá la salida."));
   };
 
+  // revisión del trabajo de la IA: aprobar o pedir cambios, e historial
+  const reviewPanel = () => {
+    const box = h("div", { class: "reviewpanel", hidden: true });
+    api("GET", `/api/tasks/${task.id}/review`).then(({ items }) => {
+      if (!items.length) return;
+      const pending = items[0].state === "pending";
+      const note = h("textarea", { rows: 3, maxLength: 4000, placeholder: "Si pedís cambios, contale a la IA qué tiene que corregir…" });
+      const decide = guard(async (action) => {
+        if (action === "changes" && !note.value.trim()) return toast("Escribí qué hay que cambiar", true);
+        const r = await api("POST", `/api/tasks/${task.id}/review`, { action, note: note.value });
+        upsert(r.task); toast(action === "approve" ? "Aprobada: la tarea pasó a Hecha" : "Cambios pedidos: la IA retoma la tarea"); closeModal(); render(); loadReviews();
+      });
+      const lbl = { pending: "⏳ Esperando revisión", approved: "✅ Aprobada", changes: "🔁 Cambios pedidos" };
+      box.replaceChildren(
+        h("h3", {}, "🔎 Revisión del trabajo de la IA"),
+        pending && h("p", { class: "hint" }, `${items[0].requested_by || "La IA"} la dio por terminada. Revisá lo que hizo (comentarios de abajo) y decidí${items[0].reviewer ? ". Revisa: " + items[0].reviewer : ""}.`),
+        pending && can("member") && h("div", {}, note, h("div", { class: "row" },
+          h("button", { class: "primary", onclick: () => decide("approve") }, "✅ Aprobar y pasar a Hecha"),
+          h("button", { onclick: () => decide("changes") }, "🔁 Pedir cambios"))),
+        h("details", {}, h("summary", {}, `Historial (${items.length})`),
+          items.map((i) => h("div", { class: "rv-row" }, h("b", {}, lbl[i.state] || i.state), h("small", {}, ` · ${new Date(i.requested_at).toLocaleString()}` + (i.decided_by ? ` · ${i.decided_by}` : "")), i.note && h("div", {}, i.note)))));
+      box.hidden = false;
+    }).catch(() => {});
+    return box;
+  };
+
   const save = guard(async () => {
     await patchTask(task.id, {
       title: title.value, description: desc.value, priority: +prio.value, status: status.value,
@@ -1088,6 +1128,7 @@ const openTask = guard(async (task) => {
           e.currentTarget.textContent = on ? "⤡ Restaurar" : "⤢ Maximizar";
         } }, store.get("taskMax") === "1" ? "⤡ Restaurar" : "⤢ Maximizar")),
       requestPanel(),
+      reviewPanel(),
       h("label", {}, "Título", title),
       h("label", {}, "Descripción", desc),
       can("member") && budgetBox(cur(), title, desc),
@@ -1141,6 +1182,7 @@ function taskCard(t) {
     t.subtasks_total > 0 && h("div", { class: "progress", title: `${t.subtasks_done}/${t.subtasks_total} subtareas` },
       h("div", { class: "bar", style: `width:${Math.round(100 * t.subtasks_done / t.subtasks_total)}%` })),
     h("div", { class: "meta" },
+      inReview(t.id) && h("span", { class: "pill review", title: "Una IA la terminó y espera tu revisión" }, "🔎 En revisión"),
       t.subtasks_total > 0 && h("span", {}, `☑ ${t.subtasks_done}/${t.subtasks_total}`),
       h("span", { class: `pill p${t.priority}` }, PRIO[t.priority]),
       t.due && h("span", { class: "due" + (late ? " late" : "") }, "⏰ " + new Date(t.due).toLocaleDateString()),
@@ -1251,6 +1293,7 @@ function appView() {
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openSchedules, title: "Tareas que se crean solas a una hora fija: cada día, semana o mes" }, "⏰ Programadas"),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
         S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
+        S.project && !S.portfolio && !S.terms && can("admin") && S.reviews && h("button", { class: S.reviews.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA da por terminado queda «en revisión» hasta que una persona lo apruebe (planes Equipo y Empresa)", onclick: toggleReview }, "🔎 Revisión: " + (S.reviews.enabled ? "sí" : "no")),
         S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
         S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),

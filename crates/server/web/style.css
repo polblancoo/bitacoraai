@@ -489,3 +489,7 @@ ol.guide pre { margin: 4px 0; }
 .ask-dlg .row { justify-content: center !important; gap: 10px; }
 .lic-warn { background: rgba(247,118,142,.12); border: 1px solid #f7768e; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .lic-terms { font-size: 12px; line-height: 1.4; white-space: pre-wrap; }
+.pill.review { background: rgba(224,175,104,.18); color: #e0af68; }
+.reviewpanel { border: 1px solid #e0af68; border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+.reviewpanel[hidden] { display: none; }
+.rv-row { padding: 4px 0; border-top: 1px solid var(--line); font-size: 13px; }
