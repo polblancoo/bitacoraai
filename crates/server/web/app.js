@@ -2481,6 +2481,7 @@ const openSchedules = guard(async () => {
     h("small", { class: "hint" }, s.active ? "Próxima: " + new Date(s.next_run).toLocaleString() : "En pausa"),
     can("member") && h("div", { class: "row" },
       h("button", { title: "Crea la tarea ahora, sin esperar ni mover el próximo horario", onclick: guard(async () => { const r = await api("POST", `/api/schedules/${s.id}/run`); toast(r.task_id ? "Tarea creada" : "No se creó la tarea"); reload(); }) }, "▶ Ejecutar ahora"),
+      h("button", { title: "Cambiar el título, la descripción, el responsable o el horario", onclick: () => edit(s) }, "✏ Editar"),
       h("button", { onclick: guard(async () => { await api("PUT", `/api/schedules/${s.id}`, body(s, { active: !s.active })); reload(); }) }, s.active ? "⏸ Pausar" : "▶ Activar"),
       h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Borrar la tarea programada?"))) return; await api("DELETE", `/api/schedules/${s.id}`); reload(); }) }, "🗑 Borrar"))));
   const title = h("input", { placeholder: "Título de la tarea (ej. Chequear resultados)", maxLength: 200 });
@@ -2494,9 +2495,26 @@ const openSchedules = guard(async () => {
   const wdL = h("label", {}, "Día de la semana", wd), mdL = h("label", {}, "Día del mes (si el mes es más corto, el último día)", md);
   const sync = () => { wdL.style.display = freq.value === "weekly" ? "" : "none"; mdL.style.display = freq.value === "monthly" ? "" : "none"; };
   sync();
+  // edición: carga la tarea programada en el formulario de abajo y «Guardar cambios» la actualiza (conserva si está activa o en pausa)
+  let editing = null;
+  const heading = h("h4", {}, "Programar una tarea nueva");
+  const okBtn = h("button", { class: "primary", onclick: () => add() }, "Programar");
+  const cancelBtn = h("button", { style: "display:none", onclick: () => reload() }, "Cancelar edición");
+  const edit = (s) => {
+    editing = s;
+    title.value = s.title; desc.value = s.description; who.value = s.assignee_id ?? ""; freq.value = s.freq; wd.value = s.weekday; md.value = s.monthday;
+    at.value = hhmm(s.at_minute); skip.checked = !!s.skip_if_open; sync();
+    heading.textContent = `Editando: ${s.title}`; okBtn.textContent = "Guardar cambios"; cancelBtn.style.display = "";
+    title.scrollIntoView({ block: "center" }); title.focus();
+  };
   const add = guard(async () => {
     const [H, M] = (at.value || "09:00").split(":").map(Number);
-    const created = await api("POST", `/api/projects/${S.project.id}/schedules`, { title: title.value, description: desc.value, assignee_id: who.value ? +who.value : null, freq: freq.value, weekday: +wd.value, monthday: +md.value || 1, at_minute: H * 60 + M, tz_offset: -new Date().getTimezoneOffset(), skip_if_open: skip.checked });
+    const data = { title: title.value, description: desc.value, assignee_id: who.value ? +who.value : null, freq: freq.value, weekday: +wd.value, monthday: +md.value || 1, at_minute: H * 60 + M, tz_offset: -new Date().getTimezoneOffset(), skip_if_open: skip.checked };
+    if (editing) {
+      const r = await api("PUT", `/api/schedules/${editing.id}`, { ...data, priority: editing.priority, active: editing.active });
+      toast("Cambios guardados. Próxima: " + new Date(r.next_run).toLocaleString()); return reload();
+    }
+    const created = await api("POST", `/api/projects/${S.project.id}/schedules`, data);
     toast("Tarea programada. Se crea el " + new Date(created.next_run).toLocaleString()); reload();
   });
   document.body.append(h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
@@ -2504,12 +2522,12 @@ const openSchedules = guard(async () => {
       h("h3", {}, "⏰ Tareas programadas · " + S.project.name, h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: closeModal }, "✕")),
       h("p", { class: "hint" }, "A la hora indicada el servidor crea la tarea ya asignada (por ejemplo, para que una IA chequee resultados cada lunes). La hora es la de tu zona horaria."),
       rows.length ? h("div", { class: "sched-list" }, rows) : h("small", { class: "hint" }, "Todavía no hay tareas programadas en este proyecto."),
-      can("member") && h("h4", {}, "Programar una tarea nueva"),
+      can("member") && heading,
       can("member") && title, can("member") && desc,
       can("member") && h("label", {}, "Responsable", who),
       can("member") && h("div", { class: "row" }, h("label", {}, "Frecuencia", freq), wdL, mdL, h("label", {}, "Hora", at)),
       can("member") && h("label", { class: "row" }, skip, h("span", {}, "Si la tarea anterior sigue abierta, no crear otra")),
-      can("member") && h("div", { class: "row" }, h("button", { class: "primary", onclick: add }, "Programar")))));
+      can("member") && h("div", { class: "row" }, okBtn, cancelBtn))));
 });
 
 // ventanas: botón para ampliar/restaurar en todas (y se pueden redimensionar desde la esquina)
