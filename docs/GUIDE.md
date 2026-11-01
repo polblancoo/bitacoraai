@@ -37,7 +37,7 @@ The server stores everything (teams, tasks, users) and serves the web app. You i
 
 For other people to join from other machines, put the server at an address they can reach (ideally with HTTPS: see the [server configuration](https://github.com/polblancoo/Rust_tuiManager#readme)). If you are only trying it out, `localhost` is enough.
 
-**One-line install (Linux x86_64, no sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh`. It downloads the server from the release, **verifies its SHA256** (no match, no install), puts it in `~/.local/bin` and creates a user service that starts by itself. Options: `--port N`, `--no-service`, `--with-agent`, `--version X`. The first time you sign in, a **start guide** with drawings walks you through team, project and AI (repeat it from Settings → Preferences → 🧭 Start guide).
+**One-line install (Linux x86_64, no sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh`. It downloads the server from the release, **verifies its SHA256** (no match, no install), puts it in `~/.local/bin` and creates a user service that starts by itself. Options: `--port N`, `--no-service`, `--with-agent`, `--with-claude`, `--with-gemini`, `--with-codex`, `--with-opencode` (install that AI's program; `--with-all-ais` all four), `--version X`. The first time you sign in, a **start guide** with drawings walks you through team, project and AI (repeat it from Settings → Preferences → 🧭 Start guide).
 
 If you prefer a terminal or a window of its own, there is also a terminal client and a desktop app on the same downloads page.
 
@@ -293,3 +293,9 @@ The **bar** on top appears with more than 3 people or 2 AIs, or if you declare i
 - **Settings in tabs**, with help under each line.
 - **Text zoom.** Bottom right: **A−**, the percentage (click = 100%) and **A+**; also **Ctrl + Alt + wheel**. Remembered per device.
 - **Our own confirmations.** Deleting, leaving a team or disconnecting an account asks in an app window (Esc cancels), not the browser's alert.
+
+### Usage profile (Settings → Team and project)
+
+Pick what your team uses CrewHelm for and the interface sets itself up: *Software development* (To do / In progress / Done, with terminals and code folder), *Content and social* (Draft / In production / Published, calendar as the starting view, no technical parts), *App factory* (Backlog / Building / Delivered, several projects in parallel), *Office and professional practices* (administration, accounting, law: Pending / In process / Closed, with the deadlines calendar) or *Other / general team*. «Load example» creates a sample project with tasks and «Delete example» removes it entirely without touching your real projects. It only changes names and what is shown: your data is untouched and you can switch profile any time. It can also be chosen in the start guide.
+
+If the team handles confidential information (for example a law firm), turn on the project's **human review**, don't load data you don't want an AI to see, and remember that task text reaches whichever model you use; for very sensitive data, use a company-owned model.

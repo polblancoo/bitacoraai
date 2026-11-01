@@ -219,7 +219,9 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     };
     // si el comando devuelve el JSON de Claude (`--output-format json`), de ahí salen los tokens y el costo reales
     let usage = out.as_ref().ok().and_then(|o| parse_usage(&String::from_utf8_lossy(&o.stdout)));
-    let run_ok = out.as_ref().is_ok_and(|o| o.status.success()) && !usage.as_ref().is_some_and(|u| u.is_error);
+    // algunos agentes (opencode) devuelven 0 aunque fallen: sin nada en la salida y un «Error» en el canal de errores, es un fallo
+    let silent_error = out.as_ref().is_ok_and(|o| o.stdout.iter().all(u8::is_ascii_whitespace) && String::from_utf8_lossy(&o.stderr).contains("Error"));
+    let run_ok = out.as_ref().is_ok_and(|o| o.status.success()) && !usage.as_ref().is_some_and(|u| u.is_error) && !silent_error;
     let u = usage.as_ref();
     let report = json!({
         "seconds": started.elapsed().as_secs(), "ok": run_ok,

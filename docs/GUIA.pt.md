@@ -37,7 +37,7 @@ O servidor guarda tudo (equipes, tarefas, usuários) e serve a web. Instala-se u
 
 Para que outras pessoas entrem de outras máquinas, coloque o servidor num endereço que elas alcancem (idealmente com HTTPS: veja a [configuração do servidor](https://github.com/polblancoo/Rust_tuiManager/blob/main/README.pt.md)). Se for só para testar, `localhost` basta.
 
-**Instalação de uma linha (Linux x86_64, sem sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh`. Baixa o servidor do release, **verifica o SHA256** (se não bater, não instala), deixa em `~/.local/bin` e cria um serviço de usuário que inicia sozinho. Opções: `--port N`, `--no-service`, `--with-agent`, `--version X`. Na primeira vez que você entra, um **guia de início** com desenhos leva você por equipe, projeto e IA (repita em Configurações → Preferências → 🧭 Guia de início).
+**Instalação de uma linha (Linux x86_64, sem sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh`. Baixa o servidor do release, **verifica o SHA256** (se não bater, não instala), deixa em `~/.local/bin` e cria um serviço de usuário que inicia sozinho. Opções: `--port N`, `--no-service`, `--with-agent`, `--with-claude`, `--with-gemini`, `--with-codex`, `--with-opencode` (install that AI's program; `--with-all-ais` all four), `--version X`. Na primeira vez que você entra, um **guia de início** com desenhos leva você por equipe, projeto e IA (repita em Configurações → Preferências → 🧭 Guia de início).
 
 Se preferir terminal ou janela própria, também há um cliente de terminal e um app de desktop na mesma página de downloads.
 
@@ -293,3 +293,9 @@ O **aviso** no topo aparece com mais de 3 pessoas ou 2 IAs, ou se você declarar
 - **Configurações em abas**, com ajuda sob cada linha.
 - **Zoom da letra.** Embaixo à direita: **A−**, a porcentagem (clique = 100 %) e **A+**; também **Ctrl + Alt + roda**. Lembrado em cada dispositivo.
 - **Confirmações próprias.** Apagar, sair de uma equipe ou desconectar uma conta pergunta em uma janela do app (Esc cancela), não no aviso do navegador.
+
+### Perfil de uso (Configurações → Equipe e projeto)
+
+Escolha para que a equipe usa o CrewHelm e a interface se prepara sozinha: *Desenvolvimento de software* (A fazer / Em andamento / Feito, com terminais e pasta do código), *Conteúdo e redes* (Rascunho / Em produção / Publicado, calendário como visão inicial e sem partes técnicas), *Fábrica de apps* (Backlog / Em construção / Entregue, vários projetos em paralelo), *Escritório e consultorias* (administração, contabilidade, advocacia: Pendente / Em andamento / Fechado, com o calendário de vencimentos) ou *Outros / equipe geral*. «Carregar exemplo» cria um projeto de amostra com tarefas e «Eliminar exemplo» o apaga inteiro sem tocar nos seus projetos reais. Só muda nomes e o que é mostrado: seus dados não mudam e você pode trocar de perfil quando quiser. Também se escolhe no guia de início.
+
+Se a equipe lida com informação confidencial (por exemplo, um escritório de advocacia), ative a **revisão humana** do projeto, não carregue dados que não quer que uma IA veja e lembre que o texto das tarefas chega ao modelo que você usar; para dados muito sensíveis, use um modelo próprio da empresa.

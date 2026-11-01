@@ -499,3 +499,9 @@ ol.guide pre { margin: 4px 0; }
 .top > * { flex-shrink: 0; }
 .top > .grow { flex: 1 1 0; min-width: 0; }
 .top h1 { flex: 1 0 auto; }
+
+.modal.ia { width: min(760px, 96vw); max-height: 92vh; }
+.modal.ia .bot-cfg { white-space: pre-wrap; word-break: break-all; font-size: 13px; max-height: none; }
+.modal .botonera { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.modal .botonera button { width: 100%; min-height: 44px; white-space: normal; line-height: 1.2; }
+.modal .botonera .spacer { display: none; }

@@ -38,7 +38,7 @@ fn infos() -> &'static Mutex<HashMap<Id, Info>> {
 }
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/api/bots/{uid}/runner", get(get_runner).put(put_runner)).route("/api/runner", get(available))
+    Router::new().route("/api/bots/{uid}/runner", get(get_runner).put(put_runner)).route("/api/runner", get(available)).route("/api/runner/openrouter-key", axum::routing::put(put_openrouter_key))
 }
 
 fn enabled_by_env() -> bool {
@@ -49,8 +49,60 @@ fn agent_bin() -> PathBuf {
     std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("tm-agent"))).filter(|p| p.exists()).unwrap_or_else(|| "tm-agent".into())
 }
 
+/// PATH del servidor más los lugares donde suelen quedar las herramientas de IA (npm con nvm, cargo, ~/.local/bin):
+/// un servicio systemd arranca sin el PATH del shell y no las encontraría.
+fn tool_path() -> std::ffi::OsString {
+    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        dirs.push(home.join(".local/bin"));
+        dirs.push(home.join(".cargo/bin"));
+        if let Ok(rd) = std::fs::read_dir(home.join(".nvm/versions/node")) {
+            let mut v: Vec<PathBuf> = rd.flatten().map(|e| e.path().join("bin")).collect();
+            v.sort();
+            dirs.extend(v.into_iter().rev());
+        }
+    }
+    std::env::join_paths(dirs).unwrap_or_default()
+}
+
 fn which(bin: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(bin).exists()))
+    std::env::split_paths(&tool_path()).any(|d| d.join(bin).exists())
+}
+
+/// Clave de OpenRouter: archivo propio del servidor (permisos 600), nunca en la base de datos.
+fn openrouter_file() -> PathBuf {
+    std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from).join(".config/tm-server/openrouter.env")
+}
+
+fn openrouter_key() -> Option<String> {
+    let txt = std::fs::read_to_string(openrouter_file()).ok();
+    txt.and_then(|t| t.lines().find_map(|l| l.trim().strip_prefix("OPENROUTER_API_KEY=").map(|v| v.trim().trim_matches('"').to_string())))
+        .filter(|k| !k.is_empty())
+        .or_else(|| std::env::var("OPENROUTER_API_KEY").ok().filter(|k| !k.is_empty()))
+}
+
+#[derive(Deserialize)]
+struct KeyBody {
+    key: String,
+}
+
+async fn put_openrouter_key(State(st): State<AppState>, user: AuthUser, Json(b): Json<KeyBody>) -> Result<Json<Value>> {
+    guard(&st, &user).await?;
+    let k = b.key.trim();
+    if k.len() < 10 || k.len() > 200 || !k.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) {
+        return Err(AppError::bad("clave inválida (solo letras, números y - _ .)"));
+    }
+    let path = openrouter_file();
+    if let Some(d) = path.parent() {
+        std::fs::create_dir_all(d).map_err(|e| AppError::bad(&format!("no pude guardar la clave: {e}")))?;
+    }
+    std::fs::write(&path, format!("OPENROUTER_API_KEY={k}\n")).map_err(|e| AppError::bad(&format!("no pude guardar la clave: {e}")))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(Json(json!({ "ok": true })))
 }
 
 fn data_dir() -> PathBuf {
@@ -63,7 +115,8 @@ async fn available(State(st): State<AppState>, user: AuthUser) -> Result<Json<Va
     let found = bin.is_absolute() || which("tm-agent");
     Ok(Json(json!({
         "allowed": admin && enabled_by_env() && cfg!(unix), "agent_found": found,
-        "tools": { "claude": which("claude"), "gemini": which("gemini"), "openai": which("codex") },
+        "tools": { "claude": which("claude"), "gemini": which("gemini"), "openai": which("codex"), "openrouter": which("opencode") },
+        "openrouter_key": openrouter_key().is_some(),
     })))
 }
 
@@ -99,13 +152,13 @@ struct Body {
 
 async fn put_runner(State(st): State<AppState>, user: AuthUser, Path(uid): Path<Id>, Json(b): Json<Body>) -> Result<Json<Value>> {
     guard(&st, &user).await?;
-    if !matches!(b.kind.as_str(), "claude" | "gemini" | "openai" | "local") {
+    if !matches!(b.kind.as_str(), "claude" | "gemini" | "openai" | "local" | "openrouter") {
         return Err(AppError::bad("tipo de IA no soportado para ejecutarse en el servidor"));
     }
     let model = b.model.trim();
     // el modelo y la dirección terminan en una línea de comandos: solo caracteres inofensivos
     let safe = |s: &str, extra: &str| s.chars().all(|c| c.is_ascii_alphanumeric() || extra.contains(c));
-    if model.is_empty() || model.len() > 60 || !safe(model, ".:_-/") {
+    if model.is_empty() || model.len() > 90 || !safe(model, ".:_-/") {
         return Err(AppError::bad("modelo inválido (letras, números y . : _ - /)"));
     }
     if b.url.len() > 200 || !safe(&b.url, ".:_-/@%") || (b.kind == "local" && !b.url.starts_with("http")) {
@@ -142,6 +195,10 @@ fn plan(kind: &str, model: &str, url: &str, conf: &std::path::Path) -> (String, 
             vec![("TM_CLAUDE_MODEL".into(), model.to_lowercase()), ("TM_AGENT_CONF".into(), conf.to_string_lossy().into_owned())],
         ),
         "gemini" => (format!("gemini -p \"$TM_TASK_PROMPT\" -m {model}"), vec![]),
+        "openrouter" => (
+            format!("opencode run -m openrouter/{model} \"$TM_TASK_PROMPT\""),
+            openrouter_key().map(|k| vec![("OPENROUTER_API_KEY".to_string(), k)]).unwrap_or_default(),
+        ),
         "openai" => (format!("codex exec \"$TM_TASK_PROMPT\" -m {model}"), vec![]),
         _ => (
             format!("codex exec \"$TM_TASK_PROMPT\" -m {model}"),
@@ -180,6 +237,7 @@ async fn spawn_one(st: &AppState, uid: Id, by: Id, name: &str, kind: &str, model
         .env("TM_AGENT_CMD", cmd)
         .env("TM_AGENT_POLL", "10")
         .envs(env)
+        .env("PATH", tool_path())
         .stdin(std::process::Stdio::null())
         .kill_on_drop(true);
     c.spawn()

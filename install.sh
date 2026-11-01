@@ -1,16 +1,21 @@
 #!/bin/sh
 # Instalador de CrewHelm (tm-server) para Linux: sin sudo, todo dentro de tu usuario.
 #   curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh
-# Opciones (después de «sh -s --»):  --port 7878   --no-service   --with-agent   --version v0.7.1
+# Opciones (después de «sh -s --»):  --port 7878   --no-service   --with-agent   --with-opencode   --with-claude   --with-gemini   --with-codex   --with-all-ais   --version v0.7.1
 set -eu
 
 REPO="polblancoo/Rust_tuiManager"
-PORT=7878; SERVICE=1; AGENT=0; VERSION="latest"
+PORT=7878; SERVICE=1; AGENT=0; OPENCODE=0; CLAUDE=0; GEMINI=0; CODEX=0; VERSION="latest"
 while [ $# -gt 0 ]; do
   case "$1" in
     --port) PORT="$2"; shift 2 ;;
     --no-service) SERVICE=0; shift ;;
     --with-agent) AGENT=1; shift ;;
+    --with-opencode) OPENCODE=1; AGENT=1; shift ;;  # agente para usar OpenRouter (modelos gratis y de pago)
+    --with-claude) CLAUDE=1; AGENT=1; shift ;;
+    --with-gemini) GEMINI=1; AGENT=1; shift ;;
+    --with-codex) CODEX=1; AGENT=1; shift ;;
+    --with-all-ais) OPENCODE=1; CLAUDE=1; GEMINI=1; CODEX=1; AGENT=1; shift ;;
     --version) VERSION="$2"; shift 2 ;;
     -h|--help) sed -n '2,5p' "$0"; exit 0 ;;
     *) echo "opción desconocida: $1" >&2; exit 1 ;;
@@ -49,6 +54,17 @@ install_one() { # install_one <binario>
 }
 install_one tm-server
 [ "$AGENT" = 1 ] && install_one tm-agent
+npm_tool() { # npm_tool <programa> <paquete>: programas de IA que el agente lanza (npm, en ~/.local, sin sudo)
+  if command -v "$1" >/dev/null 2>&1 || [ -x "$BIN/$1" ]; then say "$1 ya está instalado"; return; fi
+  if command -v npm >/dev/null 2>&1; then
+    say "Instalando $1 (npm, paquete $2) en $HOME/.local"
+    npm install -g --prefix "$HOME/.local" "$2" >/dev/null 2>&1 || echo "   (no pude instalar $1; probá a mano: npm install -g --prefix \$HOME/.local $2)"
+  else echo "   ($1 necesita Node.js/npm, que no está instalado: https://nodejs.org)"; fi
+}
+[ "$CLAUDE" = 1 ] && npm_tool claude @anthropic-ai/claude-code
+[ "$GEMINI" = 1 ] && npm_tool gemini @google/gemini-cli
+[ "$CODEX" = 1 ] && npm_tool codex @openai/codex
+[ "$OPENCODE" = 1 ] && npm_tool opencode opencode-ai
 say "Instalado en $BIN"
 case ":$PATH:" in *":$BIN:"*) ;; *) echo "   (agregá $BIN a tu PATH para usar tm-server desde cualquier carpeta)" ;; esac
 

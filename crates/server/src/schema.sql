@@ -271,3 +271,9 @@ CREATE TABLE IF NOT EXISTS notif_prefs (
     tz_offset INTEGER,
     last_digest TEXT
 );
+
+-- Perfil de uso del equipo (dev, content, factory, other): define la interfaz por defecto
+CREATE TABLE IF NOT EXISTS team_profile (
+    team_id INTEGER PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE,
+    profile TEXT NOT NULL
+);

@@ -715,7 +715,7 @@ async fn list_projects(State(st): State<AppState>, user: AuthUser, Path(team): P
     Ok(Json(rows.iter().map(project_from_row).collect()))
 }
 
-async fn create_project(
+pub(crate) async fn create_project(
     State(st): State<AppState>,
     user: AuthUser,
     Path(team): Path<Id>,
@@ -786,7 +786,7 @@ pub(crate) async fn list_tasks(State(st): State<AppState>, user: AuthUser, Path(
     Ok(Json(tasks))
 }
 
-async fn create_task(
+pub(crate) async fn create_task(
     State(st): State<AppState>,
     user: AuthUser,
     Path(project): Path<Id>,

@@ -500,6 +500,8 @@ pub struct Activity {
     pub username: String,
     pub text: String,
     pub created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub task_id: Option<Id>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -130,7 +130,7 @@ async fn create_bot(
     }
     let name = b.name.trim();
     limits::username(name)?;
-    limits::max_len("modelo", &b.model, 40)?;
+    limits::max_len("modelo", &b.model, 100)?;
     let hash = hash_password(&random_hex(32))?;
     let res = sqlx::query("INSERT INTO users (username, password_hash, is_bot, model) VALUES (?, ?, 1, ?)")
         .bind(name)
@@ -165,7 +165,7 @@ async fn update_bot(State(st): State<AppState>, user: AuthUser, Path(uid): Path<
     user.human_only()?;
     manages_bot(&st, user.id, uid).await?;
     if let Some(model) = &b.model {
-        limits::max_len("modelo", model, 40)?;
+        limits::max_len("modelo", model, 100)?;
         sqlx::query("UPDATE users SET model = ? WHERE id = ?").bind(model.trim()).bind(uid).execute(&st.db).await?;
     }
     if let Some(deny) = &b.deny {

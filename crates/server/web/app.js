@@ -6,6 +6,20 @@ const STATUS = [
   { id: "doing", label: "En curso", color: "var(--yellow)" },
   { id: "done", label: "Hecho", color: "var(--green)" },
 ];
+// Perfiles de uso: cambian cómo se llama cada columna y qué partes técnicas se ven. No cambian los datos.
+const PROFILES = {
+  dev: { name: "💻 Desarrollo de software", desc: "Tablero Por hacer / En curso / Hecho, terminales y carpeta del código.", labels: ["Por hacer", "En curso", "Hecho"], tech: true },
+  content: { name: "📣 Contenido y redes", desc: "Borrador / En producción / Publicado, con el calendario como vista inicial. Sin partes técnicas.", labels: ["Borrador", "En producción", "Publicado"], tech: false, view: "calendar" },
+  factory: { name: "🏭 Fábrica de apps", desc: "Varias apps en paralelo: Backlog / En construcción / Entregado.", labels: ["Backlog", "En construcción", "Entregado"], tech: true },
+  office: { name: "🏛️ Oficina y estudios (administración, contabilidad, abogacía)", desc: "Pendiente / En trámite / Cerrado, con calendario de vencimientos y sin partes técnicas.", labels: ["Pendiente", "En trámite", "Cerrado"], tech: false, view: "calendar" },
+  other: { name: "🏢 Otros / equipo general", desc: "Por hacer / En curso / Hecho, sin partes técnicas.", labels: ["Por hacer", "En curso", "Hecho"], tech: false },
+};
+const profileOf = () => PROFILES[S.profile] || PROFILES.dev;
+const showTech = () => profileOf().tech;
+function applyProfile(id) {
+  S.profile = PROFILES[id] ? id : null;
+  profileOf().labels.forEach((l, i) => { STATUS[i].label = l; });
+}
 const PRIO = ["Baja", "Media", "Alta", "Urgente"];
 const ROLES = [["viewer", "Lector"], ["member", "Miembro"], ["admin", "Admin"], ["owner", "Dueño"]];
 const RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
@@ -297,6 +311,9 @@ async function selectTeam(team) {
       api("GET", `/api/teams/${team.id}/projects`), api("GET", `/api/teams/${team.id}/members`),
       api("GET", `/api/teams/${team.id}/labels`), api("GET", `/api/teams/${team.id}/bots`).catch(() => []),
     ]);
+    const pr = await api("GET", `/api/teams/${team.id}/profile`).catch(() => ({}));
+    S.hasExample = !!pr.has_example; applyProfile(pr.profile);
+    if (profileOf().view && !store.get("view")) S.view = profileOf().view;
     await selectProject(S.projects[0] || null);
     loadOverview();
   } else render();
@@ -450,9 +467,10 @@ const createProject = guard(async () => {
 const mcpConfig = (token) => JSON.stringify({ mcpServers: { "rust-tui-manager": { command: "tm-mcp", env: { TM_URL: S.server, TM_TOKEN: token } } } }, null, 2);
 const copy = (text, msg) => navigator.clipboard?.writeText(text).then(() => toast(msg));
 const agentCmd = (token) => `TM_URL=${S.server} \\\nTM_TOKEN=${token || "tmk_…"} \\\nTM_AGENT_CMD='claude -p "$TM_TASK_PROMPT" --permission-mode acceptEdits' \\\ntm-agent`;
+const agentCmdGemini = (token) => `TM_URL=${S.server} \\\nTM_TOKEN=${token || "tmk_…"} \\\nGEMINI_API_KEY=tu-clave-de-gemini \\\nTM_AGENT_CMD='gemini -p "$TM_TASK_PROMPT" --approval-mode auto_edit' \\\ntm-agent`;
 function agentsGuide() {
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
-    h("div", { class: "modal" },
+    h("div", { class: "modal ia" },
       h("h3", {}, "🤖 Que una IA trabaje sola: tm-agent"),
       h("p", {}, "Una IA solo actúa mientras algo la despierta. tm-agent es ese «algo»: corre en la máquina donde está la carpeta del proyecto, mira este servidor y, cuando le asignás una tarea a la IA, abre un agente en la carpeta de trabajo, comenta y pasa la tarea a En curso y Hecho."),
       h("ol", { class: "guide" },
@@ -461,14 +479,16 @@ function agentsGuide() {
         h("li", {}, "Instalá tm-agent en esa máquina: cargo install --git https://github.com/polblancoo/Rust_tuiManager rust-tui-manager-agent"),
         h("li", {}, "Ejecutalo con el token y el comando de tu agente (Claude Code, Gemini CLI, un script…). Ejemplo:"),
         h("pre", { class: "bot-cfg" }, agentCmd()),
+        h("li", {}, "Con Gemini CLI usá este (no entiende --permission-mode; la clave sale de aistudio.google.com/apikey, o iniciá sesión una vez con «gemini»). Si algo falla, el motivo queda como comentario ❌ en la tarea de la IA:"),
+        h("pre", { class: "bot-cfg" }, agentCmdGemini()),
         h("li", {}, "Asignale una tarea a la IA: en unos segundos pasa a En curso, queda comentada y termina en Hecho. Si falla, vuelve a Por hacer con el error.")),
       h("p", {}, "⚠ El texto de las tareas llega al agente como instrucciones: dejalo correr con una carpeta y permisos acotados, y asigná tareas solo desde cuentas de confianza. Instructivo completo (servicio, seguridad, variables): docs/AGENTES.md en el repositorio."),
-      h("div", { class: "row" }, h("button", { onclick: () => copy(agentCmd(), "Comando copiado") }, "Copiar ejemplo"), h("button", { class: "primary", onclick: () => overlay.remove() }, "Cerrar"))));
+      h("div", { class: "row" }, h("button", { onclick: () => copy(agentCmd(), "Comando copiado") }, "Copiar ejemplo Claude"), h("button", { onclick: () => copy(agentCmdGemini(), "Comando copiado") }, "Copiar ejemplo Gemini"), h("button", { class: "primary", onclick: () => overlay.remove() }, "Cerrar"))));
   document.body.append(overlay);
 }
 function showBotToken(name, token, cmd) {
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
-    h("div", { class: "modal" },
+    h("div", { class: "modal ia" },
       h("h3", {}, `🤖 Token de ${name}`),
       h("p", {}, "Copialo ahora: no se vuelve a mostrar. Si lo perdés, generás uno nuevo y el anterior deja de funcionar."),
       h("code", { class: "bot-token" }, token),
@@ -496,7 +516,10 @@ const AI_KINDS = {
     env: (m) => `TM_CLAUDE_MODEL=${m.toLowerCase()}`, cmd: () => "$HOME/.config/tm-agent/run-claude.sh",
     setup: "# Una vez: copiá run-claude.sh, whitelist.txt y blacklist.txt (carpeta examples/ del repo) a ~/.config/tm-agent/\n# Claude pide permiso por la web (🙋) antes de usar un comando que no esté permitido.\n# Si usás Claude con tu suscripción (claude login), no hace falta ninguna clave." },
   gemini: { name: "Gemini (Google)", paid: true, key: "GEMINI_API_KEY", models: ["gemini-2.5-pro", "gemini-2.5-flash"],
-    cmd: (m) => `gemini -p "$TM_TASK_PROMPT" -m ${m}` },
+    cmd: (m) => `gemini -p "$TM_TASK_PROMPT" -m ${m} --approval-mode auto_edit`,
+    setup: "# Gemini usa --approval-mode (no --permission-mode, que es de Claude). auto_edit deja editar archivos; yolo permite todo.\n# Necesita GEMINI_API_KEY (https://aistudio.google.com/apikey) o haber iniciado sesión una vez con: gemini\n# Probalo antes a mano: gemini -p \"decime hola\"" },
+  openrouter: { name: "OpenRouter (modelos gratis y de pago)", paid: true, key: "OPENROUTER_API_KEY", models: ["qwen/qwen3-coder:free", "deepseek/deepseek-r1-0528:free", "mistralai/devstral-2512:free", "moonshotai/kimi-k2:free", "meta-llama/llama-3.3-70b-instruct:free"],
+    cmd: (m) => `opencode run -m openrouter/${m} "$TM_TASK_PROMPT"`, setup: "# Necesita opencode (npm i -g opencode-ai) y una clave de https://openrouter.ai/keys\n# Los modelos gratis terminan en :free" },
   openai: { name: "ChatGPT / Codex (OpenAI)", paid: true, key: "OPENAI_API_KEY", models: ["gpt-5", "gpt-5-codex"],
     cmd: (m) => `codex exec "$TM_TASK_PROMPT" -m ${m}` },
   local: { name: "Modelo propio de la empresa (local)", paid: false, local: true, models: [], cmd: (m) => `codex exec "$TM_TASK_PROMPT" -m ${m}` },
@@ -520,12 +543,12 @@ const createBot = guard(async () => {
   runL.style.display = rn.allowed ? "" : "none";
   const kind = h("select", {}, Object.entries(AI_KINDS).map(([v, k]) => h("option", { value: v }, k.name + (k.paid ? " · paga" : ""))));
   const model = h("select", {});
-  const own = h("input", { placeholder: "Escribí el nombre del modelo", maxLength: 40, style: "display:none" });
+  const own = h("input", { placeholder: "Escribí el nombre del modelo", maxLength: 90, style: "display:none" });
   const key = h("input", { type: "password", placeholder: "Vacío = usa la variable de entorno de tu máquina", autocomplete: "off" });
   const keyL = h("label", {}, "Clave de la IA ", key, h("small", { class: "hint" }, "Opcional. En Linux/Mac, si ya tenés la variable (ANTHROPIC_API_KEY, GEMINI_API_KEY u OPENAI_API_KEY) exportada, dejá esto vacío: se usa esa. Nunca se guarda en el servidor."));
   const url = h("input", { placeholder: "Dirección del servidor de IA (ej. http://10.0.0.5:11434/v1)", maxLength: 200 });
   const urlL = h("label", {}, "Servidor de la IA ", url, h("small", { class: "hint" }, "Te la da el área de IT. Si el servidor pide clave, escribila abajo; si no, dejala vacía."));
-  const name = h("input", { placeholder: "Nombre (ej. claude-ana)", maxLength: 32 });
+  const name = h("input", { placeholder: "Nombre (ej. claude-ana)", maxLength: 32, oninput: () => { name.value = name.value.replace(/\s+/g, "-").replace(/[^\p{L}\p{N}_.-]/gu, ""); } });
   const role = h("select", {}, h("option", { value: "member" }, "Miembro (crea y edita sus tareas)"), h("option", { value: "viewer" }, "Lector (solo mira)"));
   const sync = () => {
     const k = AI_KINDS[kind.value];
@@ -538,8 +561,8 @@ const createBot = guard(async () => {
   const pick = () => { own.style.display = model.value === "__otro" ? "" : "none"; };
   kind.onchange = sync; model.onchange = pick; sync();
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
-    h("div", { class: "modal small" }, h("h3", {}, "Nueva IA en el equipo"),
-      h("label", {}, "Nombre", name, h("small", { class: "hint" }, "Cómo se va a ver en el tablero. Sin espacios, ej. claude-ana.")), h("label", {}, "¿Qué IA es?", kind, h("small", { class: "hint" }, "Elegí la marca. Las pagas necesitan una clave (API key) de tu cuenta. «Modelo propio» es uno que corre en un servidor de tu empresa.")), h("label", {}, "Modelo", model, own, h("small", { class: "hint" }, "Elegí uno de la lista. Si el tuyo no está, tocá «Escribir otro…» y escribí su nombre tal cual lo da el proveedor o IT.")), urlL, keyL, h("label", {}, "Rol", role, h("small", { class: "hint" }, "Miembro: puede crear y editar tareas. Lector: solo mira.")),
+    h("div", { class: "modal ia" }, h("h3", {}, "Nueva IA en el equipo"),
+      h("label", {}, "Nombre", name, h("small", { class: "hint" }, "Cómo se va a ver en el tablero. Los espacios se cambian por «-» (ej. open-router).")), h("label", {}, "¿Qué IA es?", kind, h("small", { class: "hint" }, "Elegí la marca. Las pagas necesitan una clave (API key) de tu cuenta. «Modelo propio» es uno que corre en un servidor de tu empresa.")), h("label", {}, "Modelo", model, own, h("small", { class: "hint" }, "Elegí uno de la lista. Si el tuyo no está, tocá «Escribir otro…» y escribí su nombre tal cual lo da el proveedor o IT.")), urlL, keyL, h("label", {}, "Rol", role, h("small", { class: "hint" }, "Miembro: puede crear y editar tareas. Lector: solo mira.")),
       runL,
       h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { onclick: () => overlay.remove() }, "Cancelar"),
         h("button", { class: "primary", onclick: guard(async () => {
@@ -551,6 +574,7 @@ const createBot = guard(async () => {
           S.members = await api("GET", `/api/teams/${S.team.id}/members`);
           await loadBots();
           if (run.checked && kind.value !== "otra") {
+            if (kind.value === "openrouter" && key.value.trim()) await api("PUT", "/api/runner/openrouter-key", { key: key.value.trim() });
             await api("PUT", `/api/bots/${r.user.id}/runner`, { kind: kind.value, model: m, url: url.value.trim(), enabled: true });
             toast(`${r.user.username} activada: el servidor la ejecuta. Asignale una tarea o probala con 🧪`);
             runnerModal(S.bots.find((x) => x.id === r.user.id) || { id: r.user.id, username: r.user.username });
@@ -588,29 +612,33 @@ const testBot = async (b) => {
   if (alive) note.textContent = "❌ No respondió en 2 minutos. Revisá que el agente (tm-agent) de esta IA esté corriendo y apunte a este servidor: la tarea de prueba quedó en el tablero.";
 };
 // ejecución en el servidor: estado de la IA, activar o detener
-const RUN_KINDS = { claude: ["Claude (Anthropic)", ["Opus", "Sonnet", "Haiku"]], gemini: ["Gemini (Google)", ["gemini-2.5-pro", "gemini-2.5-flash"]], openai: ["ChatGPT / Codex (OpenAI)", ["gpt-5", "gpt-5-codex"]], local: ["Modelo propio de la empresa (local)", []] };
+const RUN_KINDS = { openrouter: ["OpenRouter (modelos gratis y de pago)", ["qwen/qwen3-coder:free", "deepseek/deepseek-r1-0528:free", "mistralai/devstral-2512:free", "moonshotai/kimi-k2:free", "meta-llama/llama-3.3-70b-instruct:free"]], claude: ["Claude (Anthropic)", ["Opus", "Sonnet", "Haiku"]], gemini: ["Gemini (Google)", ["gemini-2.5-pro", "gemini-2.5-flash"]], openai: ["ChatGPT / Codex (OpenAI)", ["gpt-5", "gpt-5-codex"]], local: ["Modelo propio de la empresa (local)", []] };
 const runnerModal = async (b) => {
   document.getElementById("runner-modal")?.remove();
   const [cur, av] = await Promise.all([api("GET", `/api/bots/${b.id}/runner`).catch(() => ({ configured: false })), api("GET", "/api/runner").catch(() => ({}))]);
   const kind = h("select", {}, Object.entries(RUN_KINDS).map(([v, [n]]) => h("option", { value: v, selected: cur.kind === v }, n)));
-  const model = h("input", { value: cur.model || "", placeholder: "Modelo (ej. Opus, gemini-2.5-pro, llama3.1:70b)", maxLength: 60 });
+  const model = h("input", { value: cur.model || "", placeholder: "Modelo (ej. Opus, gemini-2.5-pro, llama3.1:70b)", maxLength: 90 });
   const dl = h("datalist", { id: "runner-models" }); model.setAttribute("list", "runner-models");
   const url = h("input", { value: cur.url || "", placeholder: "http://10.0.0.5:11434/v1", maxLength: 200 });
   const urlL = h("label", {}, "Servidor de la IA (lo da IT)", url);
-  const sync = () => { dl.replaceChildren(...RUN_KINDS[kind.value][1].map((m) => h("option", { value: m }))); urlL.style.display = kind.value === "local" ? "" : "none"; };
+  const orKey = h("input", { type: "password", placeholder: av.openrouter_key ? "Ya hay una clave guardada; escribí otra para cambiarla" : "Pegá tu clave de OpenRouter (sk-or-…)", autocomplete: "off" });
+  const orL = h("label", {}, "Clave de OpenRouter", orKey, h("small", { class: "hint" }, "Se guarda solo en el servidor (archivo privado ~/.config/tm-server/openrouter.env), nunca en la base de datos ni se vuelve a mostrar."));
+  const sync = () => { orL.style.display = kind.value === "openrouter" ? "" : "none"; dl.replaceChildren(...RUN_KINDS[kind.value][1].map((m) => h("option", { value: m }))); urlL.style.display = kind.value === "local" ? "" : "none"; };
   kind.onchange = sync; sync();
   const st = cur.enabled ? (cur.running ? `🟢 Conectada desde ${new Date(cur.since).toLocaleString()}` : `🔴 Activada pero no está corriendo${cur.last_exit ? " (" + cur.last_exit + ")" : ""}. Se reintenta sola.`) : "⚪ No activada";
   const save = (enabled) => guard(async () => {
     if (enabled && !model.value.trim()) { toast("Falta el modelo"); return; }
+    if (enabled && kind.value === "openrouter" && !orKey.value.trim() && !av.openrouter_key) { toast("Falta la clave de OpenRouter"); return; }
+    if (kind.value === "openrouter" && orKey.value.trim()) await api("PUT", "/api/runner/openrouter-key", { key: orKey.value.trim() });
     await api("PUT", `/api/bots/${b.id}/runner`, { kind: kind.value, model: model.value.trim() || cur.model || "x", url: url.value.trim(), enabled });
     toast(enabled ? "Activada: en unos segundos aparece conectada" : "Detenida"); runnerModal(b);
   });
-  const tool = av.tools && av.tools[kind.value === "local" ? "openai" : kind.value] === false ? h("p", { class: "warn" }, "No encuentro el programa de esta IA instalado en el servidor (claude, gemini o codex). Instalalo ahí y se conecta.") : null;
+  const tool = av.tools && av.tools[kind.value === "local" ? "openai" : kind.value] === false ? h("p", { class: "warn" }, `No encuentro el programa de esta IA instalado en el servidor: ${({ openrouter: "opencode (npm i -g opencode-ai)", claude: "claude (npm i -g @anthropic-ai/claude-code)", gemini: "gemini (npm i -g @google/gemini-cli)", openai: "codex (npm i -g @openai/codex)", local: "codex (npm i -g @openai/codex)" })[kind.value]}. Instalalo ahí y se conecta.`) : null;
   const box = h("div", { class: "overlay", id: "runner-modal", onmousedown: (e) => e.target === box && box.remove() },
     h("div", { class: "modal small" }, h("h3", {}, `⚙ ${b.username}: ejecución en el servidor`), h("p", {}, st),
       !av.allowed ? h("p", { class: "warn" }, "Solo la primera persona registrada puede activar esto, y el servidor no debe tener TM_RUNNER=0.") : [
         !av.agent_found && h("p", { class: "warn" }, "El servidor no encuentra el programa tm-agent: instalalo en la misma máquina (cargo install rust-tui-manager-agent)."),
-        h("label", {}, "¿Qué IA es?", kind), h("label", {}, "Modelo", model, dl), urlL, tool,
+        h("label", {}, "¿Qué IA es?", kind), h("label", {}, "Modelo", model, dl), urlL, orL, tool,
         h("small", { class: "hint" }, "La clave de la IA se toma de las variables de entorno del servidor (ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY) o de su sesión iniciada. No se guarda acá."),
         h("div", { class: "row" }, cur.enabled && h("button", { class: "danger", onclick: save(false) }, "Detener"), h("span", { class: "spacer" }),
           h("button", { onclick: () => box.remove() }, "Cerrar"), h("button", { class: "primary", onclick: save(true) }, cur.enabled ? "Guardar y reiniciar" : "Activar"))]));
@@ -619,10 +647,10 @@ const runnerModal = async (b) => {
 const botModal = (b) => {
   const admin = can("admin");
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
-    h("div", { class: "modal small" },
+    h("div", { class: "modal ia" },
       h("h3", {}, `🤖 ${b.username}`, b.model && h("small", { class: "inl" }, " · " + b.model)),
       h("p", {}, `${b.role === "viewer" ? "Lector" : "Miembro"} · token ${b.active ? "activo" : "revocado"} · ${b.last_used ? "último uso " + new Date(b.last_used).toLocaleString() : "sin usar"}${b.created_by ? " · creada por " + b.created_by : ""}`),
-      h("div", { class: "row" },
+      h("div", { class: "row botonera" },
         admin && h("button", { onclick: guard(async () => {
           const f = await form("IA / modelo", [{ name: "model", label: "Qué IA es (ej. claude:Opus)", value: b.model, max: 40 }], "Guardar"); if (!f) return;
           await api("PATCH", `/api/bots/${b.id}`, { model: f.model }); overlay.remove(); await loadBots();
@@ -1122,7 +1150,7 @@ const openTask = guard(async (task) => {
       h("h3", { class: "task-head" }, "Tarea ", h("span", { class: "tid" }, "#" + task.id), h("span", { class: "spacer" }),
         h("button", { class: "primary", title: "Guardar los cambios y cerrar", onclick: save }, "💾 Guardar"),
         can("member") && h("button", { class: "danger", title: "Borrar la tarea", onclick: del }, "🗑 Borrar"),
-        can("owner") && h("button", { class: "ghost", title: "Abre una terminal SSH a la máquina del proyecto, sin salir de la tarea (solo owners)", onclick: guard(() => openTaskTerminal(cur())) }, "💻 Terminal"),
+        can("owner") && showTech() && h("button", { class: "ghost", title: "Abre una terminal SSH a la máquina del proyecto, sin salir de la tarea (solo owners)", onclick: guard(() => openTaskTerminal(cur())) }, "💻 Terminal"),
         h("button", { class: "ghost max-btn", title: "Maximizar o restaurar la ventana para leer los comentarios más cómodo", onclick: (e) => {
           const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("taskMax", on ? "1" : "0");
           e.currentTarget.textContent = on ? "⤡ Restaurar" : "⤢ Maximizar";
@@ -1273,7 +1301,7 @@ function appView() {
       h("div", {}, h("h2", {}, "Equipos", h("span", {}, S.team && h("button", { class: "ghost", onclick: () => { S.panel = true; store.set("panel", "1"); loadOverview(); setTimeout(() => document.querySelector(".tp-sec:last-child")?.scrollIntoView(), 400); }, title: "Editar o eliminar el equipo actual (ajustes en el panel de la derecha)" }, "⚙"), h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
         h("div", { class: "nav" }, S.teams.map((t) => h("button", { class: t.id === S.team?.id ? "active" : "", onclick: () => selectTeam(t).catch((e) => toast(e.message, true)) }, t.name)))),
       S.team && h("div", {}, h("h2", {}, "Proyectos", h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
-        h("div", { class: "nav" }, S.projects.length > 0 && can("owner") && h("button", { class: S.terms ? "active" : "", onclick: openTerms, title: "Terminales SSH de los proyectos y estado de las IAs, en paneles" }, "🖥️ Terminales"), S.projects.length > 0 && h("button", { class: S.portfolio ? "active" : "", onclick: openPortfolio, title: "Avance de todos los proyectos del equipo" }, "📊 Portafolio"),
+        h("div", { class: "nav" }, S.projects.length > 0 && can("owner") && showTech() && h("button", { class: S.terms ? "active" : "", onclick: openTerms, title: "Terminales SSH de los proyectos y estado de las IAs, en paneles" }, "🖥️ Terminales"), S.projects.length > 0 && h("button", { class: S.portfolio ? "active" : "", onclick: openPortfolio, title: "Avance de todos los proyectos del equipo" }, "📊 Portafolio"),
           S.projects.map((p) => h("button", { class: p.id === S.project?.id && !S.portfolio && !S.terms ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
           h("span", { class: "dot", style: `background:${p.color}` }), p.name)))),
       S.team && h("div", {}, h("h2", {}, "🤖 IAs", can("admin") && h("button", { class: "ghost", onclick: createBot, title: "Sumar una IA al equipo (crea su token)" }, "+")),
@@ -1416,8 +1444,8 @@ function activityView() {
     h("div", { class: "cal-head" }, h("strong", {}, "Actividad del proyecto"), h("span", { class: "spacer" }),
       h("button", { onclick: () => { S.activity = null; render(); } }, "Actualizar")),
     items.length === 0 ? h("div", { class: "empty" }, "Todavía no hay actividad.")
-      : h("div", { class: "act-list" }, items.map((a) => h("div", { class: "act-row" }, avatar(a.username || "?"),
-        h("span", { class: "grow" }, h("b", {}, a.username || "alguien"), " ", a.text), h("small", {}, new Date(a.created_at).toLocaleString())))));
+      : h("div", { class: "act-list" }, items.map((a) => h("div", { class: "act-row" + (a.task_id ? " clickable" : ""), title: a.task_id ? "Abrir la tarea: conversación, respuestas y responsables" : "", onclick: a.task_id ? guard(async () => openTask(await api("GET", `/api/tasks/${a.task_id}`))) : null }, avatar(a.username || "?"),
+        h("span", { class: "grow" }, h("b", {}, a.username || "alguien"), " ", a.text), h("small", {}, new Date(a.created_at).toLocaleString()), a.task_id && h("small", { class: "hint" }, "💬 ver")))));
 }
 
 // ---------- configuración ----------
@@ -1452,6 +1480,7 @@ const CFG_HELP = {
   join: ["Unirme con un código", "Si un admin te pasó un código de invitación, pegalo acá para entrar a su equipo.", null],
   newTeam: ["Crear un equipo", "Creás un equipo nuevo y quedás como Dueño. Después invitás a la gente desde «Miembros, roles e invitaciones».", null],
   project: ["Proyecto", "Un proyecto agrupa las tareas del equipo (tablero, calendario, Gantt y pizarra). Creá uno con «Nuevo proyecto».", null],
+  perfil: ["Perfil de uso", "Prepara la interfaz según para qué usan el equipo: cambia los nombres de las columnas y oculta lo técnico (terminales, carpeta del código) si no hace falta. «Cargar ejemplo» crea un proyecto de muestra con tareas; «Eliminar ejemplo» lo borra entero y deja todo limpio. No toca tus proyectos reales.", null],
   duplicate: ["Usar como plantilla", "Crea un proyecto nuevo copiando las tareas, etiquetas y dependencias del actual, para repetir un proceso sin armarlo de cero.", null],
   export: ["Exportar", "Descarga todas las tareas del proyecto en CSV (para planilla) o JSON (para copia de seguridad o scripts).", null],
   view: ["Vista inicial", "Qué vista se abre primero en este dispositivo: tablero, calendario, Gantt, pizarra o actividad. Se cambia en cualquier momento con las teclas 1 a 5.", null],
@@ -1583,6 +1612,34 @@ const openSettings = guard(async () => {
         can("admin") && line(["Agentes de IA: que trabajen solos (tm-agent)", "agents"], h("button", { onclick: go(agentsGuide) }, "Ver instructivo")),
         line(["Unirme a otro equipo con un código", "join"], h("button", { onclick: go(joinWithCode) }, "Unirme")),
         line(["Crear un equipo nuevo", "newTeam"], h("button", { onclick: go(createTeam) }, "Crear"))),
+      S.team && sec("Perfil de uso",
+        line([`Perfil actual: ${S.profile ? PROFILES[S.profile].name : "sin elegir"}`, "perfil"],
+          can("admin") && (() => {
+            const sel = h("select", {}, h("option", { value: "" }, "Elegir…"), Object.entries(PROFILES).map(([id, p]) => h("option", { value: id, selected: S.profile === id }, p.name)));
+            sel.onchange = guard(async () => {
+              if (!sel.value) return;
+              await api("PUT", `/api/teams/${S.team.id}/profile`, { profile: sel.value }); applyProfile(sel.value);
+              if (PROFILES[sel.value].view) S.view = PROFILES[sel.value].view;
+              close(); render(); toast(`Perfil «${PROFILES[sel.value].name}» aplicado. ${PROFILES[sel.value].desc}`);
+              if (!S.hasExample && can("member") && (await ask(`Perfil «${PROFILES[sel.value].name}» aplicado. ¿Querés cargar un proyecto de ejemplo para ver cómo se usa? Después lo borrás con «Eliminar ejemplo» y tus proyectos no se tocan.`, "Cargar ejemplo"))) {
+                await api("POST", `/api/teams/${S.team.id}/example`, { profile: sel.value });
+                S.projects = await api("GET", `/api/teams/${S.team.id}/projects`); S.hasExample = true;
+                await selectProject(S.projects[S.projects.length - 1]);
+              }
+            });
+            return sel;
+          })()),
+        can("member") && S.profile && !S.hasExample && line(["Cargar un proyecto de ejemplo del perfil", "perfil"], h("button", { onclick: guard(async () => {
+          await api("POST", `/api/teams/${S.team.id}/example`, { profile: S.profile });
+          S.projects = await api("GET", `/api/teams/${S.team.id}/projects`); S.hasExample = true;
+          close(); await selectProject(S.projects[S.projects.length - 1]); toast("Ejemplo cargado: probalo y después «Eliminar ejemplo»");
+        }) }, "Cargar ejemplo")),
+        can("admin") && S.hasExample && line(["Hay un ejemplo cargado: borrarlo deja todo limpio", "perfil"], h("button", { class: "danger", onclick: guard(async () => {
+          if (!(await ask("Se borran los proyectos de ejemplo con todas sus tareas. Tus proyectos reales no se tocan. ¿Eliminar el ejemplo?", "Eliminar ejemplo"))) return;
+          await api("DELETE", `/api/teams/${S.team.id}/example`);
+          S.projects = await api("GET", `/api/teams/${S.team.id}/projects`); S.hasExample = false;
+          close(); await selectProject(S.projects[0] || null); toast("Ejemplo eliminado");
+        }) }, "Eliminar ejemplo"))),
       S.team && sec("Proyecto",
         line([S.project ? `Proyecto actual: ${S.project.name}` : "Sin proyectos", "project"], h("button", { onclick: go(createProject) }, "Nuevo proyecto")),
         S.project && can("member") && line(["Usar como plantilla (copia tareas, etiquetas y dependencias)", "duplicate"], h("button", { onclick: go(duplicateProject) }, "Duplicar")),
@@ -1616,7 +1673,7 @@ const openSettings = guard(async () => {
   const TABS = [
     ["cuenta", "👤 Cuenta", ["user", "inbox", "logout", "logoutAll"]],
     ["conexiones", "🔔 Avisos y conexiones", ["email", "telegram", "digest", "github", "google", "reports"]],
-    ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "project", "duplicate", "export"]],
+    ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export"]],
     ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["licencia", "🏢 Licencia", ["license"]],
     ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "server", "manual", "shortcuts", "guide"]],
@@ -1832,25 +1889,36 @@ const WIZ_ART = (() => {
   };
 })();
 // el SVG es texto fijo de esta aplicación (nunca datos de usuarios)
-const wizArt = (name) => { const el = document.createElement("div"); el.className = "wiz-art"; el.append(document.importNode(new DOMParser().parseFromString(WIZ_ART[name], "image/svg+xml").documentElement, true)); return el; };
+const wizArt = (name) => { const el = document.createElement("div"); el.className = "wiz-art"; el.append(document.importNode(new DOMParser().parseFromString(WIZ_ART[name] || WIZ_ART.project, "image/svg+xml").documentElement, true)); return el; };
 
 async function openWizard() {
   document.getElementById("wiz-modal")?.remove();
   const W = { i: 0, team: S.team, project: S.project, ai: false };
-  const STEPS = ["welcome", "team", "project", "ia", "listo"];
+  const STEPS = ["welcome", "team", "perfil", "project", "ia", "listo"];
   const body = h("div", { class: "wiz-body" }), dots = h("div", { class: "wiz-dots" }), foot = h("div", { class: "wiz-foot" });
   const close = (done) => { if (done) store.set("wizDone", "1"); document.getElementById("wiz-modal")?.remove(); render(); };
   const teamIn = h("input", { placeholder: "Ej.: Mi empresa, Backend, Equipo A", maxLength: 60, value: S.team?.name || "" });
   const projIn = h("input", { placeholder: "Ej.: App de ventas", maxLength: 60 });
   const dirIn = h("input", { placeholder: "Carpeta del código, en la máquina del servidor (opcional) · /home/ana/app", maxLength: 300 });
   const sample = h("input", { type: "checkbox", checked: true });
+  const profSel = h("select", {}, h("option", { value: "" }, "Elegir más tarde"), Object.entries(PROFILES).map(([id, p]) => h("option", { value: id, selected: S.profile === id }, p.name)));
+  const profEx = h("input", { type: "checkbox" });
+  const profNote = h("small", { class: "hint" }, "");
+  profSel.onchange = () => { profNote.textContent = PROFILES[profSel.value]?.desc || ""; };
   const next = async () => {
     try {
-      if (W.i === 1 && !W.team) {
+      if (STEPS[W.i] === "perfil" && W.team && profSel.value && profSel.value !== S.profile) {
+        await api("PUT", `/api/teams/${W.team.id}/profile`, { profile: profSel.value }); applyProfile(profSel.value);
+      }
+      if (STEPS[W.i] === "perfil" && W.team && profSel.value && profEx.checked && !S.hasExample) {
+        await api("POST", `/api/teams/${W.team.id}/example`, { profile: profSel.value });
+        S.projects = await api("GET", `/api/teams/${W.team.id}/projects`); S.hasExample = true;
+      }
+      if (STEPS[W.i] === "team" && !W.team) {
         const n = teamIn.value.trim(); if (!n) return toast("Escribí un nombre para el equipo", true);
         W.team = await api("POST", "/api/teams", { name: n }); S.teams.push(W.team); await selectTeam(W.team);
       }
-      if (W.i === 2 && !W.project) {
+      if (STEPS[W.i] === "project" && !W.project) {
         const n = projIn.value.trim(); if (!n) return toast("Escribí un nombre para el proyecto", true);
         W.project = await api("POST", `/api/teams/${W.team.id}/projects`, { name: n, work_dir: dirIn.value.trim(), repo: "" });
         if (!S.projects.some((x) => x.id === W.project.id)) S.projects.push(W.project);
@@ -1868,14 +1936,16 @@ async function openWizard() {
   const paint = () => {
     const k = STEPS[W.i];
     const T = {
-      welcome: ["Bienvenida/o a " + APP_NAME, "Acá coordinás a tu equipo humano y a tus IAs en un solo tablero: repartís tareas, ves quién hace qué y las IAs trabajan por vos con permisos que controlás. En 4 pasos dejamos todo andando."],
+      welcome: ["Bienvenida/o a " + APP_NAME, "Acá coordinás a tu equipo humano y a tus IAs en un solo tablero: repartís tareas, ves quién hace qué y las IAs trabajan por vos con permisos que controlás. En 5 pasos dejamos todo andando."],
       team: ["Tu equipo", W.team ? `Ya tenés el equipo «${W.team.name}». Seguimos.` : "Un equipo agrupa a las personas y a las IAs que trabajan juntas. Vos quedás como dueño. Después invitás a quien quieras."],
+      perfil: ["¿Para qué lo van a usar?", "Elegí un perfil y la interfaz se prepara sola: nombres de las columnas y qué partes técnicas se ven. Podés cambiarlo cuando quieras en Configuración → Equipo y proyecto."],
       project: ["Tu primer proyecto", W.project ? `Proyecto «${W.project.name}» listo.` : "Un proyecto es un tablero de tareas. Si querés que las IAs trabajen sobre código, indicá la carpeta donde vive (en la máquina del servidor)."],
       ia: ["Sumá una IA (opcional)", W.ai ? "¡IA creada! Aparece en la barra lateral con su luz 🟢/🔴." : "Una IA es un asistente de código (Claude, Gemini, ChatGPT o un modelo propio) que toma tareas del tablero y pide permiso por la web para lo delicado. Podés hacerlo ahora o más tarde desde «IAs → +»."],
       listo: ["¡Todo listo!", "Ya podés usar el tablero. Tips: tecla ? muestra los atajos · la campanita 🔔 te lleva a lo nuevo · ⚙ Configuración tiene avisos, informes y comandos de las IAs · «🧭 Guía de inicio» la volvés a abrir cuando quieras."],
     }[k];
     const fields = {
       team: !W.team && h("label", {}, "Nombre del equipo", teamIn),
+      perfil: [h("label", {}, "Perfil de uso", profSel, profNote), h("label", { class: "row" }, profEx, h("span", {}, "Cargar un proyecto de ejemplo (se borra con un botón)"))],
       project: !W.project && [h("label", {}, "Nombre del proyecto", projIn), h("label", {}, "Carpeta de trabajo", dirIn)],
       ia: h("div", { class: "row" }, h("button", { class: W.ai ? "" : "primary", onclick: guard(async () => { const before = (S.bots || []).length; await createBot(); await boot(); W.ai = (S.bots || []).length > before || W.ai; paint(); }) }, W.ai ? "➕ Agregar otra IA" : "🤖 Agregar una IA")),
       listo: h("label", { class: "row" }, sample, h("span", {}, "Crear una tarea de ejemplo en el tablero")),

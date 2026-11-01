@@ -187,7 +187,7 @@ pub async fn log_task(st: &AppState, task: Id, user: Id, text: String) {
 async fn list_activity(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Vec<Activity>>> {
     ensure_member(&st, team_of_project(&st, project).await?, user.id).await?;
     let rows = sqlx::query(
-        "SELECT a.id, a.project_id, a.user_id, COALESCE(u.username, '') AS username, a.text, a.created_at \
+        "SELECT a.id, a.project_id, a.user_id, COALESCE(u.username, '') AS username, a.text, a.created_at, a.task_id \
          FROM activity a LEFT JOIN users u ON u.id = a.user_id WHERE a.project_id = ? ORDER BY a.id DESC LIMIT 100",
     )
     .bind(project)
@@ -202,6 +202,7 @@ async fn list_activity(State(st): State<AppState>, user: AuthUser, Path(project)
                 username: r.get("username"),
                 text: r.get("text"),
                 created_at: r.get("created_at"),
+                task_id: r.get("task_id"),
             })
             .collect(),
     ))
