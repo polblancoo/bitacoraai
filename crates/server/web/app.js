@@ -912,6 +912,7 @@ const msgKey = (m) => (m.to_user != null ? "dm" + (m.from_user === S.user.id ? m
 const inChan = (m, c) => msgKey(m) === chanKey(c);
 const toggleChat = () => {
   S.chatOpen = !S.chatOpen; store.set("chat", S.chatOpen ? "1" : null);
+  try { if (S.chatOpen && window.Notification && Notification.permission === "default") Notification.requestPermission(); } catch {}
   clearInterval(CHAT.timer);
   if (S.chatOpen) { CHAT.timer = setInterval(chatPresence, 20000); CHAT.teamId = null; }
   render();
@@ -923,8 +924,9 @@ async function chatPresence() {
 async function chatHistory() {
   const c = CHAT.chan, tid = S.team.id;
   const q = c.t === "dm" ? `with=${c.id}` : c.t === "project" ? `project=${c.id}` : "";
-  try { CHAT.msgs = await api("GET", `/api/teams/${tid}/chat?${q}`); CHAT.err = ""; CHAT.unread[chanKey(c)] = 0; }
+  try { const r = await api("GET", `/api/teams/${tid}/chat?${q}`); if (CHAT.chan !== c) return; CHAT.msgs = r; CHAT.err = ""; CHAT.unread[chanKey(c)] = 0; }
   catch (e) {
+    if (CHAT.chan !== c) return;
     CHAT.msgs = []; CHAT.err = e.message; CHAT.https = "";
     try { const st = await api("GET", "/api/chat/status"); if (!st.secure) CHAT.https = st.https_url || ""; } catch {}
   }
@@ -933,13 +935,49 @@ async function chatHistory() {
 function chatSwitch(c) { CHAT.chan = c; CHAT.msgs = []; chatHistory(); }
 function chatAdd(m) {
   if (m.team_id !== S.team?.id || CHAT.msgs.some((x) => x.id === m.id)) return;
+  const mine = m.from_user === S.user.id, seen = S.chatOpen && inChan(m, CHAT.chan) && !document.hidden;
   if (S.chatOpen && inChan(m, CHAT.chan)) CHAT.msgs.push(m);
-  else if (m.from_user !== S.user.id) {
+  else if (!mine) {
     CHAT.unread[msgKey(m)] = (CHAT.unread[msgKey(m)] || 0) + 1; CHAT.total++;
-    if (!S.chatOpen) { toast(`💬 ${m.from}: ${(m.body || "📎 " + (m.file?.name || "archivo")).slice(0, 80)}`); render(); }
+    if (!S.chatOpen) render();
   }
+  if (!mine && !seen) chatBubble(m);
   chatDraw();
 }
+// Burbuja que avisa de un mensaje nuevo aunque el chat esté cerrado o en otro canal; tocarla abre esa conversación.
+// Con la pestaña en segundo plano suma un aviso del navegador (si se permitió), un sonido corto y el contador en el título.
+function chatOpenFor(m) {
+  const c = m.to_user != null ? { t: "dm", id: m.from_user } : m.project_id != null ? { t: "project", id: m.project_id } : { t: "team" };
+  if (!S.chatOpen) toggleChat();
+  chatSwitch(c);
+}
+function chatBubble(m) {
+  const txt = (m.body || "📎 " + (m.file?.name || "archivo")).slice(0, 140);
+  const where = m.to_user != null ? "te escribió en privado" : m.project_id != null ? "en " + (S.projects.find((p) => p.id === m.project_id)?.name || "un proyecto") : "en el equipo";
+  let box = document.getElementById("chat-bubbles");
+  if (!box) { box = h("div", { id: "chat-bubbles" }); document.body.append(box); }
+  const b = h("div", { class: "chat-bubble", title: "Tocá para abrir la conversación" },
+    h("b", {}, "💬 " + m.from), " ", h("small", {}, where), h("div", {}, txt));
+  b.onclick = () => { b.remove(); chatOpenFor(m); };
+  box.prepend(b);
+  while (box.children.length > 3) box.lastChild.remove();
+  let secs = parseFloat(store.get("toastSecs")); if (!(secs >= 0)) secs = 6;
+  if (secs > 0) setTimeout(() => b.remove(), Math.max(secs, 8) * 1000);
+  try {
+    const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination); o.frequency.value = 880; g.gain.value = 0.05; o.start(); o.stop(a.currentTime + 0.12);
+  } catch {}
+  if (document.hidden) {
+    chatTitle();
+    try { if (window.Notification && Notification.permission === "granted") { const n = new Notification("💬 " + m.from + " " + where, { body: txt, tag: "tm-chat" }); n.onclick = () => { window.focus(); chatOpenFor(m); n.close(); }; } } catch {}
+  }
+}
+function chatTitle() {
+  CHAT.hiddenN = (CHAT.hiddenN || 0) + 1;
+  if (!CHAT.baseTitle) CHAT.baseTitle = document.title;
+  document.title = `(${CHAT.hiddenN}) 💬 ${CHAT.baseTitle}`;
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && CHAT.baseTitle) { document.title = CHAT.baseTitle; CHAT.hiddenN = 0; } });
 const chatSend = guard(async () => {
   const body = CHAT.inp.value.trim(); if (!body && !CHAT.pending) return;
   const c = CHAT.chan, payload = { body, file_id: CHAT.pending?.id };
