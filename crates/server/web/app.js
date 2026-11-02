@@ -112,10 +112,15 @@ function h(tag, attrs = {}, ...kids) {
   return el;
 }
 
-function toast(msg, error = false) {
+// cuánto queda visible el aviso emergente (Preferencias): segundos; 0 = hasta que se toque. Tocarlo abre la tarea del aviso, si la tiene.
+function toast(msg, error = false, note = null) {
   const t = document.getElementById("toast");
-  t.textContent = tr(msg); t.className = error ? "error" : ""; t.hidden = false;
-  clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 3500);
+  t.textContent = tr(msg); t.className = (error ? "error" : "") + (note ? " link" : ""); t.hidden = false;
+  t.title = note ? "Tocá para abrir la tarea" : "Tocá para cerrar";
+  t.onclick = () => { t.hidden = true; clearTimeout(toast.t); if (note) jumpToNote(note); };
+  clearTimeout(toast.t);
+  let secs = parseFloat(store.get("toastSecs")); if (!(secs >= 0)) secs = 6;
+  if (secs > 0) toast.t = setTimeout(() => (t.hidden = true), secs * 1000);
 }
 
 async function api(method, path, body) {
@@ -320,7 +325,7 @@ async function selectTeam(team) {
 }
 
 async function selectProject(p) {
-  S.portfolio = false; S.terms = false; S.project = p; S.canvas = null; S.reviews = null; S.tasks = p ? await api("GET", `/api/projects/${p.id}/tasks`) : [];
+  S.portfolio = false; S.terms = false; S.project = p; S.canvas = null; S.reviews = null; S.hold = null; S.tasks = p ? await api("GET", `/api/projects/${p.id}/tasks`) : [];
   S.ghCi = "";
   if (p) api("GET", `/api/projects/${p.id}/github/settings`).then((c) => { if (c.ci_status && S.project?.id === p.id) { S.ghCi = c.ci_state; render(); } }).catch(() => {});
   render();
@@ -330,7 +335,15 @@ async function selectProject(p) {
 async function loadReviews() {
   const id = S.project?.id; if (!id) return;
   try { const r = await api("GET", `/api/projects/${id}/reviews`); if (S.project?.id === id) { S.reviews = r; render(); } } catch {}
+  try { const r = await api("GET", `/api/projects/${id}/continuation`); if (S.project?.id === id) { S.hold = r; render(); } } catch {}
 }
+// tareas con continuación: lo que una IA termina queda en «En curso», zona de espera, hasta que una persona lo pase a Hecho
+const toggleHold = guard(async () => {
+  const on = !S.hold.enabled;
+  if (!(await ask(on ? "¿Que lo que una IA termina quede «esperando tu próximo paso» (En curso) en vez de pasar a Hecho? Vos lo pasás a Hecho cuando lo cierres." : "¿Que lo que una IA termina pase directo a Hecho?"))) return;
+  await api("PUT", `/api/projects/${S.project.id}/continuation`, { enabled: on });
+  toast(on ? "Las IAs dejan sus tramos esperando tu próximo paso" : "Las IAs pasan sus tareas directo a Hecho"); loadReviews();
+});
 const toggleReview = guard(async () => {
   const on = !S.reviews.enabled;
   if (!(await ask(on ? "¿Exigir revisión humana en este proyecto? Cuando una IA termine una tarea, quedará «en revisión» y una persona tendrá que aprobarla o pedir cambios." : "¿Dejar de exigir revisión en este proyecto? Las IAs volverán a poder pasar tareas a Hecha solas."))) return;
@@ -378,7 +391,7 @@ function onEvent({ type, data }) {
     if (S.open === data.task_id && !S.comments.some((c) => c.id === data.id)) { S.comments.push(data); renderComments(); }
   } else if (type === "notification") {
     S.unread++; if (S.inbox) { S.inbox.notifications.unshift(data); S.inbox.unread++; }
-    toast("🔔 " + data.text);
+    toast("🔔 " + data.text, false, data);
     if (document.getElementById("inbox-modal")) openInbox();
   } else if (type === "canvas_item") {
     if (S.canvas && data.project_id === S.canvas.project_id) {
@@ -536,6 +549,15 @@ const aiCmd = (token, kind, model, key, url) => {
 const editAllow = guard(async (b) => {
   const f = await form("Comandos permitidos de " + b.username, [{ name: "allow", label: "Uno por línea, ej. git clone · cargo build · Bash(npm test:*). Se suman a la lista base (whitelist.txt) del agente. «/permitir siempre …» en un pedido también los agrega acá. Lo prohibido siempre gana.", type: "textarea", value: b.allow || "", max: 4000 }], "Guardar"); if (!f) return;
   await api("PATCH", `/api/bots/${b.id}`, { allow: f.allow }); await loadBots(); toast("Lista guardada");
+});
+const editDeny = guard(async (b) => {
+  const f = await form("Comandos prohibidos de " + b.username, [{ name: "deny", label: "Uno por línea, ej. Bash(rm:*) · Bash(git push:*). La IA no puede ejecutarlos; si los necesita, te avisa con una alarma 🙋.", type: "textarea", value: b.deny || "", max: 4000 }], "Guardar"); if (!f) return;
+  await api("PATCH", `/api/bots/${b.id}`, { deny: f.deny }); await loadBots(); toast("Lista guardada");
+});
+const toggleFull = guard(async (b) => {
+  if (!b.full_access && !(await ask(`«${b.username}» podrá ejecutar CUALQUIER comando salvo los de 🚫 Comandos prohibidos (de la IA y generales). Antes de activarlo revisá esa lista. ¿Activar autorización total?`, "Activar"))) return;
+  await api("PATCH", `/api/bots/${b.id}`, { full_access: !b.full_access }); await loadBots();
+  toast(b.full_access ? "Autorización total apagada" : "Autorización total activada: vale desde la próxima tarea de la IA");
 });
 const createBot = guard(async () => {
   const rn = await api("GET", "/api/runner").catch(() => ({ allowed: false }));
@@ -699,22 +721,44 @@ const commandsDialog = guard(async (b) => {
       h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { onclick: closeIt }, "Cerrar"), h("button", { class: "danger", onclick: saveDeny }, "🚫 Agregar a prohibidos"))));
   document.body.append(box);
 });
+// Perfil confiable: la IA puede todo salvo una lista corta de cosas peligrosas (así no vuelve a pedir permiso por cada cosa)
+const TRUST_DENY = ["Bash(sudo:*)", "Bash(git push:*)", "Bash(git commit:*)", "Bash(rm -rf:*)", "Bash(git reset --hard:*)", "Bash(git clean:*)",
+  "Bash(systemctl:*)", "Bash(dd:*)", "Bash(mkfs:*)", "Bash(cargo publish:*)", "Bash(npm publish:*)"];
+const trustProfile = async (b) => {
+  if (!(await ask(`«${b.username}» va a poder usar todas las herramientas y comandos SIN pedir permiso, salvo estos, que quedan prohibidos:\n\n${TRUST_DENY.map((c) => c.replace(/^Bash\((.*):\*\)$/, "$1")).join(" · ")}\n\nLas listas pasan a manejarse desde la app (los archivos del agente se ignoran). Después podés ajustar lo prohibido en su ficha. ¿Activar?`, "Activar perfil confiable"))) return false;
+  await api("PATCH", `/api/bots/${b.id}`, { full_access: true, deny: mergeLines(b.deny, TRUST_DENY), lists_from_app: true }); await loadBots();
+  toast(`${b.username}: perfil confiable activado, no va a volver a pedir permisos`); return true;
+};
 const botModal = (b) => {
   const admin = can("admin");
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && overlay.remove() },
     h("div", { class: "modal ia" },
       h("h3", {}, `🤖 ${b.username}`, b.model && h("small", { class: "inl" }, " · " + b.model)),
       h("p", {}, `${b.role === "viewer" ? "Lector" : "Miembro"} · token ${b.active ? "activo" : "revocado"} · ${b.last_used ? "último uso " + new Date(b.last_used).toLocaleString() : "sin usar"}${b.created_by ? " · creada por " + b.created_by : ""}${b.full_access ? " · 🔓 autorización total (solo rige lo prohibido)" : ""}`),
+      (!b.lists_from_app && (b.base_deny || b.base_allow)) && (() => {
+        const lines = (t) => (t || "").split("\n").map((l) => l.trim()).filter(Boolean);
+        const [bd, ba] = [lines(b.base_deny), lines(b.base_allow)];
+        const run = (patch, msg) => guard(async () => { await api("PATCH", `/api/bots/${b.id}`, patch); overlay.remove(); await loadBots(); toast(msg); });
+        return h("details", { class: "gh-cfg", open: !b.lists_from_app && bd.length > 0 },
+          h("summary", {}, b.lists_from_app ? "📄 Los archivos del agente (whitelist.txt / blacklist.txt) ya no rigen: las listas se manejan desde acá"
+            : `📄 Rigen también los archivos del agente: ${bd.length} prohibidos y ${ba.length} permitidos (no se borran desde la app)`),
+          bd.length > 0 && h("p", { class: "hint" }, "🚫 blacklist.txt: ", h("code", {}, bd.join("  ·  "))),
+          ba.length > 0 && h("p", { class: "hint" }, "✅ whitelist.txt: ", h("code", {}, ba.join("  ·  "))),
+          admin && h("div", { class: "row" }, b.lists_from_app
+            ? h("button", { onclick: run({ lists_from_app: false }, "Vuelven a regir los archivos del agente") }, "Volver a usar los archivos")
+            : h("button", { class: "primary", title: "Copia esas listas a las de la IA en la app (donde se pueden editar) y el agente deja de leer los archivos", onclick: guard(async () => {
+                if (!(await ask("Se copian las listas de los archivos a las de esta IA en la app y el agente deja de leer los archivos. Después podés quitar de la app lo que no quieras. ¿Pasarlas?", "Pasar a la app"))) return;
+                await run({ deny: mergeLines(b.deny, bd), allow: mergeLines(b.allow, ba), lists_from_app: true }, "Listas pasadas a la app: ahora las editás desde 🚫 y ✅")();
+              }) }, "Pasar a la app (para editarlas acá)")));
+      })(),
       h("div", { class: "row botonera" },
         admin && h("button", { onclick: guard(async () => {
           const f = await form("IA / modelo", [{ name: "model", label: "Qué IA es (ej. claude:Opus)", value: b.model, max: 40 }], "Guardar"); if (!f) return;
           await api("PATCH", `/api/bots/${b.id}`, { model: f.model }); overlay.remove(); await loadBots();
         }) }, "Cambiar modelo"),
-        admin && h("button", { onclick: guard(async () => {
-          const f = await form("Comandos prohibidos", [{ name: "deny", label: "Uno por línea, ej. Bash(rm:*) · Bash(git push:*). La IA no puede ejecutarlos; si los necesita, te avisa con una alarma 🙋.", type: "textarea", value: b.deny || "", max: 4000 }], "Guardar"); if (!f) return;
-          await api("PATCH", `/api/bots/${b.id}`, { deny: f.deny }); overlay.remove(); await loadBots(); toast("Lista guardada");
-        }) }, "🚫 Comandos prohibidos"),
+        admin && h("button", { onclick: guard(async () => { overlay.remove(); await editDeny(b); }) }, "🚫 Comandos prohibidos"),
         admin && h("button", { title: "Comandos que esta IA puede usar sin pedir permiso", onclick: guard(async () => { await editAllow(b); overlay.remove(); }) }, "✅ Comandos permitidos"),
+        admin && h("button", { class: "primary", title: "Autorización total con una lista corta de cosas peligrosas prohibidas: la IA no vuelve a pedir permisos", onclick: guard(async () => { if (await trustProfile(b)) { overlay.remove(); } }) }, "⚡ Perfil confiable"),
         admin && h("button", { title: "Lo que esta IA suele pedir y un catálogo de comandos comunes para sumar a lo permitido", onclick: () => { overlay.remove(); commandsDialog(b); } }, "📋 Comandos habituales"),
         admin && h("button", { class: b.full_access ? "danger" : "", title: "Permitir todo menos lo que figura en 🚫 Comandos prohibidos", onclick: guard(async () => {
           if (!b.full_access && !(await ask(`«${b.username}» podrá ejecutar CUALQUIER comando salvo los de 🚫 Comandos prohibidos (de la IA y generales). Antes de activarlo revisá esa lista: git push, rm -rf, sudo, systemctl… ¿Activar autorización total?`, "Activar"))) return;
@@ -1005,7 +1049,7 @@ const openTask = guard(async (task) => {
   const start = h("input", { type: "date", value: cur().start ? cur().start.slice(0, 10) : "" });
   const rec = h("select", { disabled: !can("member") }, RECUR.map(([v, l]) => h("option", { value: v, selected: (cur().recurrence || "") === v }, l)));
   const due = h("input", { type: "date", value: cur().due ? cur().due.slice(0, 10) : "" });
-  const comment = h("input", { placeholder: "Escribí un comentario…", maxLength: 4000 });
+  const comment = h("textarea", { class: "comment-in", rows: 9, placeholder: "Escribí un comentario o el siguiente prompt… (Enter = línea nueva · Ctrl+Enter = enviar)", maxLength: 4000 });
 
   // etiquetas: chips que se alternan + alta de etiqueta nueva
   const labelBox = h("div", { class: "chips" });
@@ -1119,7 +1163,7 @@ const openTask = guard(async (task) => {
     if (!S.comments.some((x) => x.id === c.id)) S.comments.push(c);
     renderComments();
   });
-  comment.addEventListener("keydown", (e) => e.key === "Enter" && send());
+  comment.addEventListener("keydown", (e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && send());
 
   // tarea de pedido de una IA («🙋 Pedido de #N: …»): comandos para copiar, dónde pegar la salida y botones de respuesta
   const requestPanel = () => {
@@ -1146,6 +1190,8 @@ const openTask = guard(async (task) => {
     const fenced = [...askText.matchAll(/```[a-z]*\n?([\s\S]*?)```/g)].flatMap((m) => m[1].split("\n")).map((l) => l.replace(/^\$ /, "").trim()).filter((l) => l.length > 1);
     const askCmds = [...new Set(fenced.concat([...askText.replace(/```[\s\S]*?```/g, "").matchAll(/`([^`\n]+)`/g)].map((m) => m[1]).concat([...askText.matchAll(/'([a-z][^'\n]*\s[^'\n]*)'/g)].map((m) => m[1]))))].map((c) => c.trim()).filter(Boolean);
     // lista de comandos pedidos: se puede quitar los que no querés y permitir todo junto
+    // herramientas de Claude que no son comandos de terminal (búsqueda web, MCP…): también se autorizan desde acá
+    for (const t of [...new Set([...askText.matchAll(/\b(WebSearch|WebFetch|NotebookEdit|mcp__[\w-]+(?:__[\w*-]+)?)\b/g)].map((m) => m[1]))].reverse()) if (!askCmds.includes(t)) askCmds.unshift(t);
     let keep = [...askCmds];
     const cmdList = h("div", { class: "cmdlist" });
     const grantAll = guard(async () => {
@@ -1153,6 +1199,15 @@ const openTask = guard(async (task) => {
       for (const cmd of keep) await api("POST", `/api/tasks/${task.id}/grant`, { command: cmd, always: true });
       await reply(`✅ Autorizados (siempre): ${keep.map((c) => "`" + c + "`").join(", ")}. La IA los puede usar en su próxima ejecución.`, true);
     });
+    const authorizeAll = guard(async () => {
+      const b = askBot();
+      const fresh = keep.filter((c) => !allowedLines().includes(c));
+      if (b) for (const cmd of fresh) await api("POST", `/api/tasks/${task.id}/grant`, { command: cmd, always: true });
+      const text = keep.length ? `✅ Autorizado (siempre): ${keep.map((c) => "`" + c + "`").join(", ")}. La IA retoma la tarea sola.` : "✅ Autorizado: seguí.";
+      if (b) await loadBots();
+      await reply(text, true);
+    });
+    const trustBot = guard(async () => { const b = askBot(); if (!b) return toast("No encuentro a esa IA en este equipo", true); if (await trustProfile(b)) await reply("✅ Perfil confiable activado: ya no vas a necesitar pedir permisos (salvo lo prohibido). Seguí.", true); });
     // la IA que pidió ayuda y lo que ya tiene permitido: un comando de la lista puede estar ya autorizado y se quita de ahí
     const whoAsks = (cur().description.match(/La IA «([^»]+)»/) || [])[1];
     const askBot = () => (S.bots || []).find((x) => x.username === whoAsks);
@@ -1169,8 +1224,7 @@ const openTask = guard(async (task) => {
           allowedLines().includes(cmd) && can("admin") && h("button", { class: "ghost", title: "Este comando ya está permitido para la IA: sacarlo de su lista de permitidos", onclick: () => unallow(cmd) }, "🗑 Quitar de la lista de la IA"),
           h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋"),
           h("button", { class: "danger", title: "Quitar este comando de la lista (no se permite)", onclick: () => { keep = keep.filter((c) => c !== cmd); drawCmds(); } }, "✕"))),
-        keep.length > 0 && can("admin") && h("button", { class: "primary", title: "Agrega todos los comandos de la lista a los permitidos de esta IA, le avisa y marca el pedido como Hecho", onclick: () => grantAll() }, `✅ Permitir ${keep.length > 1 ? "los " + keep.length + " comandos" : "el comando"} siempre`),
-        keep.length < askCmds.length && h("button", { class: "ghost", onclick: () => { keep = [...askCmds]; drawCmds(); } }, "↩ Restaurar quitados"));
+        keep.length < askCmds.length ? h("button", { class: "ghost", onclick: () => { keep = [...askCmds]; drawCmds(); } }, "↩ Restaurar quitados") : "");
     };
     drawCmds();
     return h("div", { class: "reqpanel" },
@@ -1183,18 +1237,20 @@ const openTask = guard(async (task) => {
       h("div", {}, h("b", {}, cmds.length ? "2. Pegá la salida acá y enviala:" : "Respondé acá:"), out,
         h("small", { class: "hint" }, "Se publica como comentario de esta tarea y le llega sola a la IA (también queda en su tarea original).")),
       h("div", { class: "row" },
-        h("button", { class: "primary", title: "Publica la salida como comentario y marca el pedido como Hecho", onclick: () => out.value.trim() ? reply("📤 Salida:\n" + out.value.trim(), true).then(() => (out.value = "")) : toast("Pegá primero la salida", true) }, "📤 Enviar salida a la IA"),
+        can("admin") ? h("button", { class: "primary big", title: "Permite siempre lo que pide la IA (comandos y herramientas de la lista), le avisa y marca el pedido como Hecho: la IA retoma sola", onclick: authorizeAll },
+          keep.length ? `✅ Autorizar y que la IA siga (${keep.length})` : "✅ Autorizar y que la IA siga")
+          : h("button", { class: "primary", onclick: () => reply("✅ Autorizado: seguí.", true) }, "✅ Autorizar"),
         h("span", { class: "spacer" }),
-        h("button", { title: "Le responde a la IA que sí: úsalo cuando el pedido es una decisión", onclick: () => reply("✅ Autorizado: seguí.", true) }, "✅ Autorizar"),
-        can("admin") && h("button", { title: "Abre la lista de comandos permitidos de la IA que pidió ayuda, para sumar el comando a mano", onclick: guard(async () => {
-          const who = (cur().description.match(/La IA «([^»]+)»/) || [])[1];
-          const bot = (S.bots || []).find((x) => x.username === who);
-          if (!bot) return toast("No encuentro a esa IA en este equipo", true);
-          await editAllow(bot);
-        }) }, "⚙ Lista de la IA"),
-        can("admin") && h("button", { class: "primary", title: "Te muestra qué comando pide la IA, qué hace, y elegís si lo permitís solo esta vez o siempre", onclick: () => grantCmd() }, "✅ Permitir comando…"),
         h("button", { class: "danger", title: "Le responde a la IA que no; podés escribir el motivo arriba", onclick: () => reply("❌ No autorizado." + (out.value.trim() ? "\n" + out.value.trim() : ""), true).then(() => (out.value = "")) }, "❌ Rechazar")),
-      h("small", { class: "hint" }, "«Autorizar» es para decisiones (¿puedo borrar X?). Si la IA no puede ejecutar un comando porque está bloqueado, ejecutalo vos y enviá la salida."));
+      can("admin") && askBot() && h("div", { class: "row" }, h("button", { class: "ghost", title: "Autorización total con una lista corta de cosas peligrosas prohibidas: la IA deja de pedir permisos", onclick: trustBot }, "🔓 Que esta IA no vuelva a pedir permisos (perfil confiable)")),
+      h("details", {}, h("summary", {}, "Más opciones"),
+        h("div", { class: "row" },
+          h("button", { class: "primary", title: "Publica la salida como comentario y marca el pedido como Hecho", onclick: () => out.value.trim() ? reply("📤 Salida:\n" + out.value.trim(), true).then(() => (out.value = "")) : toast("Pegá primero la salida", true) }, "📤 Enviar salida a la IA"),
+          can("admin") && h("button", { title: "Abre la lista de comandos permitidos de la IA, para sumar uno a mano", onclick: guard(async () => {
+            const bot = askBot(); if (!bot) return toast("No encuentro a esa IA en este equipo", true); await editAllow(bot);
+          }) }, "⚙ Lista de la IA"),
+          can("admin") && h("button", { title: "Elegir un comando y si se permite solo esta vez o siempre", onclick: () => grantCmd() }, "Permitir solo uno…")),
+        h("small", { class: "hint" }, "Si un comando está bloqueado, también podés ejecutarlo vos y enviar la salida.")));
   };
 
   // revisión del trabajo de la IA: aprobar o pedir cambios, e historial
@@ -1251,21 +1307,23 @@ const openTask = guard(async (task) => {
         } }, store.get("taskMax") === "1" ? "⤡ Restaurar" : "⤢ Maximizar")),
       requestPanel(),
       reviewPanel(),
-      h("label", {}, "Título", title),
-      h("label", {}, "Descripción", desc),
-      can("member") && budgetBox(cur(), title, desc),
-      h("h3", {}, "Etiquetas"), labelBox, newLabel,
-      h("h3", {}, "Subtareas"), subBox, newSub,
       h("div", { class: "grid2" },
         h("label", {}, "Estado", status), h("label", {}, "Prioridad", prio),
         h("label", {}, "Responsable", who), h("label", {}, "Empieza", start),
         h("label", {}, "Vence", due), h("label", {}, "Repetición", rec), h("small", { class: "hint" }, whoHint)),
+      h("label", {}, "Título", title),
+      h("label", {}, "Descripción", desc),
+      can("member") && budgetBox(cur(), title, desc),
       ghBox,
-      h("h3", {}, "Depende de"), depBox, depAdd,
-      h("h3", {}, "Adjuntos"), attBox, attAdd,
       h("h3", {}, "Comentarios"),
       h("div", { class: "comments", id: "comments" }),
       comment,
+      h("div", { class: "row" }, h("small", { class: "hint" }, "Ctrl+Enter envía"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: send }, "Enviar comentario")),
+      h("details", { class: "more" }, h("summary", {}, "🏷 Etiquetas, subtareas, dependencias y adjuntos"),
+        h("h3", {}, "Etiquetas"), labelBox, newLabel,
+        h("h3", {}, "Subtareas"), subBox, newSub,
+        h("h3", {}, "Depende de"), depBox, depAdd,
+        h("h3", {}, "Adjuntos"), attBox, attAdd),
       h("div", { class: "row" },
         can("member") && h("button", { class: "danger", onclick: del }, "Borrar"),
         h("button", { onclick: () => { closeModal(); openMindmap(cur()); } }, "Mapa mental"), h("span", { class: "spacer" }),
@@ -1297,11 +1355,20 @@ function loginView() {
       S.register ? "Ya tengo cuenta" : "Crear una cuenta")));
 }
 
+// una IA está ejecutando la tarea: En curso, asignada a una IA y sin estar en la zona de espera
+const aiRunning = (t) => t.status === "doing" && !t.waiting && !!S.members?.find((m) => m.id === t.assignee_id)?.bot;
+function sinceTxt(iso) {
+  const m = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  return m < 1 ? "recién empezó" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+setInterval(() => document.querySelectorAll(".ai-since").forEach((e) => (e.textContent = "🤖 " + sinceTxt(e.dataset.since))), 30000);
 function taskCard(t) {
   const late = t.due && t.status !== "done" && new Date(t.due) < new Date();
   const card = h("div", { class: "card", draggable: true, onclick: () => openTask(t) },
     h("div", { class: "title" }, h("span", { class: "tid" }, "#" + t.id), " ", t.title),
     t.labels?.length > 0 && h("div", { class: "chips" }, t.labels.map((l) => h("span", { class: "chip on", style: `--c:${l.color}` }, l.name))),
+    aiRunning(t) && h("div", { class: "ai-run", title: "Una IA está trabajando en esta tarea (el tiempo cuenta desde la última vez que se movió)" },
+      h("div", { class: "ai-bar" }), h("small", { class: "ai-since", "data-since": t.updated_at }, "🤖 " + sinceTxt(t.updated_at))),
     t.subtasks_total > 0 && h("div", { class: "progress", title: `${t.subtasks_done}/${t.subtasks_total} subtareas` },
       h("div", { class: "bar", style: `width:${Math.round(100 * t.subtasks_done / t.subtasks_total)}%` })),
     h("div", { class: "meta" },
@@ -1316,12 +1383,12 @@ function taskCard(t) {
   card.addEventListener("dragend", () => card.classList.remove("dragging"));
   card.addEventListener("dragover", (e) => { if (can("member")) { e.preventDefault(); e.stopPropagation(); card.classList.add("drop-before"); } });
   card.addEventListener("dragleave", () => card.classList.remove("drop-before"));
-  card.addEventListener("drop", (e) => { e.preventDefault(); e.stopPropagation(); card.classList.remove("drop-before"); moveTask(+e.dataTransfer.getData("text/plain"), t.status, t.id); });
+  card.addEventListener("drop", (e) => { e.preventDefault(); e.stopPropagation(); card.classList.remove("drop-before"); moveTask(+e.dataTransfer.getData("text/plain"), t.status, t.id, t.waiting); });
   return card;
 }
 
 // mueve una tarea a la columna `status`, justo antes de `beforeId` (o al final); el orden manual manda sobre la prioridad
-function moveTask(id, status, beforeId) {
+function moveTask(id, status, beforeId, waiting) {
   const t = S.tasks.find((x) => x.id === id);
   if (!t || !can("member") || id === beforeId) return;
   const col = S.tasks.filter((x) => !x.parent_id && x.status === status && x.id !== id).sort(byOrder);
@@ -1329,9 +1396,11 @@ function moveTask(id, status, beforeId) {
   if (i < 0) return;
   const prev = col[i - 1]?.position, next = col[i]?.position;
   const position = prev == null ? (next == null ? t.position : next - 1) : next == null ? prev + 1 : (prev + next) / 2;
-  if (position === t.position && status === t.status) return;
+  const w = status === "doing" && !!waiting;
+  if (position === t.position && status === t.status && w === !!t.waiting) return;
   const patch = { position };
   if (status !== t.status) patch.status = status;
+  if (status === "doing" || t.waiting) patch.waiting = w;
   Object.assign(t, patch); render(); patchTask(id, patch);
 }
 const byOrder = (a, b) => a.position - b.position || a.id - b.id;
@@ -1343,9 +1412,16 @@ function column(s) {
       || t.labels.some((l) => l.name.toLowerCase().includes(q))))
     // en «Hecho» lo último que se terminó va arriba; en las demás, el orden manual
     .sort(s.id === "done" ? (a, b) => String(b.updated_at).localeCompare(String(a.updated_at)) : byOrder);
+  const split = s.id === "doing" && (S.hold?.enabled || tasks.some((t) => t.waiting));
+  const waitTasks = split ? tasks.filter((t) => t.waiting) : [];
+  const waitZone = split && h("div", { class: "wait-zone" },
+    h("div", { class: "wait-head" }, "⏳ Esperando tu próximo paso", h("span", { class: "count" }, waitTasks.length)),
+    h("div", { class: "cards" }, waitTasks.length ? waitTasks.map(taskCard) : h("small", { class: "hint" }, "Acá queda lo que la IA entrega por tramos. Comentá para que siga, o pasalo a Hecho.")));
+  waitZone && waitZone.addEventListener("drop", (e) => { e.preventDefault(); e.stopPropagation(); col.classList.remove("over"); moveTask(+e.dataTransfer.getData("text/plain"), "doing", null, true); });
   const col = h("section", { class: "col" },
     h("header", {}, h("span", { class: "bar", style: `background:${s.color}` }), s.label, h("span", { class: "count" }, tasks.length)),
-    h("div", { class: "cards" }, tasks.map(taskCard)),
+    h("div", { class: "cards" }, (split ? tasks.filter((t) => !t.waiting) : tasks).map(taskCard)),
+    waitZone,
     can("member") && h("button", { class: "add", onclick: () => createTask(s.id) }, "+ Nueva tarea"));
   col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("over"); });
   col.addEventListener("dragleave", () => col.classList.remove("over"));
@@ -1397,6 +1473,7 @@ function appView() {
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openSchedules, title: "Tareas que se crean solas a una hora fija: cada día, semana o mes" }, "⏰ Programadas"),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
         S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
+        S.project && !S.portfolio && !S.terms && can("admin") && S.hold && h("button", { class: S.hold.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA termina queda «⏳ esperando tu próximo paso» (En curso) y vos lo pasás a Hecho; al comentarlo, la IA lo retoma. Apagado: pasa directo a Hecho.", onclick: toggleHold }, "⏳ Continuación: " + (S.hold.enabled ? "sí" : "no")),
         S.project && !S.portfolio && !S.terms && can("admin") && S.reviews && h("button", { class: S.reviews.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA da por terminado queda «en revisión» hasta que una persona lo apruebe (planes Equipo y Empresa)", onclick: toggleReview }, "🔎 Revisión: " + (S.reviews.enabled ? "sí" : "no")),
         S.project && !S.portfolio && !S.terms && can("member") && h("button", { onclick: githubProject, title: "GitHub: traer issues como tareas, estado de PR y pruebas, ajustes del proyecto" }, "🐙 GitHub" + ({ success: " ✅", failure: " ❌", pending: " ⏳" }[S.ghCi] || "")),
         S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
@@ -1428,7 +1505,7 @@ function appView() {
       h("button", { class: "cfg-btn", onclick: openSettings, title: "Configuración (,)" }, "⚙  Configuración"),
       h("button", { class: "cfg-btn", onclick: () => openManual(), title: "Manual con buscador e índice por temas" }, "📖  Manual"),
       h("div", { class: "me" }, h("span", { class: "live" + (S.online ? " on" : ""), title: S.online ? "en vivo" : "desconectado" }),
-        S.user?.username, h("span", { class: "spacer" }),
+        h("span", { title: S.team ? `Tu rol en «${S.team.name}»` : "" }, S.user?.username, S.team && h("small", { class: "hint" }, " · " + (ROLES.find(([r]) => r === myRole())?.[1] || ""))), h("span", { class: "spacer" }),
         h("button", { class: "ghost bell" + (S.unread ? " has" : ""), title: "Bandeja de novedades (Ctrl+T n)", onclick: () => loadInbox(false) }, S.unread ? `🔔 ${S.unread}` : "🔔"),
         h("button", { class: "ghost", onclick: helpModal, title: "Atajos y ayuda (?)" }, "?"),
         h("button", { class: "ghost", onclick: logout }, "Salir"),
@@ -1436,7 +1513,11 @@ function appView() {
     h("main", {},
       h("div", { class: "top" }, barTop),
       S.project && !S.portfolio && !S.terms && (S.project.work_dir || S.project.repo) && h("div", { class: "proj-meta" },
-        S.project.work_dir && h("span", { title: "Carpeta de trabajo" }, "📁 " + S.project.work_dir),
+        S.project.work_dir && h("span", { title: "Carpeta de trabajo" }, "📁 " + S.project.work_dir, " ",
+          h("button", { class: "ghost", title: "Abrir la carpeta (en la máquina del servidor); si no se puede, copia la ruta", onclick: async () => {
+            try { await api("POST", `/api/projects/${S.project.id}/open-folder`); toast("Carpeta abierta"); }
+            catch (e) { copy(S.project.work_dir, "No se pudo abrir: ruta copiada"); }
+          } }, "📂 Abrir")),
         S.project.repo && h("span", { title: "Repositorio" }, "🔗 " + S.project.repo)),
       S.terms ? termsView() : S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
         : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos"),
@@ -1568,7 +1649,7 @@ const CFG_HELP = {
   license: ["Licencia", "La app es software libre (AGPL-3.0): podés usarla gratis cumpliendo esa licencia. Si tu empresa prefiere no cumplirla, existe una licencia comercial anual. Acá ves el estado y, si sos la primera persona registrada, podés comprarla.", null],
   guide: ["Guía de inicio", "Un asistente corto con dibujos que te lleva a dejar todo andando: equipo, proyecto e IA. Se abre solo la primera vez y la podés repetir cuando quieras.", null],
   cmds: ["Comandos para todas las IAs", "Son los comandos que cualquier IA del servidor puede usar sin pedir permiso (permitidos) y los que nunca puede usar (prohibidos). Se suman a la lista propia de cada IA, que está en su ficha. Lo prohibido siempre gana. Un comando se escribe así: git clone, cargo build o Bash(npm test:*).", "Solo la primera persona registrada edita estas listas. Los archivos whitelist.txt y blacklist.txt del agente son la base; estas listas se suman a ellas."],
-  digest: ["Cómo recibís los avisos", "Elegí si los avisos por Telegram y email llegan uno por uno, o juntos en un solo mensaje por día a la hora que quieras (lo normal: 09:00, en tu zona horaria). La bandeja de la app siempre se actualiza al instante, y los pedidos de ayuda de una IA (🙋) salen siempre al momento.", null],
+  digest: ["Cómo recibís los avisos", "Resumen: los avisos por Telegram y email llegan juntos en un solo mensaje, una vez por día a la hora que elijas o cada 1, 2, 3, 6 o 12 horas. Uno por uno: cada aviso sale al momento. 🔕 Silencioso: no te llega nada por Telegram ni email (ni siquiera los pedidos 🙋 de las IAs). ⏸ Pausar: silencio por un rato (1 hora a 1 semana) y después vuelve solo a como lo tenías. La bandeja de la app siempre se actualiza al instante. Fuera del silencio, los pedidos de ayuda de una IA (🙋) salen siempre al momento.", null],
   reports: ["Informes automáticos", "Un resumen diario o semanal del equipo: qué terminaron las personas y las IAs, cuánto gastaron las IAs y qué quedó trabado. Te llega a la bandeja y, si querés, por Telegram y email.", null],
   telegram: ["Telegram", "Tocá «Vincular», abrí el bot que se muestra y mandale /start CÓDIGO. Después recibís las novedades en Telegram y podés usar /tareas, /hecho N (marca la tarea N como hecha) y /stop (desvincula).",
     "Creá un bot con @BotFather en Telegram y arrancá tm-server con TM_TELEGRAM_TOKEN=<token>. No necesita URL pública (usa long polling). Sin el token, esta fila dice «el servidor no tiene el bot configurado»."],
@@ -1589,6 +1670,7 @@ const CFG_HELP = {
   duplicate: ["Usar como plantilla", "Crea un proyecto nuevo copiando las tareas, etiquetas y dependencias del actual, para repetir un proceso sin armarlo de cero.", null],
   export: ["Exportar", "Descarga todas las tareas del proyecto en CSV (para planilla) o JSON (para copia de seguridad o scripts).", null],
   bars: ["Posición de los botones", "Elegí si los botones del proyecto (Programadas, Consumo, GitHub, Proyecto, Equipo…) y las vistas con el buscador (Tablero, Calendario, Gantt…) van arriba o abajo de la pantalla. Se guarda solo en este dispositivo.", null],
+  toastSecs: ["Aviso emergente", "El cartelito que aparece abajo cuando llega un aviso. Elegí cuánto queda visible, o que se quede hasta que lo toques. Si el aviso es de una tarea, tocarlo abre la tarea para leerlo completo; si no, lo cierra. Se guarda solo en este dispositivo.", null],
   herdr: ["Terminal con herdr", "Al abrir la terminal de una tarea se abre herdr (un panel de terminales) en la carpeta del proyecto, si la máquina lo tiene. Apagalo si preferís una terminal común. Se guarda solo en este dispositivo.", null],
   view: ["Vista inicial", "Qué vista se abre primero en este dispositivo: tablero, calendario, Gantt, pizarra o actividad. Se cambia en cualquier momento con las teclas 1 a 5.", null],
   server: ["Servidor", "Es la dirección donde corre tm-server (por ejemplo https://tareas.miempresa.com). En la web propia del servidor no se cambia; en la app de escritorio o la TUI la escribís una vez y volvés a iniciar sesión.",
@@ -1757,18 +1839,26 @@ const openSettings = guard(async () => {
   const emailState = !me.email ? "sin cargar" : me.email_verified ? `✓ ${me.email}` : `${me.email} (sin verificar)`;
 
   // cómo llegan los avisos por Telegram y email: resumen a una hora fija (lo normal) o uno por uno
-  const np = S.notifyPrefs || { mode: "digest", hour: 9 };
+  const np = S.notifyPrefs || { mode: "digest", hour: 9, every_h: 0 };
   if (!S.notifyPrefs) api("GET", "/api/me/notify-prefs").then((v) => { S.notifyPrefs = v; if (document.getElementById("settings-modal")) openSettings(); }).catch(() => {});
-  const saveNp = guard(async (mode, hour) => {
-    S.notifyPrefs = { mode, hour };
-    await api("PUT", "/api/me/notify-prefs", { mode, hour, tz_offset: -new Date().getTimezoneOffset() });
-    toast(mode === "digest" ? `Resumen diario a las ${String(hour).padStart(2, "0")}:00` : "Avisos uno por uno"); 
+  const muted = np.mute_until && new Date(np.mute_until) > new Date();
+  const saveNp = guard(async (mute) => {
+    const v = { mode: npMode.value, hour: +npHour.value, every_h: +npEvery.value, tz_offset: -new Date().getTimezoneOffset(), mute_hours: mute === undefined ? (muted ? Math.max(1, Math.ceil((new Date(np.mute_until) - new Date()) / 36e5)) : 0) : mute };
+    S.notifyPrefs = await api("PUT", "/api/me/notify-prefs", v).then(() => api("GET", "/api/me/notify-prefs"));
+    toast(v.mute_hours ? `Avisos pausados ${v.mute_hours} h` : v.mode === "silent" ? "Modo silencioso: Telegram y email no te molestan" : v.mode === "digest" ? (v.every_h ? `Resumen cada ${v.every_h} h` : `Resumen diario a las ${String(v.hour).padStart(2, "0")}:00`) : "Avisos uno por uno");
+    if (document.getElementById("settings-modal")) openSettings();
   });
-  const npMode = h("select", { onchange: (e) => saveNp(e.target.value, +npHour.value) },
-    h("option", { value: "digest", selected: np.mode === "digest" }, "Un resumen por día"), h("option", { value: "instant", selected: np.mode === "instant" }, "Uno por uno, al instante"));
-  const npHour = h("select", { disabled: np.mode === "instant", onchange: (e) => saveNp(npMode.value, +e.target.value) },
-    Array.from({ length: 24 }, (_, i) => h("option", { value: i, selected: i === np.hour }, String(i).padStart(2, "0") + ":00")));
-  npMode.addEventListener("change", () => { npHour.disabled = npMode.value === "instant"; });
+  const opt = (val, cur, txt) => h("option", { value: val, selected: val === cur }, txt);
+  const npMode = h("select", { title: "Cómo te llegan los avisos por Telegram y email (la bandeja de la app siempre se llena)", onchange: () => saveNp() },
+    opt("digest", np.mode, "Resumen"), opt("instant", np.mode, "Uno por uno"), opt("silent", np.mode, "🔕 Silencioso"));
+  const npEvery = h("select", { disabled: np.mode !== "digest", title: "Cada cuánto sale el resumen", onchange: () => saveNp() },
+    opt(0, np.every_h || 0, "una vez por día"), ...[1, 2, 3, 6, 12].map((n) => opt(n, np.every_h, `cada ${n} h`)));
+  const npHour = h("select", { disabled: np.mode !== "digest" || !!np.every_h, title: "Hora del resumen diario", onchange: () => saveNp() },
+    Array.from({ length: 24 }, (_, i) => opt(i, np.hour, String(i).padStart(2, "0") + ":00")));
+  const npPause = h("select", { title: "Pausa temporal: no llega nada por Telegram ni email hasta que pase el tiempo", onchange: (e) => { const v = +e.target.value; if (v >= 0) saveNp(v); } },
+    h("option", { value: -1, selected: true }, muted ? "⏸ hasta " + new Date(np.mute_until).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "⏸ Pausar…"),
+    ...(muted ? [h("option", { value: 0 }, "▶ Reanudar ahora")] : []),
+    h("option", { value: 1 }, "1 hora"), h("option", { value: 4 }, "4 horas"), h("option", { value: 12 }, "12 horas"), h("option", { value: 24 }, "1 día"), h("option", { value: 168 }, "1 semana"));
 
   const items = [
       S.team && sec("", line(["Informes automáticos del equipo (resumen diario o semanal)", "reports"], h("button", { onclick: go(openReports) }, "Configurar"))),
@@ -1778,7 +1868,7 @@ const openSettings = guard(async () => {
         line([`Telegram: ${tgState}`, "telegram"], me.telegram_available && (me.telegram_linked
           ? h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/telegram"); close(); openSettings(); }) }, "Desvincular")
           : h("button", { onclick: () => { close(); linkTelegram(); } }, "Vincular"))),
-        line(["Cómo recibís los avisos (Telegram y email)", "digest"], npMode, npHour),
+        line(["Cómo recibís los avisos (Telegram y email)", "digest"], npMode, npEvery, npHour, npPause),
         line([`GitHub: ${!gh.available ? "el servidor no tiene GitHub configurado" : gh.linked ? "✓ conectado como @" + gh.login : "sin conectar"}`, "github"], gh.available && (gh.linked
           ? h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Desconectar tu cuenta de GitHub?"))) return; await api("DELETE", "/api/github"); close(); openSettings(); }) }, "Desconectar")
           : h("button", { onclick: () => { close(); linkGithub(); } }, "Conectar"))),
@@ -1802,6 +1892,18 @@ const openSettings = guard(async () => {
         can("member") && line(["Enviar un mensaje al equipo", "message"], h("button", { onclick: go(sendTeamMessage) }, "Escribir")),
         line(["Miembros, roles e invitaciones", "members"], h("button", { onclick: go(openTeam) }, "Administrar")),
         can("admin") && line(["Agentes de IA: que trabajen solos (tm-agent)", "agents"], h("button", { onclick: go(agentsGuide) }, "Ver instructivo")),
+        can("admin") && (S.bots || []).length > 0 && line(["Permisos de cada IA: perfil confiable, autorización total y listas de comandos", "cmds"], (() => {
+          const sel = h("select", {}, (S.bots || []).map((b) => h("option", { value: b.id }, b.username + (b.full_access ? " 🔓" : ""))));
+          const pick = () => (S.bots || []).find((b) => String(b.id) === sel.value);
+          const btn = (label, title, fn, cls) => h("button", { class: cls || "", title, onclick: () => { const b = pick(); if (b) { close(); fn(b); } } }, label);
+          return h("div", { class: "row wrap" }, sel,
+            btn("⚡ Perfil confiable", "Autorización total con una lista corta de cosas peligrosas prohibidas: la IA deja de pedir permisos", trustProfile, "primary"),
+            btn("🔒 Autorización total", "Activar o apagar: la IA puede todo salvo lo prohibido", toggleFull),
+            btn("📋 Comandos habituales", "Lo que la IA pidió antes y un catálogo para permitir", commandsDialog),
+            btn("✅ Permitidos", "Lista de comandos permitidos de la IA", editAllow),
+            btn("🚫 Prohibidos", "Lista de comandos prohibidos de la IA", editDeny),
+            btn("Ficha", "Abrir la ficha de la IA", botModal));
+        })()),
         line(["Unirme a otro equipo con un código", "join"], h("button", { onclick: go(joinWithCode) }, "Unirme")),
         line(["Crear un equipo nuevo", "newTeam"], h("button", { onclick: go(createTeam) }, "Crear"))),
       S.team && sec("Perfil de uso",
@@ -1866,6 +1968,11 @@ const openSettings = guard(async () => {
           const cb = h("input", { type: "checkbox", checked: store.get("autoHerdr") !== "0" });
           cb.onchange = () => { store.set("autoHerdr", cb.checked ? "1" : "0"); toast(cb.checked ? "herdr automático: sí" : "herdr automático: no"); };
           return cb;
+        })()),
+        line(["Cuánto queda visible el aviso emergente", "toastSecs"], (() => {
+          const cur = parseFloat(store.get("toastSecs")); const v = cur >= 0 ? cur : 6;
+          return h("select", { onchange: (e) => { store.set("toastSecs", e.target.value); toast("Así de largo se verá este aviso"); } },
+            [[3.5, "3 segundos"], [6, "6 segundos (normal)"], [12, "12 segundos"], [30, "30 segundos"], [0, "Hasta que lo toque"]].map(([n, l]) => h("option", { value: n, selected: n === v }, l)));
         })()),
         line(["Servidor", "server"], server),
         IS_WEB ? h("small", {}, "Estás usando la web del propio servidor: la dirección no se cambia desde acá.")

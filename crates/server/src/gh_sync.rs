@@ -25,6 +25,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/projects/{id}/github/settings", get(get_cfg).put(put_cfg))
         .route("/api/projects/{id}/github/now", post(sync_now))
+        .route("/api/projects/{id}/open-folder", post(open_folder))
         .route("/api/tasks/{id}/github/publish", post(publish_task))
         .route("/api/tasks/{id}/github/pr", post(open_pr))
         .route("/api/github/webhook/{id}", post(webhook))
@@ -158,6 +159,21 @@ async fn sync_now(State(st): State<AppState>, user: AuthUser, Path(project): Pat
         sqlx::query("INSERT INTO project_github_cfg (project_id, owner_user) VALUES (?, ?)").bind(project).bind(user.id).execute(&st.db).await?;
     }
     Ok(Json(sync_project(&st, project).await?))
+}
+
+/// Abre la carpeta de trabajo del proyecto en el escritorio de la máquina donde corre el servidor.
+async fn open_folder(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let team = routes::team_of_project(&st, project).await?;
+    routes::ensure_writer(&st, team, user.id).await?;
+    let dir: String = sqlx::query_scalar("SELECT work_dir FROM projects WHERE id = ?").bind(project).fetch_one(&st.db).await.unwrap_or_default();
+    if dir.trim().is_empty() || !std::path::Path::new(&dir).is_dir() {
+        return Err(AppError::bad("la carpeta no existe en la máquina del servidor"));
+    }
+    std::process::Command::new("xdg-open").arg(&dir)
+        .stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
+        .spawn().map_err(|_| AppError::bad("no se pudo abrir (falta xdg-open en el servidor)"))?;
+    Ok(Json(json!({ "ok": true })))
 }
 
 /// Un recorrido completo: issues cerrados, Pull Requests, comentarios, tareas por publicar, pruebas y commits.
@@ -410,7 +426,7 @@ async fn open_pr(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id
 
 /// Cuando una IA termina una tarea de un proyecto con «Pull Request» activado, se avisa a quien configuró GitHub.
 pub async fn after_update(st: &AppState, user: &AuthUser, before: &tm_core::Task, after: &tm_core::Task) {
-    if !user.bot || after.status != Status::Done || before.status == Status::Done {
+    if !user.bot || !(after.status == Status::Done || after.waiting) || (before.status == Status::Done || before.waiting) {
         return;
     }
     let Ok(Some(cfg)) = load(st, after.project_id).await else { return };

@@ -28,6 +28,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/me/deny", get(my_deny))
         .route("/api/me/allow", get(my_allow))
         .route("/api/bots/{uid}/suggest", get(suggest_cmds))
+        .route("/api/me/base-lists", post(set_base_lists))
         .route("/api/tasks/{id}/grant", post(grant_cmd))
         .route("/api/tasks/{id}/grants", get(task_grants))
         .route("/api/tasks/{id}/grants/claim", post(claim_grants))
@@ -52,6 +53,8 @@ struct UpdateBot {
     allow: Option<String>,
     /// Autorización total: la IA puede ejecutar todo salvo lo prohibido (las listas de prohibidos siempre ganan).
     full_access: Option<bool>,
+    /// Las listas se manejan desde la app: el agente ignora whitelist.txt / blacklist.txt.
+    lists_from_app: Option<bool>,
 }
 
 fn new_token() -> String {
@@ -88,7 +91,7 @@ async fn manages_bot(st: &AppState, caller: Id, bot: Id) -> Result<()> {
 async fn list_bots(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
     require(&st, team, user.id, Role::Viewer).await?;
     let rows = sqlx::query(
-        "SELECT u.id, u.username, u.model, u.deny, u.allow, u.full_access, m.role, m.joined_at, cb.username AS created_by, t.last_used, t.id AS tok, COALESCE(t.last_used >= ?, 0) AS online, COALESCE(r.enabled, 0) AS run_on \
+        "SELECT u.id, u.username, u.model, u.deny, u.allow, u.full_access, u.base_allow, u.base_deny, u.lists_from_app, m.role, m.joined_at, cb.username AS created_by, t.last_used, t.id AS tok, COALESCE(t.last_used >= ?, 0) AS online, COALESCE(r.enabled, 0) AS run_on \
          FROM team_members m JOIN users u ON u.id = m.user_id \
          LEFT JOIN api_tokens t ON t.user_id = u.id LEFT JOIN users cb ON cb.id = t.created_by LEFT JOIN bot_runners r ON r.user_id = u.id \
          WHERE m.team_id = ? AND u.is_bot = 1 ORDER BY u.username",
@@ -107,6 +110,9 @@ async fn list_bots(State(st): State<AppState>, user: AuthUser, Path(team): Path<
                     "deny": r.get::<String, _>("deny"),
                     "allow": r.get::<String, _>("allow"),
                     "full_access": r.get::<i64, _>("full_access") != 0,
+                    "base_allow": r.get::<String, _>("base_allow"),
+                    "base_deny": r.get::<String, _>("base_deny"),
+                    "lists_from_app": r.get::<i64, _>("lists_from_app") != 0,
                     "role": r.get::<String, _>("role"),
                     "joined_at": r.get::<Option<String>, _>("joined_at"),
                     "created_by": r.get::<Option<String>, _>("created_by"),
@@ -180,6 +186,9 @@ async fn update_bot(State(st): State<AppState>, user: AuthUser, Path(uid): Path<
     if let Some(full) = b.full_access {
         sqlx::query("UPDATE users SET full_access = ? WHERE id = ?").bind(full).bind(uid).execute(&st.db).await?;
     }
+    if let Some(v) = b.lists_from_app {
+        sqlx::query("UPDATE users SET lists_from_app = ? WHERE id = ?").bind(v).bind(uid).execute(&st.db).await?;
+    }
     if let Some(allow) = &b.allow {
         limits::max_len("lista de comandos permitidos", allow, 4000)?;
         let clean = allow.lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n");
@@ -197,8 +206,8 @@ async fn my_deny(State(st): State<AppState>, user: AuthUser) -> Result<Json<Valu
 /// La IA lee su lista permanente de comandos permitidos (se agrega con «/permitir siempre …» o desde el pedido).
 async fn my_allow(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
     let own: String = sqlx::query_scalar("SELECT allow FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
-    let full: i64 = sqlx::query_scalar("SELECT full_access FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
-    Ok(Json(json!({ "allow": join_lines(&general(&st, "cmd_allow").await, &own), "full": full != 0 })))
+    let (full, from_app): (i64, i64) = sqlx::query_as("SELECT full_access, lists_from_app FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
+    Ok(Json(json!({ "allow": join_lines(&general(&st, "cmd_allow").await, &own), "full": full != 0, "from_app": from_app != 0 })))
 }
 
 /// Tarea a la que se aplica el permiso (si es un pedido «🙋 Pedido de #N: …», la tarea N) y la IA responsable.
@@ -251,7 +260,7 @@ pub(crate) async fn grant(st: &AppState, user: &AuthUser, task: Id, command: &st
     }
     crate::extras::log_task(st, target, user.id, format!("autorizó «{command}» ({})", if always { "siempre" } else { "una vez" })).await;
     // si la IA ya había terminado (o fallado) por falta del permiso, la tarea vuelve a «Por hacer» y se reintenta sola
-    let requeued = sqlx::query("UPDATE tasks SET status = 'todo', updated_at = ? WHERE id = ? AND status = 'done'")
+    let requeued = sqlx::query("UPDATE tasks SET status = 'todo', waiting = 0, updated_at = ? WHERE id = ? AND (status = 'done' OR (status = 'doing' AND waiting = 1))")
         .bind(chrono::Utc::now())
         .bind(target)
         .execute(&st.db)
@@ -402,4 +411,23 @@ mod suggest_tests {
         let ask = "Necesito compilar:\n```bash\n$ cd /x/y && cargo build --release\ngit status\n```\ny también `npm test` por favor";
         assert_eq!(commands_in(ask), vec!["cargo build --release", "git status", "npm test"]);
     }
+}
+
+#[derive(Deserialize)]
+struct BaseLists {
+    #[serde(default)]
+    allow: String,
+    #[serde(default)]
+    deny: String,
+}
+
+/// El agente cuenta qué dicen sus archivos whitelist.txt / blacklist.txt, para que la ficha de la IA los muestre (y se puedan pasar a la app).
+async fn set_base_lists(State(st): State<AppState>, user: AuthUser, Json(b): Json<BaseLists>) -> Result<StatusCode> {
+    if !user.bot {
+        return Err(AppError::forbidden());
+    }
+    limits::max_len("whitelist", &b.allow, 8000)?;
+    limits::max_len("blacklist", &b.deny, 8000)?;
+    sqlx::query("UPDATE users SET base_allow = ?, base_deny = ? WHERE id = ?").bind(b.allow.trim()).bind(b.deny.trim()).bind(user.id).execute(&st.db).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

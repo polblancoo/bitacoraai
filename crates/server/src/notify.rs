@@ -111,7 +111,9 @@ pub async fn notify(st: &AppState, user: Id, kind: &str, team: Option<Id>, task:
 pub async fn notify_via(st: &AppState, user: Id, kind: &str, team: Option<Id>, task: Option<Id>, text: String, via_tg: bool, via_mail: bool) {
     let now = chrono::Utc::now();
     // con resumen (lo normal), Telegram y email esperan al horario de la persona; la bandeja de la app se llena al instante
-    let deferred = crate::digest::prefs(st, user).await.digest && !crate::digest::instant_kind(kind, &text);
+    let prefs = crate::digest::prefs(st, user).await;
+    let silent = prefs.silent;
+    let deferred = !silent && prefs.digest && !crate::digest::instant_kind(kind, &text);
     let pending = if deferred { i64::from(via_tg) | (i64::from(via_mail) << 1) } else { 0 };
     let id = match sqlx::query("INSERT INTO notifications (user_id, kind, team_id, task_id, text, read, created_at, ext_pending) VALUES (?, ?, ?, ?, ?, 0, ?, ?)")
         .bind(user)
@@ -150,7 +152,7 @@ pub async fn notify_via(st: &AppState, user: Id, kind: &str, team: Option<Id>, t
         }),
     );
 
-    if deferred {
+    if deferred || silent {
         return;
     }
     if let Some(tg) = st.telegram.clone().filter(|_| via_tg) {

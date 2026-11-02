@@ -21,6 +21,7 @@ const NOTE_MAX: usize = 4000;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/projects/{id}/reviews", get(project_reviews).put(set_enabled))
+        .route("/api/projects/{id}/continuation", get(get_hold).put(set_hold))
         .route("/api/tasks/{id}/review", get(task_reviews).post(decide))
 }
 
@@ -40,6 +41,26 @@ async fn enabled(st: &AppState, project: Id) -> bool {
 /// Lo llama `update_task`: si una IA intenta pasar a Hecha una tarea de un proyecto con revisión, queda en revisión.
 pub(crate) async fn holds(st: &AppState, user: &AuthUser, cur: &Task, new: Status) -> bool {
     user.bot && new == Status::Done && cur.status != Status::Done && enabled(st, cur.project_id).await && licensed(st).await
+}
+
+/// ¿Lo que una IA da por terminado queda esperando el próximo paso en vez de pasar a Hecho? (se enciende solo en cada proyecto)
+pub(crate) async fn hold_ai_done(st: &AppState, project: Id) -> bool {
+    sqlx::query_scalar::<_, i64>("SELECT hold_ai_done FROM projects WHERE id = ?").bind(project).fetch_optional(&st.db).await.ok().flatten().unwrap_or(0) == 1
+}
+
+async fn get_hold(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
+    let team = routes::team_of_project(&st, project).await?;
+    routes::ensure_member(&st, team, user.id).await?;
+    Ok(Json(json!({ "enabled": hold_ai_done(&st, project).await })))
+}
+
+async fn set_hold(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>, Json(b): Json<EnabledBody>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let team = routes::team_of_project(&st, project).await?;
+    routes::require(&st, team, user.id, Role::Admin).await?;
+    sqlx::query("UPDATE projects SET hold_ai_done = ? WHERE id = ?").bind(b.enabled as i64).bind(project).execute(&st.db).await?;
+    crate::extras::log(&st, project, user.id, if b.enabled { "activó «la IA entrega tramos y esperan tu próximo paso»".into() } else { "apagó la espera de continuación: lo que termina una IA pasa a Hecho".into() }).await;
+    Ok(Json(json!({ "enabled": b.enabled })))
 }
 
 /// Persona que revisa: quien creó la tarea si es una persona con rol de miembro o más; si no, un admin o dueño del equipo.

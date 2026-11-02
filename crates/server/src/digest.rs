@@ -22,6 +22,11 @@ pub struct Prefs {
     pub hour: i64,
     pub tz: i64,
     pub last: Option<DateTime<Utc>>,
+    /// 0 = una vez por día a `hour`; N = cada N horas
+    pub every_h: i64,
+    pub mute_until: Option<DateTime<Utc>>,
+    /// modo silencioso o pausa vigente: nada sale por Telegram ni email (la bandeja de la app sí se llena)
+    pub silent: bool,
 }
 
 fn server_tz() -> i64 {
@@ -29,15 +34,22 @@ fn server_tz() -> i64 {
 }
 
 pub async fn prefs(st: &AppState, user: Id) -> Prefs {
-    let row = sqlx::query("SELECT mode, hour, tz_offset, last_digest FROM notif_prefs WHERE user_id = ?").bind(user).fetch_optional(&st.db).await.ok().flatten();
+    let row = sqlx::query("SELECT mode, hour, tz_offset, last_digest, every_h, mute_until FROM notif_prefs WHERE user_id = ?").bind(user).fetch_optional(&st.db).await.ok().flatten();
     match row {
-        Some(r) => Prefs {
-            digest: r.get::<String, _>("mode") != "instant",
-            hour: r.get("hour"),
-            tz: r.get::<Option<i64>, _>("tz_offset").unwrap_or_else(server_tz),
-            last: r.get("last_digest"),
-        },
-        None => Prefs { digest: true, hour: DEFAULT_HOUR, tz: server_tz(), last: None },
+        Some(r) => {
+            let mode: String = r.get("mode");
+            let mute_until: Option<DateTime<Utc>> = r.get("mute_until");
+            Prefs {
+                digest: mode != "instant" && mode != "silent",
+                hour: r.get("hour"),
+                tz: r.get::<Option<i64>, _>("tz_offset").unwrap_or_else(server_tz),
+                last: r.get("last_digest"),
+                every_h: r.get("every_h"),
+                silent: mode == "silent" || mute_until.is_some_and(|m| m > Utc::now()),
+                mute_until,
+            }
+        }
+        None => Prefs { digest: true, hour: DEFAULT_HOUR, tz: server_tz(), last: None, every_h: 0, mute_until: None, silent: false },
     }
 }
 
@@ -49,7 +61,9 @@ pub fn instant_kind(kind: &str, text: &str) -> bool {
 async fn get_prefs(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
     user.human_only()?;
     let p = prefs(&st, user.id).await;
-    Ok(Json(json!({ "mode": if p.digest { "digest" } else { "instant" }, "hour": p.hour, "tz_offset": p.tz })))
+    let mode = if p.digest { "digest" } else if p.silent { "silent" } else { "instant" };
+    let muted = p.mute_until.filter(|m| *m > Utc::now());
+    Ok(Json(json!({ "mode": mode, "hour": p.hour, "tz_offset": p.tz, "every_h": p.every_h, "mute_until": muted })))
 }
 
 #[derive(Deserialize)]
@@ -57,22 +71,29 @@ struct PrefsBody {
     mode: String,
     hour: i64,
     tz_offset: i64,
+    #[serde(default)]
+    every_h: i64,
+    /// pausa por N horas desde ahora (0 = quitar la pausa)
+    #[serde(default)]
+    mute_hours: i64,
 }
 
 async fn put_prefs(State(st): State<AppState>, user: AuthUser, Json(b): Json<PrefsBody>) -> Result<Json<Value>> {
     user.human_only()?;
-    if !matches!(b.mode.as_str(), "digest" | "instant") || !(0..24).contains(&b.hour) || !(-840..=840).contains(&b.tz_offset) {
+    if !matches!(b.mode.as_str(), "digest" | "instant" | "silent") || !matches!(b.every_h, 0 | 1 | 2 | 3 | 6 | 12) || !(0..=24 * 30).contains(&b.mute_hours) || !(0..24).contains(&b.hour) || !(-840..=840).contains(&b.tz_offset) {
         return Err(AppError::bad("preferencia inválida"));
     }
     sqlx::query(
-        "INSERT INTO notif_prefs (user_id, mode, hour, tz_offset, last_digest) VALUES (?, ?, ?, ?, ?) \
-         ON CONFLICT(user_id) DO UPDATE SET mode = excluded.mode, hour = excluded.hour, tz_offset = excluded.tz_offset",
+        "INSERT INTO notif_prefs (user_id, mode, hour, tz_offset, last_digest, every_h, mute_until) VALUES (?, ?, ?, ?, ?, ?, ?) \
+         ON CONFLICT(user_id) DO UPDATE SET mode = excluded.mode, hour = excluded.hour, tz_offset = excluded.tz_offset, every_h = excluded.every_h, mute_until = excluded.mute_until",
     )
     .bind(user.id)
     .bind(&b.mode)
     .bind(b.hour)
     .bind(b.tz_offset)
     .bind(Utc::now())
+    .bind(b.every_h)
+    .bind((b.mute_hours > 0).then(|| Utc::now() + chrono::Duration::hours(b.mute_hours)))
     .execute(&st.db)
     .await?;
     // si vuelve a "uno por uno", lo que estaba esperando sale ahora
@@ -105,7 +126,8 @@ async fn run_due(st: &AppState) {
                 .await;
             continue;
         };
-        if !p.digest || next_after("daily", 0, 1, p.hour * 60, p.tz, last) > now {
+        let due = if p.every_h > 0 { last + chrono::Duration::hours(p.every_h) } else { next_after("daily", 0, 1, p.hour * 60, p.tz, last) };
+        if !p.digest || p.silent || due > now {
             continue;
         }
         let _ = sqlx::query("UPDATE notif_prefs SET last_digest = ? WHERE user_id = ?").bind(now).bind(user).execute(&st.db).await;

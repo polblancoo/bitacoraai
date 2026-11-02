@@ -99,7 +99,7 @@ pub(crate) async fn team_of_task(st: &AppState, task: Id) -> Result<Id> {
 }
 
 pub(crate) const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.title, t.description, t.status, t.priority, t.position, \
-    t.assignee_id, u.username AS assignee, t.due, t.start, t.recurrence, t.parent_id, t.created_by, t.created_at, t.updated_at, \
+    t.assignee_id, u.username AS assignee, t.due, t.start, t.recurrence, t.parent_id, t.created_by, t.waiting, t.created_at, t.updated_at, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id) AS sub_total, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id AND s.status = 'done') AS sub_done \
     FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id";
@@ -124,6 +124,7 @@ pub(crate) fn task_from_row(r: &SqliteRow) -> Task {
         subtasks_total: r.get("sub_total"),
         subtasks_done: r.get("sub_done"),
         recurrence: r.get("recurrence"),
+        waiting: r.get::<i64, _>("waiting") != 0,
         created_at: r.get("created_at"),
         updated_at: r.get("updated_at"),
     }
@@ -881,8 +882,20 @@ async fn update_task(
     if held {
         new_status = if cur.status == Status::Todo { Status::Doing } else { cur.status };
     }
+    // proyecto con «continuación»: lo que una IA da por terminado queda esperando el próximo paso (En curso, zona de espera) en vez de pasar a Hecho
+    let mut waiting = if new_status != Status::Doing || (user.bot && p.status == Some(Status::Doing)) {
+        false
+    } else {
+        p.waiting.unwrap_or(if p.status.is_some() && cur.status != Status::Doing { false } else { cur.waiting })
+    };
+    let mut ai_leg = false;
+    if !held && user.bot && new_status == Status::Done && cur.status != Status::Done && crate::review::hold_ai_done(&st, cur.project_id).await {
+        new_status = Status::Doing;
+        waiting = true;
+        ai_leg = true;
+    }
     sqlx::query(
-        "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, position = ?, assignee_id = ?, due = ?, start = ?, recurrence = ?, \
+        "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, position = ?, assignee_id = ?, due = ?, start = ?, recurrence = ?, waiting = ?, \
          remind_state = CASE WHEN ? THEN 0 ELSE remind_state END, updated_at = ? WHERE id = ?",
     )
     .bind(p.title.as_deref().map(str::trim).filter(|s| !s.is_empty()).unwrap_or(&cur.title))
@@ -894,6 +907,7 @@ async fn update_task(
     .bind(due)
     .bind(start)
     .bind(recurrence)
+    .bind(waiting)
     .bind(reminders_reset)
     .bind(Utc::now())
     .bind(id)
@@ -907,6 +921,13 @@ async fn update_task(
     }
     if held {
         crate::review::request(&st, team, &t, user.id).await;
+    }
+    if ai_leg {
+        crate::extras::log_task(&st, id, user.id, format!("entregó un tramo de «{}»: espera tu próximo paso", t.title)).await;
+        if let Some(c) = t.created_by.filter(|c| *c != user.id) {
+            let who = crate::notify::username_of(&st, user.id).await;
+            crate::notify::notify(&st, c, "comment", Some(team), Some(id), format!("⏳ {who} entregó un tramo de «{}»: espera tu próximo paso", t.title)).await;
+        }
     }
     crate::extras::after_update(&st, team, user.id, &cur, &t).await;
     crate::gh_sync::after_update(&st, &user, &cur, &t).await;
@@ -1003,13 +1024,13 @@ async fn add_comment(
     // las tareas programadas funcionan igual. Los comandos «/…» no reabren.
     if !user.bot && !n.body.trim_start().starts_with('/') {
         let reopen: Option<i64> = sqlx::query_scalar(
-            "SELECT 1 FROM tasks WHERE id = ? AND status = 'done' AND assignee_id IN (SELECT user_id FROM api_tokens)",
+            "SELECT 1 FROM tasks WHERE id = ? AND (status = 'done' OR (status = 'doing' AND waiting = 1)) AND assignee_id IN (SELECT user_id FROM api_tokens)",
         )
         .bind(task)
         .fetch_optional(&st.db)
         .await?;
         if reopen.is_some() {
-            sqlx::query("UPDATE tasks SET status = 'todo', updated_at = ? WHERE id = ?").bind(Utc::now()).bind(task).execute(&st.db).await?;
+            sqlx::query("UPDATE tasks SET status = 'todo', waiting = 0, updated_at = ? WHERE id = ?").bind(Utc::now()).bind(task).execute(&st.db).await?;
             let t = fetch_task(&st, task).await?;
             st.emit(team, Event::TaskUpdated(t.clone()));
             crate::extras::log_task(&st, task, user.id, format!("reabrió «{}» con un comentario", t.title)).await;

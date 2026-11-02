@@ -49,6 +49,28 @@ struct Cfg {
 }
 
 /// `~` y `~/carpeta` se resuelven contra la carpeta personal (el sistema no lo hace fuera de una shell).
+/// Cuenta al servidor qué dicen whitelist.txt / blacklist.txt (junto al script del agente) para que se vean y se puedan pasar a la app.
+async fn publish_lists(api: &Api) {
+    if let Some(dir) = lists_dir(&api.cfg.cmd) {
+        let read = |f: &str| {
+            std::fs::read_to_string(dir.join(f)).unwrap_or_default().lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect::<Vec<_>>().join("\n")
+        };
+        let _ = api.call(Method::POST, "/api/me/base-lists", Some(json!({ "allow": read("whitelist.txt"), "deny": read("blacklist.txt") }))).await;
+    }
+}
+
+/// Carpeta de las listas del script del agente: `TM_AGENT_CONF` o la carpeta del script de `TM_AGENT_CMD`.
+fn lists_dir(cmd: &str) -> Option<std::path::PathBuf> {
+    if let Ok(d) = std::env::var("TM_AGENT_CONF") {
+        if !d.trim().is_empty() {
+            return Some(d.trim().into());
+        }
+    }
+    let first = cmd.split_whitespace().next()?.trim_matches(|c| c == '\'' || c == '"');
+    let p = std::path::Path::new(first);
+    p.is_absolute().then(|| p.parent().map(|d| d.to_path_buf())).flatten()
+}
+
 fn expand_home(p: &str) -> PathBuf {
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from);
     match (p.strip_prefix("~/").or_else(|| (p == "~").then_some("")), home) {
@@ -189,9 +211,11 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     // Lista de comandos prohibidos que un admin edita desde la app (ficha de la IA).
     let deny = api.get("/api/me/deny").await.ok().and_then(|v| v["deny"].as_str().map(String::from)).unwrap_or_default();
     // Comandos permitidos: los permanentes de la IA («/permitir siempre») y los de «una vez» de esta tarea, que se consumen al empezar.
+    publish_lists(api).await;
     let me_allow = api.get("/api/me/allow").await.ok();
     let mut allow = me_allow.as_ref().and_then(|v| v["allow"].as_str().map(String::from)).unwrap_or_default();
     // «Autorización total»: la IA puede todo salvo lo prohibido (TM_DENY siempre gana)
+    let from_app = me_allow.as_ref().and_then(|v| v["from_app"].as_bool()).unwrap_or(false);
     let allow_all = me_allow.as_ref().and_then(|v| v["full"].as_bool()).unwrap_or(false);
     if let Ok(v) = api.call(Method::POST, &format!("/api/tasks/{}/grants/claim", job.id), None).await {
         for c in v["once"].as_array().into_iter().flatten().filter_map(|c| c.as_str()) {
@@ -206,6 +230,7 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
         .env("TM_DENY", deny)
         .env("TM_ALLOW", allow)
         .env("TM_ALLOW_ALL", if allow_all { "1" } else { "0" })
+        .env("TM_LISTS_FROM_APP", if from_app { "1" } else { "0" })
         .env("TM_TASK_ID", job.id.to_string())
         .env("TM_TASK_TITLE", &job.title)
         .env("TM_PROJECT_ID", job.project_id.to_string())
@@ -332,7 +357,7 @@ async fn pending(api: &Api, me: i64, skip: &HashMap<i64, String>, running: &Hash
             let tasks = api.get(&format!("/api/projects/{}/tasks", p["id"])).await?;
             for t in tasks.as_array().cloned().unwrap_or_default() {
                 let id = t["id"].as_i64().unwrap_or(0);
-                if t["assignee_id"].as_i64() != Some(me) || running.contains(&id) {
+                if t["assignee_id"].as_i64() != Some(me) || running.contains(&id) || t["waiting"].as_bool() == Some(true) {
                     continue;
                 }
                 match t["status"].as_str() {
@@ -414,6 +439,7 @@ async fn main() -> Result<()> {
     let api = Arc::new(Api { http: reqwest::Client::new(), cfg });
     let me = api.get("/api/me").await.context("no pude iniciar sesión con TM_TOKEN")?;
     let my_id = me["id"].as_i64().context("respuesta inesperada de /api/me")?;
+    publish_lists(&api).await;
     log(&format!("conectado como {} (id {my_id}) a {}; reviso cada {poll} s, hasta {max} en paralelo", me["username"].as_str().unwrap_or("?"), api.cfg.url));
 
     if std::env::var("TM_AGENT_TERMINAL").is_ok_and(|v| v == "1") && !once {

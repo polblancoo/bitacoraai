@@ -78,7 +78,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overf
 .row { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
 .comment { background: var(--bg2); border-radius: 8px; padding: 8px 10px; }
 .comment b { color: var(--green); } .comment small { color: var(--dim); margin-left: 6px; }
-.comments { display: grid; gap: 8px; max-height: 200px; overflow: auto; }
+.comments { display: grid; gap: 8px; max-height: 55vh; min-height: 220px; overflow: auto; align-content: start; }
 
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--card2); border: 1px solid var(--line); padding: 9px 16px; border-radius: 10px; z-index: 20; }
 #toast.error { border-color: var(--red); color: var(--red); }
@@ -342,7 +342,7 @@ ol.guide pre { margin: 4px 0; }
 .task-head { display: flex; align-items: center; gap: 8px; }
 .task-head .max-btn { font-size: 12px; padding: 4px 10px; }
 .modal.task-modal.max { width: 98vw; max-width: 1400px; height: 96vh; max-height: 96vh; }
-.modal.task-modal.max .comments { max-height: 55vh; font-size: 15px; line-height: 1.55; }
+.modal.task-modal.max .comments { max-height: 65vh; font-size: 15px; line-height: 1.55; }
 .modal.task-modal.max .comment { padding: 12px 14px; }
 .modal.task-modal.max textarea { min-height: 140px; }
 
@@ -520,3 +520,20 @@ ol.guide pre { margin: 4px 0; }
 .modal .gh-cfg label.row { display: flex; align-items: center; justify-content: flex-start; text-align: left; gap: 8px; flex-wrap: wrap; margin-top: 8px; color: var(--fg); font-size: 14px; }
 .modal .gh-cfg label.row input[type="checkbox"] { flex: none; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--green); }
 .modal .gh-cfg label.row small { flex-basis: 100%; margin: 0 0 0 24px; text-align: left; }
+.reqpanel .primary.big { padding: 10px 18px; font-size: 15px; }
+.row.wrap { flex-wrap: wrap; gap: 6px; }
+.comment-in { min-height: 200px; resize: vertical; line-height: 1.5; }
+.comment { white-space: pre-wrap; overflow-wrap: anywhere; }
+.modal.task-modal.max .comment-in { min-height: 320px; }
+.wait-zone { margin-top: 10px; padding: 8px; border-top: 2px dashed var(--line); background: color-mix(in srgb, var(--yellow) 6%, transparent); border-radius: 8px; min-height: 70px; }
+.wait-head { font-size: 12px; font-weight: 600; opacity: .85; margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
+#toast { cursor: pointer; max-width: min(90vw, 560px); }
+#toast.link { border-color: var(--blue); }
+#toast:not([hidden]) { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ai-run { display: grid; gap: 3px; margin: 6px 0 2px; }
+.ai-bar { height: 4px; border-radius: 4px; background: var(--line); position: relative; overflow: hidden; }
+.ai-bar::after { content: ""; position: absolute; inset: 0 auto 0 -35%; width: 35%; border-radius: 4px; background: var(--yellow); animation: ai-slide 1.6s ease-in-out infinite; }
+@keyframes ai-slide { to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .ai-bar::after { animation: none; inset: 0; width: 100%; opacity: .5; } }
+.modal.task-modal .more { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+.modal.task-modal .more > summary { cursor: pointer; opacity: .85; padding: 4px 0; }
