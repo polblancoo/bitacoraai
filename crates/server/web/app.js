@@ -991,12 +991,15 @@ function chatBubble(m) {
   const where = other ? `en el equipo ${other}${m.to_user != null ? " (privado)" : ""}` : m.to_user != null ? "te escribió en privado" : m.project_id != null ? "en " + (S.projects.find((p) => p.id === m.project_id)?.name || "un proyecto") : "en el equipo";
   let box = document.getElementById("chat-bubbles");
   if (!box) { box = h("div", { id: "chat-bubbles" }); document.body.append(box); }
+  let secs = parseFloat(store.get("bubbleSecs")); if (!(secs >= 0)) secs = 10;
   const b = h("div", { class: "chat-bubble", title: "Tocá para abrir la conversación" },
-    h("b", {}, (AV[m.from] || "💬") + " " + m.from), " ", h("small", {}, where), h("div", {}, txt));
+    h("div", { class: "cb-av" + (AV[m.from] ? " emoji" : ""), style: `background:${color(m.from)}` }, AV[m.from] || m.from.slice(0, 2).toUpperCase()),
+    h("div", { class: "cb-main" }, h("div", { class: "cb-head" }, h("b", {}, m.from), h("small", {}, where)), h("div", { class: "cb-txt" }, txt)),
+    h("button", { class: "cb-x", title: "Cerrar", onclick: (e) => { e.stopPropagation(); b.remove(); } }, "✕"),
+    secs > 0 && h("div", { class: "cb-bar", style: `animation-duration:${secs}s` }));
   b.onclick = () => { b.remove(); chatOpenFor(m); };
   box.prepend(b);
   while (box.children.length > 3) box.lastChild.remove();
-  let secs = parseFloat(store.get("bubbleSecs")); if (!(secs >= 0)) secs = 10;
   if (secs > 0) setTimeout(() => b.remove(), secs * 1000);
   try {
     const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain();
