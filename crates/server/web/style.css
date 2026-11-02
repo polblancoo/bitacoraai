@@ -27,6 +27,9 @@ button.danger:hover { border-color: var(--red); color: var(--red); }
 
 /* shell */
 .shell { display: grid; grid-template-columns: 240px 1fr; height: 100%; }
+/* con el cartel de licencia arriba, la pantalla ocupa lo que queda (si no, el pie —botón Enviar del chat, Configuración— se corta abajo) */
+#app:has(> .lic-banner) { display: flex; flex-direction: column; }
+#app:has(> .lic-banner) > .shell { flex: 1 1 0; height: auto; min-height: 0; }
 .shell.with-panel { grid-template-columns: 240px 1fr 330px; }
 aside { background: var(--bg2); border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
 aside h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); display: flex; justify-content: space-between; align-items: center; }
