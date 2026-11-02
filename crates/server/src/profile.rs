@@ -22,6 +22,8 @@ use tm_core::*;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/me", get(me))
+        .route("/api/me/avatar", put(set_avatar))
+        .route("/api/avatars", get(avatars))
         .route("/api/me/email", put(set_email).delete(clear_email))
         .route("/api/me/email/verify", post(verify_email))
         .route("/api/me/telegram", delete(telegram_unlink))
@@ -45,6 +47,36 @@ async fn me(State(st): State<AppState>, user: AuthUser) -> Result<Json<Me>> {
         telegram_available: st.telegram.is_some(),
         telegram_bot: st.telegram.as_ref().map(|t| t.bot.clone()),
     }))
+}
+
+#[derive(Deserialize)]
+struct SetAvatar {
+    avatar: Option<String>,
+}
+
+/// Cada persona elige su avatar: un emoji (hasta 8 caracteres, ninguno ASCII, así no sirve para hacerse pasar por un nombre). Vacío = vuelve a las iniciales.
+async fn set_avatar(State(st): State<AppState>, user: AuthUser, Json(b): Json<SetAvatar>) -> Result<StatusCode> {
+    user.human_only()?;
+    let a = b.avatar.map(|a| a.trim().to_string()).filter(|a| !a.is_empty());
+    if let Some(a) = &a {
+        if a.chars().count() > 8 || !a.chars().all(|c| !c.is_ascii() && !c.is_control()) {
+            return Err(AppError::bad("el avatar tiene que ser un emoji"));
+        }
+    }
+    sqlx::query("UPDATE users SET avatar = ? WHERE id = ?").bind(a).bind(user.id).execute(&st.db).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Avatares de las personas que comparten equipo con quien pregunta (y el propio): {usuario: emoji}.
+async fn avatars(State(st): State<AppState>, user: AuthUser) -> Result<Json<std::collections::HashMap<String, String>>> {
+    let rows = sqlx::query(
+        "SELECT DISTINCT u.username, u.avatar FROM users u WHERE u.avatar IS NOT NULL AND (u.id = ?1 OR u.id IN \
+         (SELECT m2.user_id FROM team_members m1 JOIN team_members m2 ON m2.team_id = m1.team_id WHERE m1.user_id = ?1))",
+    )
+    .bind(user.id)
+    .fetch_all(&st.db)
+    .await?;
+    Ok(Json(rows.iter().map(|r| (r.get::<String, _>(0), r.get::<String, _>(1))).collect()))
 }
 
 /// Guarda el email como NO verificado y manda un código de 6 dígitos a esa dirección.

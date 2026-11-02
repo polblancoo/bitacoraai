@@ -190,7 +190,37 @@ const color = (name) => AVATAR[[...name].reduce((a, c) => a + c.charCodeAt(0), 0
 const botInfo = (name) => (S.bots || []).find((b) => b.username === name);
 // una IA se ve con 🤖 y su modelo (ej. "claude:Opus"); las personas, con su nombre
 const label = (name) => { const b = botInfo(name); return b ? `🤖 ${name}${b.model ? " · " + b.model : ""}` : name; };
-const avatar = (name) => h("span", { class: "avatar" + (botInfo(name) ? " bot" : ""), title: label(name), style: `background:${color(name)}` }, botInfo(name) ? "🤖" : name.slice(0, 2).toUpperCase());
+// avatar elegido por cada persona (emoji); sin elegir, se ven las iniciales. AV = {usuario: emoji}
+const AV = {};
+const AVATARS = "🙂 😀 😎 🤓 🥳 😴 🤠 🧐 🦊 🐱 🐶 🐼 🐨 🦁 🐯 🐸 🐵 🦄 🐙 🦉 🐧 🐢 🦖 🐝 🦋 🌵 🍀 🌻 🔥 ⚡ 🚀 🛸 🎸 🎮 ⚽ 🏀 🍕 ☕ 🎧 💎".split(" ");
+const avatar = (name) => { const e = !botInfo(name) && AV[name]; return h("span", { class: "avatar" + (botInfo(name) ? " bot" : "") + (e ? " emoji" : ""), title: label(name), style: `background:${color(name)}` }, botInfo(name) ? "🤖" : e || name.slice(0, 2).toUpperCase()); };
+async function loadAvatars() {
+  try { const a = await api("GET", "/api/avatars"); for (const k of Object.keys(AV)) delete AV[k]; Object.assign(AV, a); } catch {}
+}
+const chooseChatExts = guard(async () => {
+  const cfg = await api("GET", "/api/chat/exts"), on = new Set(cfg.allowed), close = () => document.getElementById("exts-modal")?.remove();
+  document.body.append(h("div", { class: "overlay", id: "exts-modal", onmousedown: (e) => e.target.id === "exts-modal" && close() },
+    h("div", { class: "modal" }, h("h3", {}, "Archivos que se pueden enviar por el chat"),
+      h("small", {}, cfg.can_edit ? "Tildá los tipos permitidos (máx. 5 MB por archivo). Rige para todo el servidor." : "Solo el dueño de un equipo puede cambiar esto."),
+      ...cfg.groups.map((g) => h("div", { class: "exts-group" }, h("b", {}, g.group),
+        h("div", { class: "exts-list" }, g.exts.map((x) => h("label", { class: "inl" }, h("input", { type: "checkbox", checked: on.has(x), disabled: !cfg.can_edit, onchange: (e) => (e.target.checked ? on.add(x) : on.delete(x)) }), " ." + x))))),
+      h("small", {}, "Nunca se permiten: programas (.exe, .msi, .bat…), scripts (.sh, .js, .ps1…), HTML y SVG."),
+      h("div", { class: "row" }, h("button", { onclick: close }, "Cerrar"), h("span", { class: "spacer" }),
+        cfg.can_edit && h("button", { class: "primary", onclick: guard(async () => { await api("PUT", "/api/chat/exts", { allowed: [...on] }); close(); toast("Archivos permitidos guardados"); }) }, "Guardar")))));
+});
+const chooseAvatar = () => {
+  const mine = AV[S.user.username], close = () => document.getElementById("avatar-modal")?.remove();
+  const pick = guard(async (e) => {
+    await api("PUT", "/api/me/avatar", { avatar: e });
+    if (e) AV[S.user.username] = e; else delete AV[S.user.username];
+    close(); render(); toast(e ? "Avatar cambiado" : "Avatar: tus iniciales");
+  });
+  document.body.append(h("div", { class: "overlay", id: "avatar-modal", onmousedown: (e) => e.target.id === "avatar-modal" && close() },
+    h("div", { class: "modal" }, h("h3", {}, "Elegí tu avatar"),
+      h("small", {}, "Es el dibujito que ven los demás junto a tu nombre."),
+      h("div", { class: "avatar-grid" }, AVATARS.map((e) => h("button", { class: "ghost" + (e === mine ? " on" : ""), onclick: () => pick(e) }, e))),
+      h("div", { class: "row" }, h("button", { onclick: () => pick(null) }, "Usar mis iniciales"), h("span", { class: "spacer" }), h("button", { onclick: close }, "Cerrar")))));
+};
 
 // ---------- sesión ----------
 const logoutAll = guard(async () => {
@@ -215,6 +245,7 @@ async function authenticate(user, pass) {
 async function boot(first) {
   S.teams = await api("GET", "/api/teams");
   await selectTeam(S.teams.find((t) => t.id === S.team?.id) || S.teams[0] || null);
+  loadAvatars();
   connectWs();
   if (first) { loadInbox(true); loadLicense(); if (!S.teams.length && store.get("wizDone") !== "1") openWizard(); }
 }
@@ -919,6 +950,7 @@ const toggleChat = () => {
 };
 async function chatPresence() {
   if (!S.team || !S.chatOpen) return;
+  await loadAvatars();
   try { CHAT.people = (await api("GET", `/api/teams/${S.team.id}/presence`)).people; chatDraw(); } catch {}
 }
 async function chatHistory() {
@@ -960,12 +992,12 @@ function chatBubble(m) {
   let box = document.getElementById("chat-bubbles");
   if (!box) { box = h("div", { id: "chat-bubbles" }); document.body.append(box); }
   const b = h("div", { class: "chat-bubble", title: "Tocá para abrir la conversación" },
-    h("b", {}, "💬 " + m.from), " ", h("small", {}, where), h("div", {}, txt));
+    h("b", {}, (AV[m.from] || "💬") + " " + m.from), " ", h("small", {}, where), h("div", {}, txt));
   b.onclick = () => { b.remove(); chatOpenFor(m); };
   box.prepend(b);
   while (box.children.length > 3) box.lastChild.remove();
-  let secs = parseFloat(store.get("toastSecs")); if (!(secs >= 0)) secs = 6;
-  if (secs > 0) setTimeout(() => b.remove(), Math.max(secs, 8) * 1000);
+  let secs = parseFloat(store.get("bubbleSecs")); if (!(secs >= 0)) secs = 10;
+  if (secs > 0) setTimeout(() => b.remove(), secs * 1000);
   try {
     const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain();
     o.connect(g); g.connect(a.destination); o.frequency.value = 880; g.gain.value = 0.05; o.start(); o.stop(a.currentTime + 0.12);
@@ -1010,11 +1042,11 @@ function chatDraw() {
   const others = CHAT.people.filter((x) => !x.me);
   CHAT.who.replaceChildren(h("small", { class: "hint" }, `${CHAT.people.filter((x) => x.online).length} conectados · tocá un nombre para hablarle en privado`),
     h("div", { class: "chat-chips" }, others.map((x) => h("button", { class: "chip" + (CHAT.chan.t === "dm" && CHAT.chan.id === x.id ? " on" : ""), title: x.online ? "Conectado" : "Desconectado", onclick: () => chatSwitch({ t: "dm", id: x.id }) },
-      h("span", { class: "dot " + (x.online ? "on" : "off") }), x.username, CHAT.unread["dm" + x.id] ? ` (${CHAT.unread["dm" + x.id]})` : ""))));
+      h("span", { class: "dot " + (x.online ? "on" : "off") }), AV[x.username] ? AV[x.username] + " " : "", x.username, CHAT.unread["dm" + x.id] ? ` (${CHAT.unread["dm" + x.id]})` : ""))));
   CHAT.err_.replaceChildren(CHAT.err, ...(CHAT.err && CHAT.https ? [h("div", {}, h("a", { href: CHAT.https + location.pathname, class: "btnlike" }, "🔒 Abrir con conexión segura (HTTPS)"))] : []));
   CHAT.err_.hidden = !CHAT.err;
   CHAT.list.replaceChildren(...CHAT.msgs.map((m) => h("div", { class: "chat-msg" + (m.from_user === me ? " mine" : "") },
-    h("div", {}, h("b", {}, m.from), " ", h("small", {}, new Date(m.created_at).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))),
+    h("div", {}, h("b", {}, (AV[m.from] ? AV[m.from] + " " : "") + m.from), " ", h("small", {}, new Date(m.created_at).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))),
     m.body && h("div", { class: "chat-body" }, m.body),
     m.file && h("button", { class: "ghost chat-file", title: "Descargar", onclick: guard(() => saveFile(`/api/chat/files/${m.file.id}`, m.file.name)) }, `📎 ${m.file.name} (${kb(m.file.size)})`))));
   CHAT.list.scrollTop = CHAT.list.scrollHeight;
@@ -1868,6 +1900,9 @@ const CFG_HELP = {
   duplicate: ["Usar como plantilla", "Crea un proyecto nuevo copiando las tareas, etiquetas y dependencias del actual, para repetir un proceso sin armarlo de cero.", null],
   export: ["Exportar", "Descarga todas las tareas del proyecto en CSV (para planilla) o JSON (para copia de seguridad o scripts).", null],
   bars: ["Posición de los botones", "Elegí si los botones del proyecto (Programadas, Consumo, GitHub, Proyecto, Equipo…) y las vistas con el buscador (Tablero, Calendario, Gantt…) van arriba o abajo de la pantalla. Se guarda solo en este dispositivo.", null],
+  chatExts: ["Archivos del chat", "Qué tipos de archivo se pueden mandar por el chat (hasta 5 MB cada uno). Rige para todo el servidor y lo cambia el dueño de un equipo. Los programas, scripts, HTML y SVG nunca se pueden enviar. Los comprimidos (zip, rar…) vienen apagados porque pueden esconder programas.", null],
+  avatar: ["Tu avatar", "El dibujito (emoji) que ven los demás junto a tu nombre: en el chat, el equipo y las tareas. Si no elegís, se ven tus iniciales.", null],
+  bubbleSecs: ["Burbuja del chat", "Cuánto queda visible la burbuja que avisa de un mensaje nuevo del chat. Tocarla abre la conversación. Se guarda solo en este dispositivo.", null],
   toastSecs: ["Aviso emergente", "El cartelito que aparece abajo cuando llega un aviso. Elegí cuánto queda visible, o que se quede hasta que lo toques. Si el aviso es de una tarea, tocarlo abre la tarea para leerlo completo; si no, lo cierra. Se guarda solo en este dispositivo.", null],
   herdr: ["Terminal con herdr", "Al abrir la terminal de una tarea se abre herdr (un panel de terminales) en la carpeta del proyecto, si la máquina lo tiene. Apagalo si preferís una terminal común. Se guarda solo en este dispositivo.", null],
   view: ["Vista inicial", "Qué vista se abre primero en este dispositivo: tablero, calendario, Gantt, pizarra o actividad. Se cambia en cualquier momento con las teclas 1 a 5.", null],
@@ -2062,6 +2097,8 @@ const openSettings = guard(async () => {
       S.team && sec("", line(["Informes automáticos del equipo (resumen diario o semanal)", "reports"], h("button", { onclick: go(openReports) }, "Configurar"))),
       sec("Cuenta",
         line([`Usuario: ${me.username}`, "user"]),
+        line(["Archivos permitidos en el chat", "chatExts"], h("button", { onclick: () => { close(); chooseChatExts(); } }, "Elegir tipos")),
+        line(["Tu avatar", "avatar"], avatar(me.username), h("button", { onclick: () => { close(); chooseAvatar(); } }, "Elegir")),
         line([`Email para avisos: ${emailState}`, "email"], h("button", { onclick: go(openProfile) }, "Configurar")),
         line([`Telegram: ${tgState}`, "telegram"], me.telegram_available && (me.telegram_linked
           ? h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/telegram"); close(); openSettings(); }) }, "Desvincular")
@@ -2171,6 +2208,11 @@ const openSettings = guard(async () => {
           const cur = parseFloat(store.get("toastSecs")); const v = cur >= 0 ? cur : 6;
           return h("select", { onchange: (e) => { store.set("toastSecs", e.target.value); toast("Así de largo se verá este aviso"); } },
             [[3.5, "3 segundos"], [6, "6 segundos (normal)"], [12, "12 segundos"], [30, "30 segundos"], [0, "Hasta que lo toque"]].map(([n, l]) => h("option", { value: n, selected: n === v }, l)));
+        })()),
+        line(["Cuánto queda visible la burbuja del chat", "bubbleSecs"], (() => {
+          const cur = parseFloat(store.get("bubbleSecs")); const v = cur >= 0 ? cur : 10;
+          return h("select", { onchange: (e) => { store.set("bubbleSecs", e.target.value); toast("Así de larga se verá la burbuja"); } },
+            [[5, "5 segundos"], [10, "10 segundos (normal)"], [20, "20 segundos"], [60, "1 minuto"], [0, "Hasta que la toque"]].map(([n, l]) => h("option", { value: n, selected: n === v }, l)));
         })()),
         line(["Servidor", "server"], server),
         IS_WEB ? h("small", {}, "Estás usando la web del propio servidor: la dirección no se cambia desde acá.")

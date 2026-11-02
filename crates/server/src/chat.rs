@@ -29,10 +29,27 @@ const FILE_MAX: usize = 5 * 1024 * 1024;
 const PAGE: i64 = 60;
 /// Tipos permitidos: imágenes, PDF, texto y documentos de oficina. Nada ejecutable, ni HTML, ni SVG, ni comprimidos.
 const ALLOWED: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "md", "csv", "json", "log", "docx", "xlsx", "pptx", "odt", "ods"];
+/// Tipos que el administrador puede tildar en Configuración, por grupo. Nunca se ofrecen ejecutables, scripts, HTML ni SVG.
+const CATALOG: &[(&str, &[&str])] = &[
+    ("Imágenes", &["png", "jpg", "jpeg", "gif", "webp"]),
+    ("Documentos", &["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf"]),
+    ("Texto y datos", &["txt", "md", "csv", "tsv", "json", "xml", "yaml", "yml", "log", "sql"]),
+    ("Comprimidos (pueden esconder programas: activalos solo si hace falta)", &["zip", "rar", "7z", "gz"]),
+];
+
+/// Tipos permitidos hoy: lo que tildó el administrador (guardado en la base) o, si nunca lo tocó, la lista de siempre.
+async fn allowed_exts(st: &AppState) -> Vec<String> {
+    let saved: Option<String> = sqlx::query_scalar("SELECT value FROM meta WHERE key = 'chat_exts'").fetch_optional(&st.db).await.ok().flatten();
+    match saved {
+        Some(v) => v.split(',').filter(|e| CATALOG.iter().any(|(_, l)| l.contains(e))).map(String::from).collect(),
+        None => ALLOWED.iter().map(|e| e.to_string()).collect(),
+    }
+}
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/chat/status", get(status))
+        .route("/api/chat/exts", get(exts_get).put(exts_put))
         .route("/api/teams/{id}/chat", get(history).post(send))
         .route("/api/teams/{id}/chat/files", post(upload).layer(DefaultBodyLimit::max(FILE_MAX + 4096)))
         .route("/api/teams/{id}/presence", get(presence))
@@ -83,6 +100,30 @@ async fn status(State(st): State<AppState>, ConnectInfo(peer): ConnectInfo<Socke
     Ok(Json(json!({ "secure": secure(&st, &headers, peer), "https_url": https_url })))
 }
 
+async fn exts_get(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+    user.human_only()?;
+    let can_edit: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM team_members WHERE user_id = ? AND role = 'owner')").bind(user.id).fetch_one(&st.db).await?;
+    let groups: Vec<Value> = CATALOG.iter().map(|(g, l)| json!({ "group": g, "exts": l })).collect();
+    Ok(Json(json!({ "allowed": allowed_exts(&st).await, "groups": groups, "can_edit": can_edit })))
+}
+
+#[derive(Deserialize)]
+struct ExtsBody {
+    allowed: Vec<String>,
+}
+
+/// Solo quien es dueño de algún equipo cambia los tipos permitidos, que rigen para todo el servidor.
+async fn exts_put(State(st): State<AppState>, user: AuthUser, Json(b): Json<ExtsBody>) -> Result<StatusCode> {
+    user.human_only()?;
+    let owner: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM team_members WHERE user_id = ? AND role = 'owner')").bind(user.id).fetch_one(&st.db).await?;
+    if !owner {
+        return Err(AppError(StatusCode::FORBIDDEN, "solo el dueño de un equipo cambia los archivos permitidos".into()));
+    }
+    let list: Vec<&str> = CATALOG.iter().flat_map(|(_, l)| l.iter().copied()).filter(|e| b.allowed.iter().any(|a| a == e)).collect();
+    sqlx::query("INSERT INTO meta (key, value) VALUES ('chat_exts', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(list.join(",")).execute(&st.db).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 fn clean_name(raw: &str) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("");
     let n: String = base.chars().filter(|c| !c.is_control()).take(limits::ATTACHMENT_NAME_MAX).collect();
@@ -102,8 +143,14 @@ fn magic_ok(ext: &str, data: &[u8]) -> bool {
         "gif" => data.starts_with(b"GIF8"),
         "webp" => data.len() > 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP",
         "pdf" => data.starts_with(b"%PDF"),
-        "docx" | "xlsx" | "pptx" | "odt" | "ods" => data.starts_with(b"PK"),
-        _ => !data.contains(&0),
+        "docx" | "xlsx" | "pptx" | "odt" | "ods" | "odp" | "zip" => data.starts_with(b"PK"),
+        "doc" | "xls" | "ppt" => data.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]),
+        "rtf" => data.starts_with(b"{\\rtf"),
+        "rar" => data.starts_with(b"Rar!"),
+        "7z" => data.starts_with(&[b'7', b'z', 0xBC, 0xAF]),
+        "gz" => data.starts_with(&[0x1F, 0x8B]),
+        // texto: UTF-8 sin bytes nulos, o UTF-16 con su marca (así Excel guarda «Texto Unicode»)
+        _ => data.starts_with(&[0xFF, 0xFE]) || data.starts_with(&[0xFE, 0xFF]) || !data.contains(&0),
     }
 }
 
@@ -134,9 +181,20 @@ async fn upload(
     if body.len() > FILE_MAX {
         return Err(AppError(StatusCode::PAYLOAD_TOO_LARGE, "máximo 5 MB por archivo".into()));
     }
-    if !ALLOWED.contains(&ext.as_str()) || !magic_ok(&ext, &body) {
-        audit(&st, &headers, peer, user.id, team, "archivo_rechazado", format!("{name} ({} bytes)", body.len())).await;
-        return Err(AppError::bad("tipo de archivo no permitido (imágenes, PDF, texto y documentos de oficina)"));
+    let allowed = allowed_exts(&st).await;
+    if !allowed.contains(&ext) {
+        audit(&st, &headers, peer, user.id, team, "archivo_rechazado", format!("{name} ({} bytes): tipo no permitido", body.len())).await;
+        return Err(AppError(
+            StatusCode::BAD_REQUEST,
+            format!(
+            "no se permite enviar archivos «.{ext}». Permitidos: {}. Un administrador puede cambiarlo en Configuración.",
+            allowed.join(", ")
+        ),
+        ));
+    }
+    if !magic_ok(&ext, &body) {
+        audit(&st, &headers, peer, user.id, team, "archivo_rechazado", format!("{name} ({} bytes): el contenido no es de ese tipo", body.len())).await;
+        return Err(AppError(StatusCode::BAD_REQUEST, format!("el contenido de «{name}» no corresponde a un archivo .{ext}")));
     }
     st.user_limiter.hit(&format!("chat-file:{}", user.id), 30, Duration::from_secs(3600))?;
     let id = sqlx::query("INSERT INTO chat_files (team_id, uploader, name, size, data, created_at) VALUES (?, ?, ?, ?, ?, ?)")
