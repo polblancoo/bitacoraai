@@ -507,7 +507,8 @@ ol.guide pre { margin: 4px 0; }
 .modal .botonera .spacer { display: none; }
 
 /* barra inferior (cuando la persona mueve los botones abajo): deja libre el control de zoom de la esquina */
-.top.bottom { border-bottom: 0; border-top: 1px solid var(--line); padding-right: 150px; }
+.bars.bottom .top { border-bottom: 0; border-top: 1px solid var(--line); }
+.bars.bottom .top:last-child { padding-right: 150px; }
 
 /* ventana de la tarea: más ancha por defecto (hay mucha información); el botón de maximizar sigue disponible */
 .modal.task-modal:not(.max) { width: min(920px, 96vw); }
@@ -537,3 +538,36 @@ ol.guide pre { margin: 4px 0; }
 @media (prefers-reduced-motion: reduce) { .ai-bar::after { animation: none; inset: 0; width: 100%; opacity: .5; } }
 .modal.task-modal .more { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
 .modal.task-modal .more > summary { cursor: pointer; opacity: .85; padding: 4px 0; }
+/* panel de tarea tipo terminal: la conversación al centro y los datos a un costado */
+.modal.task-modal:not(.max) { width: min(1180px, 97vw); }
+.task-split { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.task-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.task-main .comments { max-height: 58vh; min-height: 260px; }
+.task-main .desc-box > summary { cursor: pointer; opacity: .85; padding: 2px 0 6px; }
+.task-side { display: grid; gap: 8px; align-content: start; padding-left: 14px; border-left: 1px solid var(--line); min-width: 0; }
+.task-side h3 { margin: 10px 0 2px; font-size: 13px; opacity: .8; }
+.modal.task-modal .task-side .grid2, .modal.task-modal:not(.max) .task-side .grid2 { grid-template-columns: 1fr 1fr; gap: 8px; }
+.modal.task-modal.max .task-split { grid-template-columns: minmax(0, 1fr) 340px; }
+.modal.task-modal.max .task-main .comments { max-height: 68vh; }
+@media (max-width: 900px) { .task-split { grid-template-columns: 1fr; } .task-side { padding-left: 0; border-left: 0; } }
+.modal.task-modal:not(.max) .comment-in { min-height: 130px; }
+.modal.task-modal:not(.max) .task-main .desc-box textarea { min-height: 90px; }
+.task-main .comments { min-height: 200px; }
+.files-modal { max-width: 900px; }
+.files-path { margin: 8px 0; font-size: 13px; opacity: .9; }
+.files-path a { cursor: pointer; color: var(--blue); }
+.files-list { display: grid; max-height: 60vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.files-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 12px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.files-row:hover { background: var(--bg2); }
+.files-row:last-child { border-bottom: 0; }
+.files-view { max-height: 62vh; overflow: auto; background: var(--bg2); padding: 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.5; white-space: pre; tab-size: 4; }
+
+/* bloques de la barra: los botones pasan a la línea de abajo en vez de irse a la derecha fuera de la pantalla */
+.top.bblock { flex-wrap: nowrap; overflow: visible; padding-top: 8px; padding-bottom: 8px; }
+.top.bblock .blk-body { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; flex: 1 1 0; min-width: 0; animation: blk-in .18s ease-out; }
+.top.bblock .blk-body > * { flex-shrink: 1; }
+.top.bblock .blk-body input { width: 200px; }
+.top.bblock.min { padding-top: 4px; padding-bottom: 4px; }
+.top.bblock .blk-t { flex-shrink: 0; padding: 2px 8px; opacity: .8; }
+@keyframes blk-in { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .top.bblock .blk-body { animation: none; } }

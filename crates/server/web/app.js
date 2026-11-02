@@ -1307,23 +1307,25 @@ const openTask = guard(async (task) => {
         } }, store.get("taskMax") === "1" ? "⤡ Restaurar" : "⤢ Maximizar")),
       requestPanel(),
       reviewPanel(),
-      h("div", { class: "grid2" },
-        h("label", {}, "Estado", status), h("label", {}, "Prioridad", prio),
-        h("label", {}, "Responsable", who), h("label", {}, "Empieza", start),
-        h("label", {}, "Vence", due), h("label", {}, "Repetición", rec), h("small", { class: "hint" }, whoHint)),
-      h("label", {}, "Título", title),
-      h("label", {}, "Descripción", desc),
-      can("member") && budgetBox(cur(), title, desc),
-      ghBox,
-      h("h3", {}, "Comentarios"),
-      h("div", { class: "comments", id: "comments" }),
-      comment,
-      h("div", { class: "row" }, h("small", { class: "hint" }, "Ctrl+Enter envía"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: send }, "Enviar comentario")),
-      h("details", { class: "more" }, h("summary", {}, "🏷 Etiquetas, subtareas, dependencias y adjuntos"),
-        h("h3", {}, "Etiquetas"), labelBox, newLabel,
-        h("h3", {}, "Subtareas"), subBox, newSub,
-        h("h3", {}, "Depende de"), depBox, depAdd,
-        h("h3", {}, "Adjuntos"), attBox, attAdd),
+      h("div", { class: "task-split" },
+        h("div", { class: "task-main" },
+          h("label", {}, "Título", title),
+          h("details", { class: "desc-box", open: !cur().description || !S.comments.length }, h("summary", {}, "📝 Descripción de la tarea"), desc),
+          h("h3", {}, "Conversación"),
+          h("div", { class: "comments", id: "comments" }),
+          comment,
+          h("div", { class: "row" }, h("small", { class: "hint" }, "Ctrl+Enter envía"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: send }, "Enviar"))),
+        h("aside", { class: "task-side" },
+          h("div", { class: "grid2" },
+            h("label", {}, "Estado", status), h("label", {}, "Prioridad", prio),
+            h("label", {}, "Responsable", who), h("label", {}, "Empieza", start),
+            h("label", {}, "Vence", due), h("label", {}, "Repetición", rec), h("small", { class: "hint" }, whoHint)),
+          can("member") && budgetBox(cur(), title, desc),
+          ghBox,
+          h("h3", {}, "Etiquetas"), labelBox, newLabel,
+          h("h3", {}, "Subtareas"), subBox, newSub,
+          h("h3", {}, "Depende de"), depBox, depAdd,
+          h("h3", {}, "Adjuntos"), attBox, attAdd)),
       h("div", { class: "row" },
         can("member") && h("button", { class: "danger", onclick: del }, "Borrar"),
         h("button", { onclick: () => { closeModal(); openMindmap(cur()); } }, "Mapa mental"), h("span", { class: "spacer" }),
@@ -1362,6 +1364,44 @@ function sinceTxt(iso) {
   return m < 1 ? "recién empezó" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 setInterval(() => document.querySelectorAll(".ai-since").forEach((e) => (e.textContent = "🤖 " + sinceTxt(e.dataset.since))), 30000);
+// explorador de solo lectura de la carpeta de trabajo del proyecto (para quien usa la web desde otra máquina)
+const openFiles = guard(async () => {
+  const pid = S.project.id;
+  const body = h("div", { class: "files-body" });
+  const modal = h("div", { class: "overlay", id: "files-modal", onmousedown: (e) => e.target.id === "files-modal" && modal.remove() },
+    h("div", { class: "modal wide files-modal" }, h("h3", {}, "🗂 Archivos del proyecto", h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: () => modal.remove() }, "✕")),
+      h("small", { class: "hint" }, "Solo lectura. No se muestran archivos ocultos, claves ni bases de datos."), body));
+  document.body.append(modal);
+  const join = (a, b) => (a ? a + "/" : "") + b;
+  const kb = (n) => (n < 1024 ? n + " B" : (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB");
+  const crumbs = (path) => {
+    const parts = path ? path.split("/") : [];
+    return h("div", { class: "files-path" }, h("a", { onclick: () => show("") }, "📁 " + (S.project.work_dir.split("/").pop() || "/")),
+      ...parts.flatMap((p, i) => [" / ", h("a", { onclick: () => show(parts.slice(0, i + 1).join("/")) }, p)]));
+  };
+  async function show(path) {
+    try {
+      const r = await api("GET", `/api/projects/${pid}/files?path=${encodeURIComponent(path)}`);
+      body.replaceChildren(crumbs(r.path),
+        h("div", { class: "files-list" }, path && h("div", { class: "files-row", onclick: () => show(path.split("/").slice(0, -1).join("/")) }, "⬆ ..",),
+          r.entries.map((e) => h("div", { class: "files-row", onclick: () => (e.dir ? show(join(path, e.name)) : view(join(path, e.name))) },
+            h("span", {}, (e.dir ? "📁 " : "📄 ") + e.name), h("small", {}, e.dir ? "" : kb(e.size)))),
+          !r.entries.length && h("small", { class: "hint" }, "Carpeta vacía"), r.truncated && h("small", { class: "hint" }, "Se muestran los primeros 500.")));
+    } catch (e) { toast(e.message, true); }
+  }
+  async function view(path) {
+    try {
+      const r = await api("GET", `/api/projects/${pid}/file?path=${encodeURIComponent(path)}`);
+      const dir = path.split("/").slice(0, -1).join("/");
+      body.replaceChildren(crumbs(dir),
+        h("div", { class: "row" }, h("strong", {}, path), h("span", { class: "spacer" }),
+          h("button", { onclick: () => copy(r.text, "Contenido copiado") }, "Copiar contenido"), h("button", { onclick: () => show(dir) }, "← Volver")),
+        h("pre", { class: "files-view" }, r.text));
+    } catch (e) { toast(e.message, true); }
+  }
+  show("");
+});
+
 function taskCard(t) {
   const late = t.due && t.status !== "done" && new Date(t.due) < new Date();
   const card = h("div", { class: "card", draggable: true, onclick: () => openTask(t) },
@@ -1466,10 +1506,12 @@ function appView() {
   const search = h("input", { placeholder: "Buscar…", value: S.query, oninput: (e) => { S.query = e.target.value; render(true); } });
   const dock = PANES.length > 0 && !S.terms && h("button", { class: "term-dock", title: "Tenés terminales abiertas: tocá para volver a ellas", onclick: () => openTerms() }, `🖥️ Terminales (${PANES.length})`);
   // la barra se parte en dos grupos (botones de acciones; vistas y buscador) que se pueden poner arriba o abajo (Preferencias)
-  const barActs = [
+  const actsLead = [
         // el nombre del proyecto ya se ve resaltado en la barra lateral: arriba se deja el lugar a los botones
         (S.terms || S.portfolio || !S.project) ? h("h1", {}, S.terms ? "🖥️ Terminales" : S.portfolio ? "📊 Portafolio" : S.team ? "Sin proyectos" : "Creá un equipo para empezar") : h("span", { class: "grow" }),
         h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
+  ];
+  const barActs = [
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openSchedules, title: "Tareas que se crean solas a una hora fija: cada día, semana o mes" }, "⏰ Programadas"),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
         S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
@@ -1487,8 +1529,23 @@ function appView() {
         search
   ];
   const posActs = store.get("barActs") === "bottom" ? "bottom" : "top", posViews = store.get("barViews") === "bottom" ? "bottom" : "top";
-  const barTop = [...(posActs === "top" ? barActs : []), ...(posViews === "top" ? barViews : [])];
-  const barBottom = [...(posActs === "bottom" ? barActs : []), ...(posViews === "bottom" ? barViews : [])];
+  // cada grupo es un bloque: se minimiza (se desliza a la izquierda y queda una pestaña para volver a abrirlo) y se intercambia de lugar con el otro
+  const viewsFirst = store.get("barOrder") === "views";
+  const swapBlocks = () => {
+    if (posActs !== posViews) { store.set("barActs", posViews); store.set("barViews", posActs); }
+    else store.set("barOrder", viewsFirst ? "acts" : "views");
+    render();
+  };
+  const block = (key, name, lead, items) => {
+    const off = store.get("blk" + key) === "1";
+    return h("div", { class: "top bblock" + (off ? " min" : "") }, ...lead,
+      h("button", { class: "ghost blk-t", title: off ? `Mostrar ${name}` : `Minimizar ${name} (se desliza a la izquierda)`, onclick: () => { store.set("blk" + key, off ? "0" : "1"); render(); } }, off ? "› " + name : "‹"),
+      !off && h("div", { class: "blk-body" }, items.filter(Boolean)),
+      !off && h("button", { class: "ghost blk-t", title: "Intercambiar de lugar este bloque con el otro (arriba / abajo)", onclick: swapBlocks }, "⇅"));
+  };
+  const bActs = block("Acts", "Acciones", actsLead, barActs), bViews = block("Views", "Vistas", [], barViews);
+  const inRegion = (pos) => [[posActs, bActs, 0], [posViews, bViews, 1]].filter(([p]) => p === pos).sort((x, y) => (viewsFirst ? y[2] - x[2] : x[2] - y[2])).map((x) => x[1]);
+  const barTop = inRegion("top"), barBottom = inRegion("bottom");
   return h("div", { class: "shell" + (S.sideOff ? " side-off" : "") + (S.panel && S.team ? " with-panel" : "") + (S.terms && store.get("tvZen") === "1" ? " tv-zen" : "") },
     h("aside", {},
       h("div", { class: "brand" }, h("img", { src: "icon-192.png", alt: "", width: 22, height: 22, style: "vertical-align:middle;margin-right:6px;border-radius:5px" }), h("span", { class: "brand-name" }, APP_NAME),
@@ -1511,17 +1568,17 @@ function appView() {
         h("button", { class: "ghost", onclick: logout }, "Salir"),
         h("button", { class: "ghost", onclick: logoutAll, title: "Cierra la sesión en todos los dispositivos" }, "⏻"))),
     h("main", {},
-      h("div", { class: "top" }, barTop),
+      barTop.length > 0 && h("div", { class: "bars" }, barTop),
       S.project && !S.portfolio && !S.terms && (S.project.work_dir || S.project.repo) && h("div", { class: "proj-meta" },
         S.project.work_dir && h("span", { title: "Carpeta de trabajo" }, "📁 " + S.project.work_dir, " ",
-          h("button", { class: "ghost", title: "Abrir la carpeta (en la máquina del servidor); si no se puede, copia la ruta", onclick: async () => {
+          h("button", { class: "ghost", title: "Abre la carpeta si estás en la máquina del servidor; desde otra máquina copia la ruta", onclick: async () => {
             try { await api("POST", `/api/projects/${S.project.id}/open-folder`); toast("Carpeta abierta"); }
-            catch (e) { copy(S.project.work_dir, "No se pudo abrir: ruta copiada"); }
-          } }, "📂 Abrir")),
+            catch (e) { copy(S.project.work_dir, "La carpeta está en la máquina del servidor: no se abre desde acá. Ruta copiada"); }
+          } }, "📂 Abrir"), " ", h("button", { class: "ghost", title: "Ver los archivos de la carpeta de trabajo (solo lectura), sin importar desde qué máquina entres", onclick: openFiles }, "🗂 Archivos")),
         S.project.repo && h("span", { title: "Repositorio" }, "🔗 " + S.project.repo)),
       S.terms ? termsView() : S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
         : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos"),
-      barBottom.filter(Boolean).length > 0 && h("div", { class: "top bottom" }, barBottom)),
+      barBottom.length > 0 && h("div", { class: "bars bottom" }, barBottom)),
     S.panel && S.team && teamPanel(), dock);
 }
 

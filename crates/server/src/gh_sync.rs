@@ -161,11 +161,22 @@ async fn sync_now(State(st): State<AppState>, user: AuthUser, Path(project): Pat
     Ok(Json(sync_project(&st, project).await?))
 }
 
-/// Abre la carpeta de trabajo del proyecto en el escritorio de la máquina donde corre el servidor.
-async fn open_folder(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
+/// Abre la carpeta de trabajo del proyecto en el escritorio de la máquina donde corre el servidor (solo si quien lo pide está en esa misma máquina).
+async fn open_folder(
+    State(st): State<AppState>,
+    axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
+    headers: axum::http::HeaderMap,
+    user: AuthUser,
+    Path(project): Path<Id>,
+) -> Result<Json<Value>> {
     user.human_only()?;
     let team = routes::team_of_project(&st, project).await?;
     routes::ensure_writer(&st, team, user.id).await?;
+    // solo si quien pide está sentado frente a la máquina del servidor (entra por localhost): si no, se abriría en la pantalla de otra persona
+    let ip = crate::limits::client_ip(&headers, peer, st.trust_proxy);
+    if !ip.is_loopback() {
+        return Err(AppError::bad("la carpeta está en la máquina del servidor: solo se puede abrir desde esa máquina"));
+    }
     let dir: String = sqlx::query_scalar("SELECT work_dir FROM projects WHERE id = ?").bind(project).fetch_one(&st.db).await.unwrap_or_default();
     if dir.trim().is_empty() || !std::path::Path::new(&dir).is_dir() {
         return Err(AppError::bad("la carpeta no existe en la máquina del servidor"));
