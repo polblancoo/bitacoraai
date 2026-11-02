@@ -11,6 +11,7 @@ mod digest;
 mod review;
 mod files;
 mod chat;
+mod tls;
 mod limits;
 mod notify;
 mod extras;
@@ -249,19 +250,35 @@ async fn main() -> anyhow::Result<()> {
         .layer(cors())
         .layer(TraceLayer::new_for_http())
         .with_state(state);
-    let svc = app.into_make_service_with_connect_info::<SocketAddr>();
-
     match (std::env::var("TM_TLS_CERT"), std::env::var("TM_TLS_KEY")) {
         (Ok(cert), Ok(key)) => {
             let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
             let cfg = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert, key).await?;
             tracing::info!("tm-server (HTTPS) escuchando en {addr}");
-            axum_server::bind_rustls(addr, cfg).serve(svc).await?;
+            axum_server::bind_rustls(addr, cfg).serve(app.into_make_service_with_connect_info::<SocketAddr>()).await?;
         }
         _ => {
-            if !addr.ip().is_loopback() && !trust_proxy {
-                tracing::warn!("sirviendo HTTP plano en {addr}: configurá TM_TLS_CERT/TM_TLS_KEY o un proxy TLS (TM_TRUSTED_PROXY=1)");
+            // HTTP de siempre, más un HTTPS con certificado propio en el puerto siguiente (lo necesita el chat)
+            if let Some(https_addr) = tls::plan(addr) {
+                match tls::ensure_cert() {
+                    Ok((cert, key)) => {
+                        let svc = app.clone().layer(axum::middleware::from_fn(tls::mark)).into_make_service_with_connect_info::<SocketAddr>();
+                        tokio::spawn(async move {
+                            match axum_server::tls_rustls::RustlsConfig::from_pem_file(cert, key).await {
+                                Ok(cfg) => {
+                                    tracing::info!("tm-server (HTTPS automático) escuchando en {https_addr}");
+                                    if let Err(e) = axum_server::bind_rustls(https_addr, cfg).serve(svc).await {
+                                        tracing::warn!("el HTTPS automático se detuvo: {e}");
+                                    }
+                                }
+                                Err(e) => tracing::warn!("no se pudo cargar el certificado propio: {e}"),
+                            }
+                        });
+                    }
+                    Err(e) => tracing::warn!("no se pudo crear el certificado HTTPS propio: {e}"),
+                }
             }
+            let svc = app.layer(axum::middleware::from_fn(tls::strip)).into_make_service_with_connect_info::<SocketAddr>();
             let listener = tokio::net::TcpListener::bind(addr).await?;
             tracing::info!("tm-server escuchando en {addr}");
             axum::serve(listener, svc).await?;

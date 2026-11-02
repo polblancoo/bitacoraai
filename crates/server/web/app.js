@@ -924,7 +924,10 @@ async function chatHistory() {
   const c = CHAT.chan, tid = S.team.id;
   const q = c.t === "dm" ? `with=${c.id}` : c.t === "project" ? `project=${c.id}` : "";
   try { CHAT.msgs = await api("GET", `/api/teams/${tid}/chat?${q}`); CHAT.err = ""; CHAT.unread[chanKey(c)] = 0; }
-  catch (e) { CHAT.msgs = []; CHAT.err = e.message; }
+  catch (e) {
+    CHAT.msgs = []; CHAT.err = e.message; CHAT.https = "";
+    try { const st = await api("GET", "/api/chat/status"); if (!st.secure) CHAT.https = st.https_url || ""; } catch {}
+  }
   chatDraw();
 }
 function chatSwitch(c) { CHAT.chan = c; CHAT.msgs = []; chatHistory(); }
@@ -967,7 +970,8 @@ function chatDraw() {
   CHAT.who.replaceChildren(h("small", { class: "hint" }, `${CHAT.people.filter((x) => x.online).length} conectados · tocá un nombre para hablarle en privado`),
     h("div", { class: "chat-chips" }, others.map((x) => h("button", { class: "chip" + (CHAT.chan.t === "dm" && CHAT.chan.id === x.id ? " on" : ""), title: x.online ? "Conectado" : "Desconectado", onclick: () => chatSwitch({ t: "dm", id: x.id }) },
       h("span", { class: "dot " + (x.online ? "on" : "off") }), x.username, CHAT.unread["dm" + x.id] ? ` (${CHAT.unread["dm" + x.id]})` : ""))));
-  CHAT.err_.textContent = CHAT.err; CHAT.err_.hidden = !CHAT.err;
+  CHAT.err_.replaceChildren(CHAT.err, ...(CHAT.err && CHAT.https ? [h("div", {}, h("a", { href: CHAT.https + location.pathname, class: "btnlike" }, "🔒 Abrir con conexión segura (HTTPS)"))] : []));
+  CHAT.err_.hidden = !CHAT.err;
   CHAT.list.replaceChildren(...CHAT.msgs.map((m) => h("div", { class: "chat-msg" + (m.from_user === me ? " mine" : "") },
     h("div", {}, h("b", {}, m.from), " ", h("small", {}, new Date(m.created_at).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))),
     m.body && h("div", { class: "chat-body" }, m.body),

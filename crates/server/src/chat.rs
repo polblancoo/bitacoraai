@@ -42,7 +42,7 @@ pub fn router() -> Router<AppState> {
 
 /// ¿La conexión es segura? HTTPS propio, proxy de confianza que avisa HTTPS, o la propia máquina del servidor.
 fn secure(st: &AppState, headers: &HeaderMap, peer: SocketAddr) -> bool {
-    if std::env::var("TM_CHAT_ALLOW_HTTP").is_ok_and(|v| v == "1") || st.tls {
+    if std::env::var("TM_CHAT_ALLOW_HTTP").is_ok_and(|v| v == "1") || st.tls || headers.contains_key(crate::tls::HDR) {
         return true;
     }
     let ip = limits::client_ip(headers, peer, st.trust_proxy);
@@ -55,7 +55,7 @@ fn secure(st: &AppState, headers: &HeaderMap, peer: SocketAddr) -> bool {
 fn need_https() -> AppError {
     AppError(
         StatusCode::FORBIDDEN,
-        "El chat solo funciona por una conexión segura (HTTPS): configurá TM_TLS_CERT/TM_TLS_KEY o un proxy con HTTPS (TM_TRUSTED_PROXY=1). Para probar en una red de confianza se puede forzar con TM_CHAT_ALLOW_HTTP=1.".into(),
+        "El chat solo funciona por una conexión segura (HTTPS). Abrí la app con https:// (el navegador va a avisar una vez que el certificado es propio: aceptalo) o pedile al administrador que ponga un certificado de la empresa.".into(),
     )
 }
 
@@ -74,7 +74,13 @@ async fn audit(st: &AppState, headers: &HeaderMap, peer: SocketAddr, user: Id, t
 
 async fn status(State(st): State<AppState>, ConnectInfo(peer): ConnectInfo<SocketAddr>, headers: HeaderMap, user: AuthUser) -> Result<Json<Value>> {
     user.human_only()?;
-    Ok(Json(json!({ "secure": secure(&st, &headers, peer) })))
+    // Enlace a la misma pantalla por HTTPS (mismo equipo, puerto seguro) para ofrecerlo cuando se entró por HTTP
+    let https_url = crate::tls::port().and_then(|p| {
+        let host = headers.get("host")?.to_str().ok()?;
+        let name = host.rsplit_once(':').filter(|(_, port)| port.chars().all(|c| c.is_ascii_digit())).map_or(host, |(n, _)| n);
+        Some(format!("https://{name}:{p}"))
+    });
+    Ok(Json(json!({ "secure": secure(&st, &headers, peer), "https_url": https_url })))
 }
 
 fn clean_name(raw: &str) -> String {

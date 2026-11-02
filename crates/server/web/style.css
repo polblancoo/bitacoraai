@@ -585,6 +585,7 @@ ol.guide pre { margin: 4px 0; }
 .chat-file { margin-top: 4px; padding: 2px 6px; }
 .chat-in { min-height: 64px; resize: vertical; }
 .chat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.chat-err a { display: inline-block; margin-top: 6px; }
 .chat-err { background: color-mix(in srgb, var(--red) 15%, transparent); border: 1px solid var(--red); border-radius: 8px; padding: 8px; font-size: 13px; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; background: var(--dim); }
 .dot.on { background: var(--green); }

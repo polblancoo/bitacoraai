@@ -44,3 +44,4 @@ aes-gcm = "0.10"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "aws-lc-rs", "hostname", "webpki-roots"] }
+rcgen = "0.13.2"
