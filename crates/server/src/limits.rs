@@ -147,6 +147,10 @@ impl WsCounter {
         true
     }
 
+    pub fn is_online(&self, user: i64) -> bool {
+        self.0.lock().unwrap().contains_key(&user)
+    }
+
     pub fn release(&self, user: i64) {
         let mut m = self.0.lock().unwrap();
         if let Some(n) = m.get_mut(&user) {

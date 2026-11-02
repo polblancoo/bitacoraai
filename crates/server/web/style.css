@@ -507,8 +507,6 @@ ol.guide pre { margin: 4px 0; }
 .modal .botonera .spacer { display: none; }
 
 /* barra inferior (cuando la persona mueve los botones abajo): deja libre el control de zoom de la esquina */
-.bars.bottom .top { border-bottom: 0; border-top: 1px solid var(--line); }
-.bars.bottom .top:last-child { padding-right: 150px; }
 
 /* ventana de la tarea: más ancha por defecto (hay mucha información); el botón de maximizar sigue disponible */
 .modal.task-modal:not(.max) { width: min(920px, 96vw); }
@@ -562,12 +560,34 @@ ol.guide pre { margin: 4px 0; }
 .files-row:last-child { border-bottom: 0; }
 .files-view { max-height: 62vh; overflow: auto; background: var(--bg2); padding: 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.5; white-space: pre; tab-size: 4; }
 
-/* bloques de la barra: los botones pasan a la línea de abajo en vez de irse a la derecha fuera de la pantalla */
-.top.bblock { flex-wrap: nowrap; overflow: visible; padding-top: 8px; padding-bottom: 8px; }
-.top.bblock .blk-body { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; flex: 1 1 0; min-width: 0; animation: blk-in .18s ease-out; }
-.top.bblock .blk-body > * { flex-shrink: 1; }
+/* bloques de la barra: van lado a lado en una sola fila (si no entran, la fila se desplaza); cada uno se minimiza y se intercambian con ⇅ */
+.bars { display: flex; flex-wrap: nowrap; align-items: stretch; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }
+.bars.bottom { border-bottom: 0; border-top: 1px solid var(--line); }
+.bars .top.bblock { border: 0; flex-wrap: nowrap; overflow: visible; padding: 14px 10px 14px 22px; flex: 0 0 auto; }
+.bars .top.bblock:first-child { flex: 1 1 auto; }
+.bars.bottom .top.bblock:last-child { padding-right: 150px; }
+.top.bblock .blk-body { display: flex; flex-wrap: nowrap; gap: 12px; align-items: center; animation: blk-in .18s ease-out; }
 .top.bblock .blk-body input { width: 200px; }
-.top.bblock.min { padding-top: 4px; padding-bottom: 4px; }
 .top.bblock .blk-t { flex-shrink: 0; padding: 2px 8px; opacity: .8; }
 @keyframes blk-in { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .top.bblock .blk-body { animation: none; } }
+
+/* chat del equipo: panel lateral que se muestra y se oculta */
+.shell.with-chat { grid-template-columns: 240px 1fr 340px; }
+.shell.with-panel.with-chat { grid-template-columns: 240px 1fr 330px 340px; }
+.shell.side-off.with-chat { grid-template-columns: 46px 1fr 340px; }
+.shell.side-off.with-panel.with-chat { grid-template-columns: 46px 1fr 330px 340px; }
+.chat-panel { background: var(--bg2); border-left: 1px solid var(--line); padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; height: auto; max-height: 100%; overflow: hidden; padding-bottom: 76px; }
+.chat-list { flex: 1 1 auto; min-height: 120px; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+.chat-msg { background: var(--card); border-radius: 8px; padding: 7px 10px; max-width: 94%; align-self: flex-start; }
+.chat-msg.mine { align-self: flex-end; background: color-mix(in srgb, var(--blue) 18%, var(--card)); }
+.chat-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-file { margin-top: 4px; padding: 2px 6px; }
+.chat-in { min-height: 64px; resize: vertical; }
+.chat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.chat-err { background: color-mix(in srgb, var(--red) 15%, transparent); border: 1px solid var(--red); border-radius: 8px; padding: 8px; font-size: 13px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; background: var(--dim); }
+.dot.on { background: var(--green); }
+.audit-list { display: grid; gap: 4px; max-height: 60vh; overflow: auto; margin-top: 8px; }
+.audit-row { display: grid; grid-template-columns: 150px 90px 150px 1fr 110px; gap: 8px; font-size: 13px; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+@media (max-width: 1100px) { .shell.with-chat .chat-panel { position: fixed; right: 0; top: 0; bottom: 0; width: min(360px, 94vw); z-index: 41; box-shadow: -10px 0 30px #0008; } .shell.with-chat, .shell.with-panel.with-chat { grid-template-columns: 240px 1fr; } }

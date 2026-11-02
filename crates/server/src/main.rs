@@ -10,6 +10,7 @@ mod profile_pack;
 mod digest;
 mod review;
 mod files;
+mod chat;
 mod limits;
 mod notify;
 mod extras;
@@ -59,6 +60,8 @@ pub struct AppState {
     pub user_limiter: Arc<limits::RateLimiter<String>>,
     pub ws_conns: Arc<limits::WsCounter>,
     pub trust_proxy: bool,
+    /// El propio servidor sirve HTTPS (TM_TLS_CERT / TM_TLS_KEY).
+    pub tls: bool,
     pub mailer: Option<Arc<notify::Mailer>>,
     pub email_limiter: Arc<limits::RateLimiter<Id>>,
     pub telegram: Option<Arc<telegram::Telegram>>,
@@ -221,6 +224,7 @@ async fn main() -> anyhow::Result<()> {
         user_limiter: Default::default(),
         ws_conns: Default::default(),
         trust_proxy,
+        tls: std::env::var("TM_TLS_CERT").is_ok() && std::env::var("TM_TLS_KEY").is_ok(),
         mailer: notify::Mailer::from_env().map(Arc::new),
         email_limiter: Default::default(),
         telegram: telegram::Telegram::from_env().await.map(Arc::new),
@@ -238,7 +242,7 @@ async fn main() -> anyhow::Result<()> {
     report::spawn_reports(state.clone());
     digest::spawn(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(gh_sync::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(gh_sync::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(chat::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

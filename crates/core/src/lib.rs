@@ -481,6 +481,28 @@ pub enum Event {
     CanvasItemDeleted { id: Id, project_id: Id },
     CanvasLink(CanvasLink),
     CanvasLinkDeleted { id: Id, project_id: Id },
+    /// Mensaje de chat: del canal del equipo o de un proyecto (a todo el equipo) o directo (solo a las dos personas).
+    Chat(ChatMessage),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatFile {
+    pub id: Id,
+    pub name: String,
+    pub size: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub id: Id,
+    pub team_id: Id,
+    pub project_id: Option<Id>,
+    pub from_user: Id,
+    pub from: String,
+    pub to_user: Option<Id>,
+    pub body: String,
+    pub file: Option<ChatFile>,
+    pub created_at: DateTime<Utc>,
 }
 
 // ---- Adjuntos, actividad ----

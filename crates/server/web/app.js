@@ -33,7 +33,7 @@ const store = {
 
 const S = {
   sideOff: store.get("sideOff") === "1",
-  panel: store.get("panel") === "1", overview: null,
+  panel: store.get("panel") === "1", overview: null, chatOpen: store.get("chat") === "1",
   // servida por tm-server (web): el servidor es el propio origen; en Tauri se elige a mano
   server: /^https?:$/.test(location.protocol) && location.hostname !== "tauri.localhost" ? location.origin : store.get("server") || "http://127.0.0.1:7878",
   token: store.get("token"),
@@ -372,6 +372,8 @@ function onEvent({ type, data }) {
       i >= 0 ? (S.tasks[i] = data) : S.tasks.push(data);
       if (S.reviews) { clearTimeout(onEvent.rv); onEvent.rv = setTimeout(loadReviews, 600); }
     }
+  } else if (type === "chat") {
+    chatAdd(data);
   } else if (type === "label_created") {
     if (data.team_id === S.team?.id && !S.labels.some((l) => l.id === data.id)) S.labels.push(data);
   } else if (type === "label_deleted") {
@@ -901,6 +903,98 @@ const togglePanel = () => {
   S.panel = !S.panel; store.set("panel", S.panel ? "1" : null);
   S.panel ? loadOverview() : render();
 };
+
+// ---------- chat del equipo (panel lateral) ----------
+// El panel se arma una sola vez y se vuelve a colocar en cada dibujo de la pantalla, así no pierde lo que se está escribiendo.
+const CHAT = { el: null, chan: { t: "team" }, msgs: [], people: [], unread: {}, pending: null, err: "", teamId: null, timer: null, total: 0 };
+const chanKey = (c) => (c.t === "dm" ? "dm" + c.id : c.t === "project" ? "p" + c.id : "team");
+const msgKey = (m) => (m.to_user != null ? "dm" + (m.from_user === S.user.id ? m.to_user : m.from_user) : m.project_id != null ? "p" + m.project_id : "team");
+const inChan = (m, c) => msgKey(m) === chanKey(c);
+const toggleChat = () => {
+  S.chatOpen = !S.chatOpen; store.set("chat", S.chatOpen ? "1" : null);
+  clearInterval(CHAT.timer);
+  if (S.chatOpen) { CHAT.timer = setInterval(chatPresence, 20000); CHAT.teamId = null; }
+  render();
+};
+async function chatPresence() {
+  if (!S.team || !S.chatOpen) return;
+  try { CHAT.people = (await api("GET", `/api/teams/${S.team.id}/presence`)).people; chatDraw(); } catch {}
+}
+async function chatHistory() {
+  const c = CHAT.chan, tid = S.team.id;
+  const q = c.t === "dm" ? `with=${c.id}` : c.t === "project" ? `project=${c.id}` : "";
+  try { CHAT.msgs = await api("GET", `/api/teams/${tid}/chat?${q}`); CHAT.err = ""; CHAT.unread[chanKey(c)] = 0; }
+  catch (e) { CHAT.msgs = []; CHAT.err = e.message; }
+  chatDraw();
+}
+function chatSwitch(c) { CHAT.chan = c; CHAT.msgs = []; chatHistory(); }
+function chatAdd(m) {
+  if (m.team_id !== S.team?.id || CHAT.msgs.some((x) => x.id === m.id)) return;
+  if (S.chatOpen && inChan(m, CHAT.chan)) CHAT.msgs.push(m);
+  else if (m.from_user !== S.user.id) {
+    CHAT.unread[msgKey(m)] = (CHAT.unread[msgKey(m)] || 0) + 1; CHAT.total++;
+    if (!S.chatOpen) { toast(`💬 ${m.from}: ${(m.body || "📎 " + (m.file?.name || "archivo")).slice(0, 80)}`); render(); }
+  }
+  chatDraw();
+}
+const chatSend = guard(async () => {
+  const body = CHAT.inp.value.trim(); if (!body && !CHAT.pending) return;
+  const c = CHAT.chan, payload = { body, file_id: CHAT.pending?.id };
+  if (c.t === "dm") payload.to = c.id; else if (c.t === "project") payload.project_id = c.id;
+  const m = await api("POST", `/api/teams/${S.team.id}/chat`, payload);
+  CHAT.inp.value = ""; CHAT.pending = null; chatAdd(m);
+});
+const chatPick = guard(async (e) => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  const r = await (await apiRaw("POST", `/api/teams/${S.team.id}/chat/files?name=${encodeURIComponent(f.name)}`, f)).json();
+  CHAT.pending = r; chatDraw();
+});
+const chatAudit = guard(async () => {
+  const rows = await api("GET", `/api/teams/${S.team.id}/chat/audit`);
+  const m = h("div", { class: "overlay", id: "audit-modal", onmousedown: (e) => e.target.id === "audit-modal" && m.remove() },
+    h("div", { class: "modal wide" }, h("h3", {}, "🧾 Registro del chat", h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: () => m.remove() }, "✕")),
+      h("small", { class: "hint" }, "Quién hizo qué, cuándo y desde qué dirección (últimos 300 movimientos). Solo lo ven administradores y dueños."),
+      h("div", { class: "audit-list" }, rows.length ? rows.map((r) => h("div", { class: "audit-row" }, h("small", {}, new Date(r.at).toLocaleString()), h("b", {}, r.who || "?"), h("span", {}, r.action.replace(/_/g, " ")), h("span", { class: "hint" }, r.detail), h("small", {}, r.ip))) : h("small", {}, "Todavía no hay movimientos."))));
+  document.body.append(m);
+});
+function chatDraw() {
+  if (!CHAT.el) return;
+  const me = S.user.id, kb = (n) => (n < 1024 ? n + " B" : (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB");
+  CHAT.sel.replaceChildren(h("option", { value: "team", selected: CHAT.chan.t === "team" }, "👥 Todo el equipo" + (CHAT.unread.team ? ` (${CHAT.unread.team})` : "")),
+    ...S.projects.map((p) => h("option", { value: "p" + p.id, selected: CHAT.chan.t === "project" && CHAT.chan.id === p.id }, "📁 " + p.name + (CHAT.unread["p" + p.id] ? ` (${CHAT.unread["p" + p.id]})` : ""))),
+    CHAT.chan.t === "dm" && h("option", { value: "dm", selected: true }, "✉ " + (CHAT.people.find((x) => x.id === CHAT.chan.id)?.username || "directo")));
+  const others = CHAT.people.filter((x) => !x.me);
+  CHAT.who.replaceChildren(h("small", { class: "hint" }, `${CHAT.people.filter((x) => x.online).length} conectados · tocá un nombre para hablarle en privado`),
+    h("div", { class: "chat-chips" }, others.map((x) => h("button", { class: "chip" + (CHAT.chan.t === "dm" && CHAT.chan.id === x.id ? " on" : ""), title: x.online ? "Conectado" : "Desconectado", onclick: () => chatSwitch({ t: "dm", id: x.id }) },
+      h("span", { class: "dot " + (x.online ? "on" : "off") }), x.username, CHAT.unread["dm" + x.id] ? ` (${CHAT.unread["dm" + x.id]})` : ""))));
+  CHAT.err_.textContent = CHAT.err; CHAT.err_.hidden = !CHAT.err;
+  CHAT.list.replaceChildren(...CHAT.msgs.map((m) => h("div", { class: "chat-msg" + (m.from_user === me ? " mine" : "") },
+    h("div", {}, h("b", {}, m.from), " ", h("small", {}, new Date(m.created_at).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))),
+    m.body && h("div", { class: "chat-body" }, m.body),
+    m.file && h("button", { class: "ghost chat-file", title: "Descargar", onclick: guard(() => saveFile(`/api/chat/files/${m.file.id}`, m.file.name)) }, `📎 ${m.file.name} (${kb(m.file.size)})`))));
+  CHAT.list.scrollTop = CHAT.list.scrollHeight;
+  CHAT.att.replaceChildren(...(CHAT.pending ? [h("span", {}, "📎 " + CHAT.pending.name + " "), h("button", { class: "ghost", onclick: () => { CHAT.pending = null; chatDraw(); } }, "✕")] : []));
+}
+function chatPanel() {
+  if (!CHAT.el) {
+    CHAT.sel = h("select", { onchange: (e) => { const v = e.target.value; if (v === "team") chatSwitch({ t: "team" }); else if (v[0] === "p") chatSwitch({ t: "project", id: +v.slice(1) }); } });
+    CHAT.who = h("div", { class: "chat-who" }); CHAT.list = h("div", { class: "chat-list" });
+    CHAT.err_ = h("div", { class: "chat-err", hidden: true }); CHAT.att = h("div", { class: "chat-att" });
+    CHAT.inp = h("textarea", { class: "chat-in", rows: 3, maxLength: 4000, placeholder: "Escribí un mensaje… (Enter envía · Shift+Enter, línea nueva)" });
+    CHAT.inp.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); chatSend(); } });
+    const pick = h("input", { type: "file", hidden: true, onchange: chatPick });
+    CHAT.el = h("section", { class: "chat-panel" },
+      h("div", { class: "row" }, h("strong", {}, "💬 Chat"), h("span", { class: "spacer" }),
+        can("admin") && h("button", { class: "ghost", title: "Registro de todo lo que pasó en el chat", onclick: chatAudit }, "🧾"),
+        h("button", { class: "ghost", title: "Cerrar el chat", onclick: toggleChat }, "✕")),
+      h("small", { class: "hint" }, "🔒 Solo por conexión segura; mensajes y archivos se guardan cifrados."),
+      CHAT.err_, CHAT.sel, CHAT.who, CHAT.list, CHAT.att,
+      CHAT.inp, h("div", { class: "row" }, h("button", { class: "ghost", title: "Adjuntar un archivo (imágenes, PDF, texto, documentos; hasta 5 MB)", onclick: () => pick.click() }, "📎 Adjuntar"), pick, h("span", { class: "spacer" }), h("button", { class: "primary", onclick: chatSend }, "Enviar")));
+  }
+  if (S.team && CHAT.teamId !== S.team.id) { CHAT.teamId = S.team.id; CHAT.chan = { t: "team" }; CHAT.msgs = []; CHAT.unread = {}; CHAT.total = 0; CHAT.people = []; chatHistory(); chatPresence(); }
+  else chatDraw();
+  return CHAT.el;
+}
 
 function teamPanel() {
   const o = S.overview && S.overview.id === S.team.id ? S.overview : null;
@@ -1519,6 +1613,7 @@ function appView() {
         S.project && !S.portfolio && !S.terms && can("admin") && S.reviews && h("button", { class: S.reviews.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA da por terminado queda «en revisión» hasta que una persona lo apruebe (planes Equipo y Empresa)", onclick: toggleReview }, "🔎 Revisión: " + (S.reviews.enabled ? "sí" : "no")),
         S.project && !S.portfolio && !S.terms && can("member") && h("button", { onclick: githubProject, title: "GitHub: traer issues como tareas, estado de PR y pruebas, ajustes del proyecto" }, "🐙 GitHub" + ({ success: " ✅", failure: " ❌", pending: " ⏳" }[S.ghCi] || "")),
         S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
+        S.team && h("button", { class: S.chatOpen ? "on" : "", onclick: toggleChat, title: "Chat del equipo: ver quién está conectado, charlar y mandar archivos" }, "💬 Chat" + (CHAT.total > 0 && !S.chatOpen ? ` (${CHAT.total})` : "")),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
         S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
   ];
@@ -1546,7 +1641,7 @@ function appView() {
   const bActs = block("Acts", "Acciones", actsLead, barActs), bViews = block("Views", "Vistas", [], barViews);
   const inRegion = (pos) => [[posActs, bActs, 0], [posViews, bViews, 1]].filter(([p]) => p === pos).sort((x, y) => (viewsFirst ? y[2] - x[2] : x[2] - y[2])).map((x) => x[1]);
   const barTop = inRegion("top"), barBottom = inRegion("bottom");
-  return h("div", { class: "shell" + (S.sideOff ? " side-off" : "") + (S.panel && S.team ? " with-panel" : "") + (S.terms && store.get("tvZen") === "1" ? " tv-zen" : "") },
+  return h("div", { class: "shell" + (S.sideOff ? " side-off" : "") + (S.panel && S.team ? " with-panel" : "") + (S.chatOpen && S.team ? " with-chat" : "") + (S.terms && store.get("tvZen") === "1" ? " tv-zen" : "") },
     h("aside", {},
       h("div", { class: "brand" }, h("img", { src: "icon-192.png", alt: "", width: 22, height: 22, style: "vertical-align:middle;margin-right:6px;border-radius:5px" }), h("span", { class: "brand-name" }, APP_NAME),
         h("button", { class: "ghost side-toggle", title: S.sideOff ? "Mostrar la barra lateral" : "Ocultar la barra lateral (queda una franja para volver a abrirla)", onclick: toggleSide }, S.sideOff ? "»" : "«")),
@@ -1563,6 +1658,7 @@ function appView() {
       h("button", { class: "cfg-btn", onclick: () => openManual(), title: "Manual con buscador e índice por temas" }, "📖  Manual"),
       h("div", { class: "me" }, h("span", { class: "live" + (S.online ? " on" : ""), title: S.online ? "en vivo" : "desconectado" }),
         h("span", { title: S.team ? `Tu rol en «${S.team.name}»` : "" }, S.user?.username, S.team && h("small", { class: "hint" }, " · " + (ROLES.find(([r]) => r === myRole())?.[1] || ""))), h("span", { class: "spacer" }),
+        S.team && h("button", { class: "ghost" + (S.chatOpen ? " on" : ""), title: "Chat del equipo: ver quién está conectado, charlar y mandar archivos", onclick: toggleChat }, "💬" + (CHAT.total > 0 && !S.chatOpen ? ` ${CHAT.total}` : "")),
         h("button", { class: "ghost bell" + (S.unread ? " has" : ""), title: "Bandeja de novedades (Ctrl+T n)", onclick: () => loadInbox(false) }, S.unread ? `🔔 ${S.unread}` : "🔔"),
         h("button", { class: "ghost", onclick: helpModal, title: "Atajos y ayuda (?)" }, "?"),
         h("button", { class: "ghost", onclick: logout }, "Salir"),
@@ -1579,7 +1675,7 @@ function appView() {
       S.terms ? termsView() : S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
         : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos"),
       barBottom.length > 0 && h("div", { class: "bars bottom" }, barBottom)),
-    S.panel && S.team && teamPanel(), dock);
+    S.panel && S.team && teamPanel(), S.chatOpen && S.team && chatPanel(), dock);
 }
 
 function render(keepFocus) {

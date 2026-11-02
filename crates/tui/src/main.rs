@@ -316,7 +316,7 @@ impl App {
                 self.unread += 1;
                 if let Some(i) = self.inbox.as_mut() { i.notifications.insert(0, n); i.unread += 1; }
             }
-            tm_core::Event::CanvasItem(_) | tm_core::Event::CanvasItemDeleted { .. } | tm_core::Event::CanvasLink(_) | tm_core::Event::CanvasLinkDeleted { .. } => {}
+            tm_core::Event::Chat(_) | tm_core::Event::CanvasItem(_) | tm_core::Event::CanvasItemDeleted { .. } | tm_core::Event::CanvasLink(_) | tm_core::Event::CanvasLinkDeleted { .. } => {}
             tm_core::Event::MemberAdded { team_id, .. } => {
                 if team_id == self.cur_team() {
                     if let Ok(m) = self.api.members(team_id).await { self.members = m; }

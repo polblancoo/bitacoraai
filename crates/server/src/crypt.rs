@@ -73,6 +73,24 @@ impl Cred {
         }
     }
 
+    /// Cifra bytes (archivos del chat): 12 bytes de nonce al principio y el texto cifrado después.
+    pub fn seal_bytes(&self, plain: &[u8]) -> Vec<u8> {
+        let mut nonce = [0u8; 12];
+        let _ = getrandom::fill(&mut nonce);
+        match self.0.encrypt(Nonce::from_slice(&nonce), plain) {
+            Ok(ct) => [nonce.to_vec(), ct].concat(),
+            Err(_) => vec![],
+        }
+    }
+
+    pub fn open_bytes(&self, stored: &[u8]) -> Option<Vec<u8>> {
+        if stored.len() < 13 {
+            return None;
+        }
+        let (nonce, ct) = stored.split_at(12);
+        self.0.decrypt(Nonce::from_slice(nonce), ct).ok()
+    }
+
     pub fn open(&self, stored: &str) -> Option<String> {
         let Some(body) = stored.strip_prefix(PREFIX) else { return Some(stored.to_string()) };
         let raw = unhex(body)?;

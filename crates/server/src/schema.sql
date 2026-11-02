@@ -308,3 +308,34 @@ CREATE TABLE IF NOT EXISTS project_github_cfg (
     last_sync TEXT NOT NULL DEFAULT '',
     last_msg TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    project_id INTEGER,
+    from_user INTEGER NOT NULL REFERENCES users(id),
+    to_user INTEGER,
+    body TEXT NOT NULL,
+    file_id INTEGER,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_team ON chat_messages(team_id, id);
+CREATE TABLE IF NOT EXISTS chat_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    uploader INTEGER NOT NULL REFERENCES users(id),
+    name TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS chat_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    team_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    detail TEXT NOT NULL,
+    ip TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_audit_team ON chat_audit(team_id, id);
