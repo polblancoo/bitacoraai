@@ -934,7 +934,8 @@ async function chatHistory() {
 }
 function chatSwitch(c) { CHAT.chan = c; CHAT.msgs = []; chatHistory(); }
 function chatAdd(m) {
-  if (m.team_id !== S.team?.id || CHAT.msgs.some((x) => x.id === m.id)) return;
+  if (m.team_id !== S.team?.id) { if (m.from_user !== S.user.id && S.teams.some((t) => t.id === m.team_id)) chatBubble(m); return; }
+  if (CHAT.msgs.some((x) => x.id === m.id)) return;
   const mine = m.from_user === S.user.id, seen = S.chatOpen && inChan(m, CHAT.chan) && !document.hidden;
   if (S.chatOpen && inChan(m, CHAT.chan)) CHAT.msgs.push(m);
   else if (!mine) {
@@ -946,14 +947,16 @@ function chatAdd(m) {
 }
 // Burbuja que avisa de un mensaje nuevo aunque el chat esté cerrado o en otro canal; tocarla abre esa conversación.
 // Con la pestaña en segundo plano suma un aviso del navegador (si se permitió), un sonido corto y el contador en el título.
-function chatOpenFor(m) {
+async function chatOpenFor(m) {
+  if (m.team_id !== S.team?.id) { const t = S.teams.find((x) => x.id === m.team_id); if (t) await selectTeam(t); }
   const c = m.to_user != null ? { t: "dm", id: m.from_user } : m.project_id != null ? { t: "project", id: m.project_id } : { t: "team" };
   if (!S.chatOpen) toggleChat();
   chatSwitch(c);
 }
 function chatBubble(m) {
   const txt = (m.body || "📎 " + (m.file?.name || "archivo")).slice(0, 140);
-  const where = m.to_user != null ? "te escribió en privado" : m.project_id != null ? "en " + (S.projects.find((p) => p.id === m.project_id)?.name || "un proyecto") : "en el equipo";
+  const other = m.team_id !== S.team?.id ? S.teams.find((t) => t.id === m.team_id)?.name : "";
+  const where = other ? `en el equipo ${other}${m.to_user != null ? " (privado)" : ""}` : m.to_user != null ? "te escribió en privado" : m.project_id != null ? "en " + (S.projects.find((p) => p.id === m.project_id)?.name || "un proyecto") : "en el equipo";
   let box = document.getElementById("chat-bubbles");
   if (!box) { box = h("div", { id: "chat-bubbles" }); document.body.append(box); }
   const b = h("div", { class: "chat-bubble", title: "Tocá para abrir la conversación" },
