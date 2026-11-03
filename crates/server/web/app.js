@@ -1575,10 +1575,10 @@ const openTask = guard(async (task) => {
 const botChatModal = guard(async (b) => {
   document.getElementById("botchat-modal")?.remove();
   const c = await api("GET", `/api/bots/${b.id}/chat`), close = () => document.getElementById("botchat-modal")?.remove();
-  const KINDS = [["", "(como la corre el servidor)"], ["openrouter", "OpenRouter (modelos gratis y de pago)"], ["claude", "Claude (Anthropic)"], ["openai", "ChatGPT (OpenAI)"], ["gemini", "Gemini (Google)"], ["local", "Modelo propio (dirección compatible con OpenAI)"]];
+  const KINDS = [["", "(como la corre el servidor)"], ["openrouter", "OpenRouter (modelos gratis y de pago)"], ["claude-cli", "Claude con tu sesión de Claude Code (sin clave de API)"], ["claude", "Claude por API (necesita ANTHROPIC_API_KEY)"], ["openai", "ChatGPT (OpenAI)"], ["gemini", "Gemini (Google)"], ["local", "Modelo propio (dirección compatible con OpenAI)"]];
   const on = h("input", { type: "checkbox", checked: c.enabled });
   const kind = h("select", {}, KINDS.map(([v, l]) => h("option", { value: v, selected: v === c.kind }, l + (v && c.available[v] === false ? " — falta la clave en el servidor" : ""))));
-  const model = h("input", { value: c.model, placeholder: "ej.: qwen/qwen3-coder:free · haiku · gpt-5-mini", maxLength: 120 });
+  const model = h("input", { value: c.model, placeholder: "ej.: haiku (Claude) · qwen/qwen3-coder:free · gpt-5-mini", maxLength: 120 });
   const url = h("input", { value: c.url, placeholder: "solo para modelo propio: http://servidor:11434", maxLength: 300 });
   const num = (v, min, max, step = 1) => h("input", { type: "number", min, max, step, value: v, style: "width:90px" });
   const usd = num(c.daily_usd, 0, 100, 0.1), hour = num(c.per_hour, 1, 200), ctx = num(c.ctx, 2, 30), tok = num(c.max_tokens, 50, 1500, 50);
@@ -1590,7 +1590,7 @@ const botChatModal = guard(async (b) => {
       h("div", { class: "grid2" },
         h("label", {}, "Tope por día (USD, estimado)", usd), h("label", {}, "Respuestas por hora", hour),
         h("label", {}, "Mensajes de contexto", ctx), h("label", {}, "Tokens por respuesta", tok)),
-      h("small", { class: "hint" }, `Hoy gastó ≈ ${c.spent_usd.toFixed(4)} USD (${c.spent_tokens} tokens). El costo es una estimación; con OpenRouter se usa el que informa el proveedor. Si el servidor no tiene la clave del proveedor, la IA contesta que no pudo. Lo que se habla con una IA se envía a ese proveedor.`),
+      h("small", { class: "hint" }, `Hoy gastó ≈ ${c.spent_usd.toFixed(4)} USD (${c.spent_tokens} tokens). El costo es una estimación; con OpenRouter se usa el que informa el proveedor. Si el servidor no tiene la clave del proveedor, la IA contesta que no pudo. «Claude con tu sesión» usa el cupo de tu suscripción de Claude Code (el mismo de las tareas): conviene Haiku y un tope bajo. Lo que se habla con una IA se envía a ese proveedor.`),
       h("div", { class: "row" }, h("button", { onclick: close }, "Cancelar"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: guard(async () => {
         await api("PUT", `/api/bots/${b.id}/chat`, { enabled: on.checked, kind: kind.value, model: model.value.trim(), url: url.value.trim(), daily_usd: +usd.value, per_hour: +hour.value, ctx: +ctx.value, max_tokens: +tok.value });
         close(); toast(on.checked ? `${b.username} ya puede chatear` : `${b.username}: chat apagado`);

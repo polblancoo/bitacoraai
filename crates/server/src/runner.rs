@@ -51,7 +51,7 @@ fn agent_bin() -> PathBuf {
 
 /// PATH del servidor más los lugares donde suelen quedar las herramientas de IA (npm con nvm, cargo, ~/.local/bin):
 /// un servicio systemd arranca sin el PATH del shell y no las encontraría.
-fn tool_path() -> std::ffi::OsString {
+pub(crate) fn tool_path() -> std::ffi::OsString {
     let mut dirs: Vec<PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
     if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
         dirs.push(home.join(".local/bin"));
@@ -65,7 +65,7 @@ fn tool_path() -> std::ffi::OsString {
     std::env::join_paths(dirs).unwrap_or_default()
 }
 
-fn which(bin: &str) -> bool {
+pub(crate) fn which(bin: &str) -> bool {
     std::env::split_paths(&tool_path()).any(|d| d.join(bin).exists())
 }
 
@@ -105,7 +105,7 @@ async fn put_openrouter_key(State(st): State<AppState>, user: AuthUser, Json(b):
     Ok(Json(json!({ "ok": true })))
 }
 
-fn data_dir() -> PathBuf {
+pub(crate) fn data_dir() -> PathBuf {
     std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from).join(".local/share/tm-server/agents")
 }
 
