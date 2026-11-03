@@ -649,3 +649,4 @@ ol.guide pre { margin: 4px 0; }
 .flow-edit { display: grid; gap: 8px; }
 .flow-row { display: grid; grid-template-columns: 22px 1fr 120px 30px; gap: 6px; align-items: start; }
 .flow-row textarea { grid-column: 2 / 5; }
+.chat-ai-note { background: color-mix(in srgb, var(--yellow, #e0af68) 14%, transparent); border: 1px solid var(--yellow, #e0af68); border-radius: 8px; padding: 8px; font-size: 12.5px; line-height: 1.4; }

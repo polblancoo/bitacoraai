@@ -254,6 +254,11 @@ async fn send(
         if to == user.id || ensure_member(&st, team, to).await.is_err() {
             return Err(AppError::bad("esa persona no está en el equipo"));
         }
+        // si es una IA, tiene que tener el chat activado (lo prende un administrador)
+        let is_bot: Option<i64> = sqlx::query_scalar("SELECT 1 FROM api_tokens WHERE user_id = ?").bind(to).fetch_optional(&st.db).await?;
+        if is_bot.is_some() && !crate::chat_ai::cfg_of(&st, to).await.enabled {
+            return Err(AppError::bad("esa IA no tiene el chat activado"));
+        }
     }
     let mut file: Option<ChatFile> = None;
     if let Some(fid) = b.file_id {
@@ -303,6 +308,8 @@ async fn send(
         }
         None => st.emit(team, Event::Chat(msg.clone())),
     }
+    // si le hablaron a una IA (en privado o con @nombre), contesta; lo que escribe una IA nunca llega hasta acá
+    crate::chat_ai::trigger(st.clone(), team, msg.clone());
     Ok(Json(msg))
 }
 
@@ -433,7 +440,17 @@ async fn presence(State(st): State<AppState>, user: AuthUser, Path(team): Path<I
             json!({ "id": id, "username": r.get::<String, _>("username"), "online": st.ws_conns.is_online(id), "me": id == user.id })
         })
         .collect();
-    Ok(Json(json!({ "people": people })))
+    let brows = sqlx::query("SELECT u.id, u.username FROM bot_chat c JOIN users u ON u.id = c.user_id JOIN team_members m ON m.user_id = u.id AND m.team_id = ? WHERE c.enabled = 1 AND u.id IN (SELECT user_id FROM api_tokens) ORDER BY u.username")
+        .bind(team)
+        .fetch_all(&st.db)
+        .await?;
+    let mut bots: Vec<Value> = Vec::new();
+    for r in &brows {
+        let id: Id = r.get("id");
+        let c = crate::chat_ai::cfg_of(&st, id).await;
+        bots.push(json!({ "id": id, "username": r.get::<String, _>("username"), "left_usd": crate::chat_ai::left_usd(&st, id, &c).await, "ctx": c.ctx, "per_hour": c.per_hour, "daily_usd": c.daily_usd }));
+    }
+    Ok(Json(json!({ "people": people, "bots": bots })))
 }
 
 async fn download(

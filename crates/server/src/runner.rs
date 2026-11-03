@@ -74,7 +74,7 @@ fn openrouter_file() -> PathBuf {
     std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from).join(".config/tm-server/openrouter.env")
 }
 
-fn openrouter_key() -> Option<String> {
+pub(crate) fn openrouter_key() -> Option<String> {
     let txt = std::fs::read_to_string(openrouter_file()).ok();
     txt.and_then(|t| t.lines().find_map(|l| l.trim().strip_prefix("OPENROUTER_API_KEY=").map(|v| v.trim().trim_matches('"').to_string())))
         .filter(|k| !k.is_empty())

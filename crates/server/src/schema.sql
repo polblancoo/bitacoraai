@@ -366,3 +366,30 @@ CREATE TABLE IF NOT EXISTS task_flows (
     from_comment INTEGER NOT NULL DEFAULT 0,
     finished INTEGER NOT NULL DEFAULT 0
 );
+
+-- chat con IAs: qué IAs contestan en el chat y con qué topes; gasto del día; y a quién ya se le aclararon los límites
+CREATE TABLE IF NOT EXISTS bot_chat (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL DEFAULT '',
+    daily_usd REAL NOT NULL DEFAULT 1.0,
+    per_hour INTEGER NOT NULL DEFAULT 20,
+    ctx INTEGER NOT NULL DEFAULT 10,
+    max_tokens INTEGER NOT NULL DEFAULT 400
+);
+CREATE TABLE IF NOT EXISTS bot_chat_usage (
+    user_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    usd REAL NOT NULL DEFAULT 0,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    replies INTEGER NOT NULL DEFAULT 0,
+    notified INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, day)
+);
+CREATE TABLE IF NOT EXISTS bot_chat_intro (
+    bot_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    PRIMARY KEY (bot_id, user_id)
+);

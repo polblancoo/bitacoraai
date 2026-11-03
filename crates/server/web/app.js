@@ -996,7 +996,7 @@ const toggleChat = () => {
 async function chatPresence() {
   if (!S.team || !S.chatOpen) return;
   await loadAvatars();
-  try { CHAT.people = (await api("GET", `/api/teams/${S.team.id}/presence`)).people; chatDraw(); } catch {}
+  try { const pr = await api("GET", `/api/teams/${S.team.id}/presence`); CHAT.people = pr.people; CHAT.bots = pr.bots || []; chatDraw(); } catch {}
 }
 async function chatHistory() {
   const c = CHAT.chan, tid = S.team.id;
@@ -1092,15 +1092,19 @@ function chatDraw() {
     h("optgroup", { label: "Conversaciones" }, h("option", { value: "team", selected: CHAT.chan.t === "team" }, "👥 Todo el equipo" + n("team")),
       ...S.projects.map((p) => h("option", { value: "p" + p.id, selected: CHAT.chan.t === "project" && CHAT.chan.id === p.id }, "📁 " + p.name + n("p" + p.id)))),
     others.some((x) => x.online) && h("optgroup", { label: "🟢 Conectados · mensaje directo" }, others.filter((x) => x.online).map(person)),
-    others.some((x) => !x.online) && h("optgroup", { label: "⚪ Desconectados · lo ven al conectarse" }, others.filter((x) => !x.online).map(person)));
+    others.some((x) => !x.online) && h("optgroup", { label: "⚪ Desconectados · lo ven al conectarse" }, others.filter((x) => !x.online).map(person)),
+    (CHAT.bots || []).length > 0 && h("optgroup", { label: "🤖 IAs · respuestas cortas" }, CHAT.bots.map((x) => h("option", { value: "u" + x.id, selected: CHAT.chan.t === "dm" && CHAT.chan.id === x.id }, "🤖 " + x.username + n("dm" + x.id)))));
   const peer = CHAT.chan.t === "dm" ? others.find((x) => x.id === CHAT.chan.id) : null;
-  CHAT.who.replaceChildren(h("small", { class: "hint" }, peer && !peer.online
+  const aiPeer = CHAT.chan.t === "dm" ? (CHAT.bots || []).find((x) => x.id === CHAT.chan.id) : null;
+  CHAT.who.replaceChildren(aiPeer ? h("div", { class: "chat-ai-note" }, h("b", {}, `🤖 ${aiPeer.username} es una IA.`),
+    ` Charla corta: solo recuerda los últimos ${aiPeer.ctx} mensajes de esta conversación, contesta en pocas líneas, no ve tus tareas, archivos ni el código del proyecto, y tiene un tope de uso por día (hoy le quedan ≈ ${aiPeer.left_usd.toFixed(2)} USD). Sirve para consultas rápidas; para trabajo de verdad, asignale una tarea.`)
+    : h("small", { class: "hint" }, peer && !peer.online
     ? `⚪ ${peer.username} está desconectado: el mensaje y los archivos le quedan esperando y los ve al conectarse.`
-    : `${CHAT.people.filter((x) => x.online).length} conectados · elegí a alguien en la lista para escribirle en privado`));
+    : `${CHAT.people.filter((x) => x.online).length} conectados · elegí a alguien en la lista para escribirle en privado` + ((CHAT.bots || []).length ? " · mencioná a una IA con @nombre" : "")));
   CHAT.err_.replaceChildren(CHAT.err, ...(CHAT.err && CHAT.https ? [h("div", {}, h("a", { href: CHAT.https + location.pathname, class: "btnlike" }, "🔒 Abrir con conexión segura (HTTPS)"))] : []));
   CHAT.err_.hidden = !CHAT.err;
   CHAT.list.replaceChildren(...CHAT.msgs.map((m) => h("div", { class: "chat-msg" + (m.from_user === me ? " mine" : "") },
-    h("div", {}, h("b", {}, (AV[m.from] ? AV[m.from] + " " : "") + m.from), " ", h("small", {}, new Date(m.created_at).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))),
+    h("div", {}, h("b", {}, (botInfo(m.from) ? "🤖 " : AV[m.from] ? AV[m.from] + " " : "") + m.from), " ", h("small", {}, new Date(m.created_at).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))),
     m.body && h("div", { class: "chat-body" }, m.body),
     m.file && h("button", { class: "ghost chat-file", title: "Descargar", onclick: guard(() => saveFile(`/api/chat/files/${m.file.id}`, m.file.name)) }, `📎 ${m.file.name} (${kb(m.file.size)})`))));
   CHAT.list.scrollTop = CHAT.list.scrollHeight;
@@ -1565,6 +1569,32 @@ const openTask = guard(async (task) => {
   drawLabels(); drawSubs(); drawDeps(); drawAtts();
   renderComments();
   title.focus();
+});
+
+// ---------- chat con IAs: qué IA contesta en el chat y con qué topes ----------
+const botChatModal = guard(async (b) => {
+  document.getElementById("botchat-modal")?.remove();
+  const c = await api("GET", `/api/bots/${b.id}/chat`), close = () => document.getElementById("botchat-modal")?.remove();
+  const KINDS = [["", "(como la corre el servidor)"], ["openrouter", "OpenRouter (modelos gratis y de pago)"], ["claude", "Claude (Anthropic)"], ["openai", "ChatGPT (OpenAI)"], ["gemini", "Gemini (Google)"], ["local", "Modelo propio (dirección compatible con OpenAI)"]];
+  const on = h("input", { type: "checkbox", checked: c.enabled });
+  const kind = h("select", {}, KINDS.map(([v, l]) => h("option", { value: v, selected: v === c.kind }, l + (v && c.available[v] === false ? " — falta la clave en el servidor" : ""))));
+  const model = h("input", { value: c.model, placeholder: "ej.: qwen/qwen3-coder:free · haiku · gpt-5-mini", maxLength: 120 });
+  const url = h("input", { value: c.url, placeholder: "solo para modelo propio: http://servidor:11434", maxLength: 300 });
+  const num = (v, min, max, step = 1) => h("input", { type: "number", min, max, step, value: v, style: "width:90px" });
+  const usd = num(c.daily_usd, 0, 100, 0.1), hour = num(c.per_hour, 1, 200), ctx = num(c.ctx, 2, 30), tok = num(c.max_tokens, 50, 1500, 50);
+  document.body.append(h("div", { class: "overlay", id: "botchat-modal", onmousedown: (e) => e.target.id === "botchat-modal" && close() },
+    h("div", { class: "modal" }, h("h3", {}, `💬 Chat de ${b.username}`),
+      h("small", {}, "La IA contesta solo cuando una persona le escribe en privado o la menciona con @nombre. Lo que escribe una IA nunca despierta a otra: no hay charla IA con IA ni gasto que se dispare."),
+      h("label", { class: "inl" }, on, " Puede chatear con el equipo"),
+      h("label", {}, "Proveedor", kind), h("label", {}, "Modelo (conviene uno barato y rápido)", model), h("label", {}, "Dirección (modelo propio)", url),
+      h("div", { class: "grid2" },
+        h("label", {}, "Tope por día (USD, estimado)", usd), h("label", {}, "Respuestas por hora", hour),
+        h("label", {}, "Mensajes de contexto", ctx), h("label", {}, "Tokens por respuesta", tok)),
+      h("small", { class: "hint" }, `Hoy gastó ≈ ${c.spent_usd.toFixed(4)} USD (${c.spent_tokens} tokens). El costo es una estimación; con OpenRouter se usa el que informa el proveedor. Si el servidor no tiene la clave del proveedor, la IA contesta que no pudo. Lo que se habla con una IA se envía a ese proveedor.`),
+      h("div", { class: "row" }, h("button", { onclick: close }, "Cancelar"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: guard(async () => {
+        await api("PUT", `/api/bots/${b.id}/chat`, { enabled: on.checked, kind: kind.value, model: model.value.trim(), url: url.value.trim(), daily_usd: +usd.value, per_hour: +hour.value, ctx: +ctx.value, max_tokens: +tok.value });
+        close(); toast(on.checked ? `${b.username} ya puede chatear` : `${b.username}: chat apagado`);
+      }) }, "Guardar")))));
 });
 
 // ---------- flujo de la tarea: etapas con responsable e instrucción ----------
@@ -2257,6 +2287,7 @@ const openSettings = guard(async () => {
             btn("📋 Comandos habituales", "Lo que la IA pidió antes y un catálogo para permitir", commandsDialog),
             btn("✅ Permitidos", "Lista de comandos permitidos de la IA", editAllow),
             btn("🚫 Prohibidos", "Lista de comandos prohibidos de la IA", editDeny),
+            btn("💬 Chat", "Que esta IA conteste en el chat del equipo, con topes de gasto", botChatModal),
             btn("Ficha", "Abrir la ficha de la IA", botModal));
         })()),
         line(["Unirme a otro equipo con un código", "join"], h("button", { onclick: go(joinWithCode) }, "Unirme")),
