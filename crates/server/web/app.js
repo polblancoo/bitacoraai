@@ -1674,7 +1674,7 @@ function sinceTxt(iso) {
   const m = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
   return m < 1 ? "recién empezó" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
 }
-setInterval(() => document.querySelectorAll(".ai-since").forEach((e) => (e.textContent = "🤖 " + sinceTxt(e.dataset.since))), 30000);
+setInterval(() => document.querySelectorAll(".ai-since").forEach((e) => (e.textContent = "🤖 Trabajando · " + sinceTxt(e.dataset.since))), 30000);
 // explorador de solo lectura de la carpeta de trabajo del proyecto (para quien usa la web desde otra máquina)
 const openFiles = guard(async () => {
   const pid = S.project.id;
@@ -1728,7 +1728,7 @@ function taskCard(t) {
     h("div", { class: "title" }, h("span", { class: "tid" }, "#" + t.id), " ", t.title),
     t.labels?.length > 0 && h("div", { class: "chips" }, t.labels.map((l) => h("span", { class: "chip on", style: `--c:${l.color}` }, l.name))),
     aiRunning(t) && h("div", { class: "ai-run", title: "Una IA está trabajando en esta tarea (el tiempo cuenta desde la última vez que se movió)" },
-      h("div", { class: "ai-bar" }), h("small", { class: "ai-since", "data-since": t.updated_at }, "🤖 " + sinceTxt(t.updated_at))),
+      h("div", { class: "ai-bar" }), h("small", { class: "ai-since", "data-since": t.updated_at }, "🤖 Trabajando · " + sinceTxt(t.updated_at))),
     flowStrip(t),
     t.subtasks_total > 0 && h("div", { class: "progress", title: `${t.subtasks_done}/${t.subtasks_total} subtareas` },
       h("div", { class: "bar", style: `width:${Math.round(100 * t.subtasks_done / t.subtasks_total)}%` })),

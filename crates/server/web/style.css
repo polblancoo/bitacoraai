@@ -532,11 +532,15 @@ ol.guide pre { margin: 4px 0; }
 #toast { cursor: pointer; max-width: min(90vw, 560px); }
 #toast.link { border-color: var(--blue); }
 #toast:not([hidden]) { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.ai-run { display: grid; gap: 3px; margin: 6px 0 2px; }
-.ai-bar { height: 4px; border-radius: 4px; background: var(--line); position: relative; overflow: hidden; }
-.ai-bar::after { content: ""; position: absolute; inset: 0 auto 0 -35%; width: 35%; border-radius: 4px; background: var(--yellow); animation: ai-slide 1.6s ease-in-out infinite; }
+.ai-run { display: grid; gap: 4px; margin: 8px 0 4px; padding: 6px 8px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--yellow) 55%, transparent); background: color-mix(in srgb, var(--yellow) 10%, transparent); }
+.ai-bar { height: 6px; border-radius: 6px; background: color-mix(in srgb, var(--yellow) 22%, var(--line)); position: relative; overflow: hidden; }
+.ai-bar::after { content: ""; position: absolute; inset: 0 auto 0 -35%; width: 35%; border-radius: 6px; background: var(--yellow); animation: ai-slide 1.4s ease-in-out infinite; }
 @keyframes ai-slide { to { left: 100%; } }
-@media (prefers-reduced-motion: reduce) { .ai-bar::after { animation: none; inset: 0; width: 100%; opacity: .5; } }
+.ai-since { font-size: 12px; font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.ai-since::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); animation: ai-pulse 1.2s ease-in-out infinite; }
+@keyframes ai-pulse { 50% { opacity: .25; } }
+/* con "reducir movimiento" no se desliza, pero sigue latiendo suave para que se note que trabaja */
+@media (prefers-reduced-motion: reduce) { .ai-bar::after { animation: ai-pulse 2.4s ease-in-out infinite; inset: 0; width: 100%; } .ai-since::before { animation-duration: 2.4s; } }
 .modal.task-modal .more { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
 .modal.task-modal .more > summary { cursor: pointer; opacity: .85; padding: 4px 0; }
 /* panel de tarea tipo terminal: la conversación al centro y los datos a un costado */
@@ -650,3 +654,9 @@ ol.guide pre { margin: 4px 0; }
 .flow-row { display: grid; grid-template-columns: 22px 1fr 120px 30px; gap: 6px; align-items: start; }
 .flow-row textarea { grid-column: 2 / 5; }
 .chat-ai-note { background: color-mix(in srgb, var(--yellow, #e0af68) 14%, transparent); border: 1px solid var(--yellow, #e0af68); border-radius: 8px; padding: 8px; font-size: 12.5px; line-height: 1.4; }
+/* barras de arriba: scroll fino, redondeado y que se enciende al pasar el mouse */
+.top, .bars { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--blue) 45%, transparent) transparent; scroll-behavior: smooth; overscroll-behavior-x: contain; }
+.top::-webkit-scrollbar, .bars::-webkit-scrollbar { height: 6px; }
+.top::-webkit-scrollbar-track, .bars::-webkit-scrollbar-track { background: transparent; margin: 0 10px; }
+.top::-webkit-scrollbar-thumb, .bars::-webkit-scrollbar-thumb { border-radius: 6px; background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 50%, transparent), color-mix(in srgb, var(--yellow) 50%, transparent)); transition: background .2s; }
+.top:hover::-webkit-scrollbar-thumb, .bars:hover::-webkit-scrollbar-thumb { background: linear-gradient(90deg, var(--blue), var(--yellow)); }
