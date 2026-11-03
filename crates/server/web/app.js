@@ -2060,8 +2060,8 @@ function appView() {
         S.project && !S.portfolio && !S.terms && can("member") && h("button", { onclick: githubProject, title: "GitHub: traer issues como tareas, estado de PR y pruebas, ajustes del proyecto" }, "🐙 GitHub" + ({ success: " ✅", failure: " ❌", pending: " ⏳" }[S.ghCi] || "")),
         S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
         S.team && h("button", { class: S.chatOpen ? "on" : "", onclick: toggleChat, title: "Comunicación del equipo: mensajes, archivos, traducción y videollamadas" }, "💬 Comunicación" + (CHAT.total > 0 && !S.chatOpen ? ` (${CHAT.total})` : "")),
-        S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
-        S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
+        S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Alt+K t)" }, "👥 Equipo"),
+        S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Alt+K s)" }, "✉ Mensaje"),
   ];
   const barViews = [
         !S.portfolio && !S.terms && h("div", { class: "seg" },
@@ -2105,7 +2105,7 @@ function appView() {
       h("div", { class: "me" }, h("span", { class: "live" + (S.online ? " on" : ""), title: S.online ? "en vivo" : "desconectado" }),
         h("span", { title: S.team ? `Tu rol en «${S.team.name}»` : "" }, S.user?.username, S.team && h("small", { class: "hint" }, " · " + (ROLES.find(([r]) => r === myRole())?.[1] || ""))), h("span", { class: "spacer" }),
         S.team && h("button", { class: "ghost" + (S.chatOpen ? " on" : ""), title: "Chat del equipo: ver quién está conectado, charlar y mandar archivos", onclick: toggleChat }, "💬" + (CHAT.total > 0 && !S.chatOpen ? ` ${CHAT.total}` : "")),
-        h("button", { class: "ghost bell" + (S.unread ? " has" : ""), title: "Bandeja de novedades (Ctrl+T n)", onclick: () => loadInbox(false) }, S.unread ? `🔔 ${S.unread}` : "🔔"),
+        h("button", { class: "ghost bell" + (S.unread ? " has" : ""), title: "Bandeja de novedades (Alt+K n)", onclick: () => loadInbox(false) }, S.unread ? `🔔 ${S.unread}` : "🔔"),
         h("button", { class: "ghost", onclick: cycleTheme, title: "Tema: " + THEMES[themePref()][1] + " (clic para cambiar)" }, THEMES[themePref()][0]),
         h("button", { class: "ghost", onclick: helpModal, title: "Atajos y ayuda (?)" }, "?"),
         h("button", { class: "ghost", onclick: logout }, "Salir"),
@@ -2254,7 +2254,7 @@ const CFG_HELP = {
   reports: ["Informes automáticos", "Un resumen diario o semanal del equipo: qué terminaron las personas y las IAs, cuánto gastaron las IAs y qué quedó trabado. Te llega a la bandeja y, si querés, por Telegram y email.", null],
   telegram: ["Telegram", "Tocá «Vincular», abrí el bot que se muestra y mandale /start CÓDIGO. Después recibís las novedades en Telegram y podés usar /tareas, /hecho N (marca la tarea N como hecha) y /stop (desvincula).",
     "Creá un bot con @BotFather en Telegram y arrancá tm-server con TM_TELEGRAM_TOKEN=<token>. No necesita URL pública (usa long polling). Sin el token, esta fila dice «el servidor no tiene el bot configurado»."],
-  inbox: ["Bandeja de novedades", "Reúne lo que te pasó: asignaciones, comentarios, menciones (@usuario), recordatorios y mensajes. Se marcan como leídas al cerrarla. También abre con la campana 🔔 o Ctrl+T n.",
+  inbox: ["Bandeja de novedades", "Reúne lo que te pasó: asignaciones, comentarios, menciones (@usuario), recordatorios y mensajes. Se marcan como leídas al cerrarla. También abre con la campana 🔔 o Alt+K n.",
     "Los recordatorios de tareas por vencer salen solos; la frecuencia se ajusta con TM_REMINDER_SECS (300 segundos por defecto)."],
   logout: ["Cerrar sesión", "Sale de la app en este dispositivo. Tus datos quedan en el servidor.", null],
   logoutAll: ["Cerrar todas las sesiones", "Úsalo si perdiste un dispositivo o sospechás que alguien más entró: invalida todas tus sesiones abiertas y tenés que volver a iniciar sesión en cada dispositivo.", null],
@@ -2799,10 +2799,10 @@ const openSettings = guard(async () => {
 const SHORTCUTS = [
   ["?", "Abrir esta ayuda"], ["/", "Ir al buscador"], ["n", "Nueva tarea (en Por hacer)"],
   ["1", "Vista Tablero"], ["2", "Vista Calendario"], ["3", "Vista Gantt"], ["4", "Vista Pizarra"], ["5", "Vista Actividad"], ["@usuario", "En un comentario: menciona y avisa a esa persona"],
-  ["Esc", "Cerrar ventana"], [",", "Configuración"], ["Ctrl+T c", "Configuración"], ["Ctrl+T s", "Enviar un mensaje al equipo"], ["Ctrl+T g", "Vincular Telegram"],
-  ["Ctrl+T m", "Equipo: miembros y agregar con búsqueda"], ["Ctrl+T i", "Equipo: generar código de invitación"],
-  ["Ctrl+T j", "Unirse a un equipo con código"], ["Ctrl+T t", "Crear equipo"], ["Ctrl+T p", "Crear proyecto"],
-  ["Ctrl+T e", "Mi email para recibir avisos"], ["Ctrl+T n", "Bandeja de novedades y mis tareas"],
+  ["Esc", "Cerrar ventana"], [",", "Configuración"], ["Alt+K c", "Configuración"], ["Alt+K s", "Enviar un mensaje al equipo"], ["Alt+K g", "Vincular Telegram"],
+  ["Alt+K m", "Equipo: miembros y agregar con búsqueda"], ["Alt+K i", "Equipo: generar código de invitación"],
+  ["Alt+K j", "Unirse a un equipo con código"], ["Alt+K t", "Crear equipo"], ["Alt+K p", "Crear proyecto"],
+  ["Alt+K e", "Mi email para recibir avisos"], ["Alt+K n", "Bandeja de novedades y mis tareas"],
   ["Arrastrar tarjeta", "Cambiar de estado (Tablero)"], ["Arrastrar barra", "Mover fechas (Gantt)"],
   ["Doble clic en la pizarra", "Nueva nota en ese lugar"], ["↗ en un elemento", "Conectar dos elementos (Pizarra)"],
 ];
@@ -2941,7 +2941,7 @@ document.addEventListener("keydown", (e) => {
     if (top) { top.id === "inbox-modal" ? closeInbox() : top.id === "modal" ? closeModal() : top.remove(); }
     S.prefix = false; return;
   }
-  if (e.ctrlKey && e.key.toLowerCase() === "t") { e.preventDefault(); S.prefix = true; toast("Ctrl+T ▸ m miembros · i invitar · j unirse · t panel del equipo · p proyecto · e email · n bandeja · s mensaje · g Telegram · c config"); return; }
+  if ((e.altKey && e.code === "KeyK") || (e.ctrlKey && e.key.toLowerCase() === "t")) { e.preventDefault(); S.prefix = true; toast("Alt+K ▸ m miembros · i invitar · j unirse · t panel del equipo · p proyecto · e email · n bandeja · s mensaje · g Telegram · c config"); return; }
   if (S.prefix) {
     S.prefix = false; e.preventDefault();
     const act = { m: () => S.team && openTeam(), i: () => S.team && openTeam(), j: joinWithCode, t: togglePanel, p: () => S.team && createProject(), e: openProfile, n: () => loadInbox(false), c: openSettings, s: () => S.team && can("member") && sendTeamMessage(), g: linkTelegram }[e.key.toLowerCase()];
