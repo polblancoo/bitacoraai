@@ -1226,19 +1226,56 @@ const inviteMessage = (code) => [
   "El código vence en 7 días.",
 ].join("\n");
 
+// diálogo de "Nueva tarea": ancho de un tercio, prompt grande, atributos en dos filas, atajos y avisos al pie
+function taskForm(status, assignable) {
+  return new Promise((resolve) => {
+    const title = h("input", { type: "text", maxLength: 120, placeholder: "Título corto" });
+    const desc = h("textarea", { rows: 8, maxLength: 20000, placeholder: "Qué hay que hacer, con el contexto necesario. Si la hace una IA, esto es lo que va a leer." });
+    const grow = () => { desc.style.height = "auto"; desc.style.height = Math.min(desc.scrollHeight + 2, window.innerHeight * 0.42) + "px"; };
+    desc.oninput = grow;
+    const sel = (opts, value) => h("select", {}, opts.map(([v, l]) => h("option", { value: v, selected: String(v) === String(value) }, l)));
+    const st = sel(STATUS.map((x) => [x.id, x.label]), status), pr = sel(PRIO.map((x, i) => [i, x]), 1);
+    const asOpts = [["", "Sin asignar"], ...assignable.map((m) => [m.id, m.id === S.user?.id && !can("admin") ? `Yo (${m.username})` : label(m.username)])];
+    const as = sel(asOpts, ""), start = h("input", { type: "date" }), due = h("input", { type: "date" }), rec = sel(RECUR, "");
+    const note = h("div", { class: "tf-note" });
+    const notes = () => {
+      const m = S.members.find((x) => String(x.id) === as.value), out = [];
+      if (m?.bot) out.push([S.project.work_dir ? "🤖 " + m.username + " trabaja en 📁 " + S.project.work_dir : "🤖 El proyecto no tiene carpeta de trabajo: la IA usa una por defecto y la crea si no existe", !S.project.work_dir]);
+      if (!as.value) out.push(["Sin responsable: queda en el tablero sin dueño", false]);
+      if (start.value && due.value && due.value < start.value) out.push(["⚠️ Vence antes de empezar", true]);
+      if (rec.value) out.push(["🔁 Se repite al completarse", false]);
+      note.replaceChildren(...out.map(([t, w]) => h("span", { class: w ? "warn" : "" }, t)));
+    };
+    [as, start, due, rec].forEach((e) => e.addEventListener("change", notes)); notes();
+    const done = (v) => { overlay.remove(); resolve(v); };
+    const submit = () => {
+      if (!title.value.trim()) { title.focus(); return; }
+      done({ title: title.value.trim(), description: desc.value.trim(), status: st.value, priority: pr.value, assignee: as.value, start: start.value, due: due.value, recurrence: rec.value });
+    };
+    const fld = (lbl, key, el) => h("label", {}, h("span", {}, lbl, key && h("kbd", {}, key)), el);
+    const jump = { e: st, p: pr, r: as, f: start, v: due, t: title, d: desc };
+    const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && done(null) },
+      h("div", { class: "modal task-form", onkeydown: (e) => {
+        if (e.key === "Escape") { e.stopPropagation(); done(null); }
+        else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
+        else if (e.key === "Enter" && e.target === title) { e.preventDefault(); desc.focus(); }
+        else if (e.altKey && jump[e.key.toLowerCase()]) { e.preventDefault(); jump[e.key.toLowerCase()].focus(); }
+      } },
+        h("h3", {}, "Nueva tarea"),
+        fld("Título", "Alt+T", title),
+        fld("Instrucción / prompt para quien la haga", "Alt+D", desc),
+        h("div", { class: "tf-row" }, fld("Estado", "Alt+E", st), fld("Prioridad", "Alt+P", pr), fld("Responsable", "Alt+R", as)),
+        h("div", { class: "tf-row" }, fld("Empieza", "Alt+F", start), fld("Vence", "Alt+V", due), fld("Repetición", "", rec)),
+        h("div", { class: "tf-help" }, h("kbd", {}, "Ctrl+Enter"), " crear · ", h("kbd", {}, "Esc"), " cancelar · ", h("kbd", {}, "Enter"), " en el título pasa al prompt · ", h("kbd", {}, "Alt+letra"), " salta al campo"),
+        note,
+        h("div", { class: "row" }, h("button", { onclick: () => done(null) }, "Cancelar"), h("button", { class: "primary", onclick: submit }, "Crear tarea"))));
+    document.body.append(overlay); title.focus();
+  });
+}
 const createTask = guard(async (status) => {
   // mismas reglas que en el modal: un líder asigna a cualquiera; un miembro solo a sí mismo
   const assignable = can("admin") ? S.members.filter((m) => RANK[m.role] >= 1) : S.members.filter((m) => m.id === S.user?.id && can("member"));
-  const f = await form("Nueva tarea", [
-    { name: "title", label: "Título", max: 200 },
-    { name: "description", label: "Descripción (opcional)", type: "textarea" },
-    { name: "status", label: "Estado", type: "select", options: STATUS.map((s) => [s.id, s.label]), value: status },
-    { name: "priority", label: "Prioridad", type: "select", options: PRIO.map((p, i) => [i, p]), value: 1 },
-    ...(assignable.length ? [{ name: "assignee", label: "Responsable", type: "select", options: [["", "Sin asignar"], ...assignable.map((m) => [m.id, m.id === S.user?.id && !can("admin") ? `Yo (${m.username})` : label(m.username)])] }] : []),
-    { name: "start", label: "Empieza (opcional)", type: "date" },
-    { name: "due", label: "Vence (opcional)", type: "date" },
-    { name: "recurrence", label: "Repetición", type: "select", options: RECUR },
-  ], "Crear tarea"); if (!f) return;
+  const f = await taskForm(status, assignable); if (!f) return;
   const day = (d) => (d ? new Date(d + "T12:00:00Z").toISOString() : undefined);
   let t = await api("POST", `/api/projects/${S.project.id}/tasks`, { title: f.title, description: f.description, priority: +f.priority, assignee_id: f.assignee ? +f.assignee : undefined, start: day(f.start), due: day(f.due), recurrence: f.recurrence || undefined });
   if (f.status !== "todo") t = await api("PATCH", `/api/tasks/${t.id}`, { status: f.status });

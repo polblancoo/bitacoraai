@@ -708,3 +708,16 @@ aside { gap: 10px; }
 :root:not([data-theme="dark"]) .gantt .g-stripe { fill: #1f2a4408; }
 :root:not([data-theme="dark"]) .team-panel, :root:not([data-theme="dark"]) .modal, :root:not([data-theme="dark"]) .chat-panel { box-shadow: 0 10px 30px #1f2a4422; }
 }
+
+/* diálogo de nueva tarea: un tercio de la pantalla */
+.modal.task-form { width: clamp(420px, 33vw, 760px); max-width: 96vw; gap: 10px; }
+.task-form textarea { resize: vertical; min-height: 150px; line-height: 1.5; }
+.task-form label > span { display: flex; justify-content: space-between; align-items: center; }
+.task-form kbd, .tf-help kbd { font: 600 10px/1 ui-monospace, monospace; padding: 2px 5px; border-radius: 4px; background: var(--card2); border: 1px solid var(--line); color: var(--dim); }
+.tf-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tf-row select, .tf-row input { padding: 6px 8px; min-width: 0; }
+.tf-help { font-size: 11px; color: var(--dim); line-height: 1.9; }
+.tf-note { display: flex; flex-wrap: wrap; gap: 6px; min-height: 22px; }
+.tf-note span { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--card2); color: var(--dim); }
+.tf-note span.warn { background: color-mix(in srgb, var(--yellow) 18%, transparent); color: var(--yellow); }
+@media (max-width: 760px) { .modal.task-form { width: 96vw; } .tf-row { grid-template-columns: 1fr 1fr; } }
