@@ -2373,8 +2373,8 @@ const integAdmin = guard(async () => {
         h("label", { class: "wiz-opt" }, h("input", { type: "radio", name: "w", checked: st.where === "propio", onchange: () => { st.where = "propio"; st.mode = "panel"; } }),
           h("div", {}, h("b", {}, "🏢 Servidor propio (intranet o máxima privacidad)"), h("small", {}, "Usás tu propio Jitsi (por ejemplo meet.tuempresa.com). Funciona sin internet y nada sale de tu red. Hay que instalarlo aparte; con Docker son pocos pasos y tiene que estar con HTTPS para que el navegador deje usar cámara y micrófono."))),
       ];
-      if (st.step === 2) { const dom = h("input", { value: st.domain, placeholder: "meet.tuempresa.com", maxLength: 120, oninput: (e) => (st.domain = e.target.value.trim()) }); main = [
-        st.where === "propio" && h("label", {}, "Dirección de tu Jitsi", dom, h("small", { class: "hint" }, "Solo el dominio, sin la sala. Debe abrir con https://.")),
+      if (st.step === 2) { const dom = h("input", { value: st.domain, placeholder: "meet.tuempresa.com  o  192.168.1.50:8443", maxLength: 120, oninput: (e) => (st.domain = e.target.value.trim()) }); main = [
+        st.where === "propio" && h("label", {}, "Dirección de tu Jitsi", dom, h("small", { class: "hint" }, "El dominio o la IP (con el puerto si no es el 443), sin la sala. Se abre con https://.")),
         h("label", {}, "Nombre del botón", h("input", { value: st.name, maxLength: 40, oninput: (e) => (st.name = e.target.value) })),
         st.where === "internet" && h("p", { class: "hint" }, "Ojo: el Jitsi público corta las llamadas a los 5 minutos cuando va incrustado en otra página, y a veces pide que quien abre la sala inicie sesión. Por eso se recomienda «Ventana nueva». Para la pestaña dentro de la app usá tu propio servidor."),
         h("label", {}, "¿Cómo se abre?", h("select", { onchange: (e) => (st.mode = e.target.value) },
@@ -2386,7 +2386,7 @@ const integAdmin = guard(async () => {
         h("button", { onclick: () => window.open(integUrl(url()).replace("{sala}", encodeURIComponent(r.room)), "_blank", "noopener,noreferrer") }, "▶ Probar ahora (ventana nueva)"),
       ];
       const next = guard(async () => {
-        if (st.step === 2) { if (st.where === "propio" && !/^[\w.-]+\.[a-z]{2,}(:\d+)?$/i.test(st.domain.replace(/^https?:\/\//, "").replace(/\/+$/, ""))) throw new Error("escribí el dominio, por ejemplo meet.tuempresa.com"); if (!st.name.trim()) throw new Error("falta el nombre"); }
+        if (st.step === 2) { if (st.where === "propio" && !/^[\w-]+(\.[\w-]+)*(:\d{2,5})?$/i.test(st.domain.replace(/^https?:\/\//, "").replace(/\/+$/, ""))) throw new Error("escribí el dominio o la IP, con el puerto si no es el 443: meet.tuempresa.com o 192.168.1.50:8443"); if (!st.name.trim()) throw new Error("falta el nombre"); }
         if (st.step < 3) { st.step++; dd(); return; }
         items = items.filter((i) => !i.url.includes("{sala}") || !/jit/i.test(i.name + i.url)).concat({ name: st.name.trim(), icon: "📹", url: url(), mode: st.mode });
         wz.remove(); draw();
