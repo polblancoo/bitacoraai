@@ -86,7 +86,7 @@ async fn snapshot() -> Vec<(u32, String, u64, u64)> {
 }
 
 async fn cmd(bin: &str, args: &[&str]) -> String {
-    match tokio::time::timeout(Duration::from_secs(4), tokio::process::Command::new(bin).args(args).output()).await {
+    match tokio::time::timeout(Duration::from_secs(4), tokio::process::Command::new(bin).args(args).env("LC_ALL", "C").output()).await {
         Ok(Ok(o)) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
         _ => String::new(),
     }

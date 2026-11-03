@@ -1179,7 +1179,7 @@ function procPanel() {
       box.replaceChildren(
         h("div", { class: "proc-grid" },
           h("div", {}, h("b", {}, "RAM"), bar(memP), h("small", {}, `${gb(r.mem_mb.used)} de ${gb(r.mem_mb.total)}`)),
-          h("div", {}, h("b", {}, "Disco"), bar(dskP), h("small", {}, `${gb(r.disk_mb.used)} de ${gb(r.disk_mb.total)} · ${r.disk_mb.dir}`)),
+          h("div", {}, h("b", {}, "Disco"), bar(dskP), h("small", { style: dskP > 90 ? "color:var(--red)" : "" }, r.disk_mb.total ? `${gb(r.disk_mb.used)} de ${gb(r.disk_mb.total)} (${Math.round(dskP)}%) · ${r.disk_mb.dir}` : "no se pudo leer el disco de " + r.disk_mb.dir)),
           h("div", {}, h("b", {}, "Carga"), bar((100 * (r.load[0] || 0)) / r.cpus), h("small", {}, `${(r.load || []).join(" · ")} (${r.cpus} núcleos)`)),
           h("div", {}, h("b", {}, "Encendido"), h("small", {}, `${Math.floor(r.uptime_s / 86400)} d ${Math.floor((r.uptime_s % 86400) / 3600)} h`))),
         h("h5", {}, "Procesos de CrewHelm"),
