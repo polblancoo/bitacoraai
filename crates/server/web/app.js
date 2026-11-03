@@ -1045,7 +1045,7 @@ async function chatOpenFor(m) {
   chatSwitch(c);
 }
 function chatBubble(m) {
-  const txt = (m.body || "📎 " + (m.file?.name || "archivo")).slice(0, 140);
+  const txt = ((m.body || "").replace(CALL_RE, "").trim() || "📎 " + (m.file?.name || "archivo")).slice(0, 140);
   const other = m.team_id !== S.team?.id ? S.teams.find((t) => t.id === m.team_id)?.name : "";
   const where = other ? `en el equipo ${other}${m.to_user != null ? " (privado)" : ""}` : m.to_user != null ? "te escribió en privado" : m.project_id != null ? "en " + (S.projects.find((p) => p.id === m.project_id)?.name || "un proyecto") : "en el equipo";
   let box = document.getElementById("chat-bubbles");
@@ -1101,17 +1101,21 @@ async function loadTrCfg() {
   const id = S.team?.id; if (!id) { CHAT.trCfg = null; return; }
   try { const r = await api("GET", `/api/teams/${id}/chat/translate-cfg`); if (S.team?.id === id) { CHAT.trCfg = r; chatDraw(); } } catch { CHAT.trCfg = null; }
 }
+const URL_RE = /(https?:\/\/[^\s<>"')]+)/g;
+const linkify = (t) => t.split(URL_RE).map((p, i) => (i % 2 ? h("a", { href: p, target: "_blank", rel: "noopener noreferrer" }, p) : p));
 function chatBody(m) {
+  const call = m.body && CALL_RE.exec(m.body);
+  if (call) return h("div", { class: "chat-body" }, m.body.replace(CALL_RE, "").trim(), " ", h("button", { class: "primary", onclick: () => openCall(call[1]) }, "📞 Unirme"));
   const k = tr.lang + ":" + m.id, t = CHAT.tr[k], foreign = m.from_user !== S.user.id && typeof t === "string" && t !== "=";
   if (foreign && trWanted() && !CHAT.orig[m.id])
     return h("div", { class: "chat-body" }, t, h("small", { class: "chat-tr", title: "Mostrar lo que escribió la otra persona", onclick: () => { CHAT.orig[m.id] = 1; chatDraw(); } }, " 🌐 traducido · ver original"));
   if (foreign && trWanted()) return h("div", { class: "chat-body" }, m.body, h("small", { class: "chat-tr", onclick: () => { delete CHAT.orig[m.id]; chatDraw(); } }, " 🌐 ver traducción"));
-  return h("div", { class: "chat-body" }, m.body);
+  return h("div", { class: "chat-body" }, linkify(m.body));
 }
 // pide las traducciones que faltan (una tanda por vez); lo que ya está en el idioma de quien lee queda marcado con «=»
 async function chatTrNeed() {
   if (!trWanted() || CHAT.trBusy || !S.team) return;
-  const ids = CHAT.msgs.filter((m) => m.body && m.from_user !== S.user.id && CHAT.tr[tr.lang + ":" + m.id] === undefined).map((m) => m.id).slice(-30);
+  const ids = CHAT.msgs.filter((m) => m.body && !CALL_RE.test(m.body) && m.from_user !== S.user.id && CHAT.tr[tr.lang + ":" + m.id] === undefined).map((m) => m.id).slice(-30);
   if (!ids.length) return;
   CHAT.trBusy = true;
   for (const id of ids) CHAT.tr[tr.lang + ":" + id] = null;
@@ -1248,7 +1252,8 @@ function chatPanel() {
     CHAT.inp.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); chatSend(); } });
     const pick = h("input", { type: "file", hidden: true, onchange: chatPick });
     CHAT.el = h("section", { class: "chat-panel" },
-      h("div", { class: "row" }, h("strong", {}, "💬 Chat"), h("span", { class: "spacer" }),
+      h("div", { class: "row" }, h("strong", {}, "💬 Comunicación"), h("span", { class: "spacer" }),
+        callItem() && h("button", { class: "ghost", title: "Iniciar una videollamada en esta conversación e invitar por acá", onclick: chatCall }, "📞 Llamar"),
         CHAT.trCfg?.enabled && h("button", { class: "ghost" + (trWanted() ? " on" : ""), title: trWanted() ? "Traducción automática activada: tocá para ver todo en su idioma original" : "Traducción automática desactivada: tocá para activarla", onclick: () => { store.set("chatTr", trWanted() ? "0" : "1"); chatDraw(); } }, "🌐"),
         can("admin") && h("button", { class: "ghost", title: "Traducción automática del chat (configurar)", onclick: chatTrModal }, "⚙🌐"),
         can("admin") && h("button", { class: "ghost", title: "Registro de todo lo que pasó en el chat", onclick: chatAudit }, "🧾"),
@@ -2054,7 +2059,7 @@ function appView() {
         S.project && !S.portfolio && !S.terms && can("admin") && S.reviews && h("button", { class: S.reviews.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA da por terminado queda «en revisión» hasta que una persona lo apruebe (planes Equipo y Empresa)", onclick: toggleReview }, "🔎 Revisión: " + (S.reviews.enabled ? "sí" : "no")),
         S.project && !S.portfolio && !S.terms && can("member") && h("button", { onclick: githubProject, title: "GitHub: traer issues como tareas, estado de PR y pruebas, ajustes del proyecto" }, "🐙 GitHub" + ({ success: " ✅", failure: " ❌", pending: " ⏳" }[S.ghCi] || "")),
         S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
-        S.team && h("button", { class: S.chatOpen ? "on" : "", onclick: toggleChat, title: "Chat del equipo: ver quién está conectado, charlar y mandar archivos" }, "💬 Chat" + (CHAT.total > 0 && !S.chatOpen ? ` (${CHAT.total})` : "")),
+        S.team && h("button", { class: S.chatOpen ? "on" : "", onclick: toggleChat, title: "Comunicación del equipo: mensajes, archivos, traducción y videollamadas" }, "💬 Comunicación" + (CHAT.total > 0 && !S.chatOpen ? ` (${CHAT.total})` : "")),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Ctrl+T t)" }, "👥 Equipo"),
         S.team && can("member") && h("button", { onclick: sendTeamMessage, title: "Mensaje al equipo (Ctrl+T s)" }, "✉ Mensaje"),
   ];
@@ -2417,13 +2422,32 @@ async function loadInteg() {
   const id = S.team?.id; if (!id) { S.integ = null; return; }
   try { const r = await api("GET", `/api/teams/${id}/integrations`); if (S.team?.id === id) { S.integ = r; render(true); } } catch { S.integ = null; }
 }
-const integUrl = (u) => u.replaceAll("{sala}", encodeURIComponent(S.integ?.room || "")).replaceAll("{equipo}", encodeURIComponent((S.integ?.team || "").replace(/\s+/g, "-"))).replaceAll("{usuario}", encodeURIComponent(S.user?.username || ""));
+const integUrl = (u, room) => u.replaceAll("{sala}", encodeURIComponent(room || S.integ?.room || "")).replaceAll("{equipo}", encodeURIComponent((S.integ?.team || "").replace(/\s+/g, "-"))).replaceAll("{usuario}", encodeURIComponent(S.user?.username || ""));
 const DOCK = { tabs: [], active: null };
 function openInteg(it) {
   if (it.mode !== "panel") { window.open(integUrl(it.url), "_blank", "noopener,noreferrer"); return; }
   if (!DOCK.tabs.some((t) => t.id === it.id)) DOCK.tabs.push({ id: it.id, name: it.name, icon: it.icon, src: integUrl(it.url) });
   DOCK.active = it.id; drawDock();
 }
+// ---------- llamadas desde el chat: sala propia y aleatoria, la invitación llega solo a quienes ven esa conversación ----------
+const CALL_RE = /\[\[call:([a-f0-9]{16,40})\]\]/;
+const callItem = () => (S.integ?.items || []).find((i) => i.url.includes("{sala}"));
+function openCall(room) {
+  const it = callItem();
+  if (!it) { toast("Falta configurar la videollamada (Configuración → Integraciones)", true); return; }
+  const src = integUrl(it.url, "crewhelm-" + room), id = "call-" + room;
+  if (it.mode !== "panel") { window.open(src, "_blank", "noopener,noreferrer"); return; }
+  if (!DOCK.tabs.some((t) => t.id === id)) DOCK.tabs.push({ id, name: "Llamada", icon: "📞", src });
+  DOCK.active = id; document.getElementById("integ-dock")?.classList.remove("min"); drawDock();
+}
+const chatCall = guard(async () => {
+  if (!callItem()) { toast(can("admin") ? "Primero configurá la videollamada en Configuración → Integraciones" : "El administrador todavía no configuró la videollamada", true); return; }
+  const room = [...crypto.getRandomValues(new Uint8Array(10))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const c = CHAT.chan, payload = { body: `📞 ${S.user.username} inició una videollamada [[call:${room}]]` };
+  if (c.t === "dm") payload.to = c.id; else if (c.t === "project") payload.project_id = c.id;
+  const m = await api("POST", `/api/teams/${S.team.id}/chat`, payload);
+  chatAdd(m); openCall(room);
+});
 function drawDock() {
   let d = document.getElementById("integ-dock");
   if (!DOCK.tabs.length) { d?.remove(); return; }
@@ -2443,7 +2467,7 @@ function drawDock() {
     h("span", { class: "spacer" }),
     cur && h("button", { class: "ghost", title: "Abrir en una ventana aparte", onclick: () => window.open(cur.src, "_blank", "noopener,noreferrer") }, "↗"),
     h("button", { class: "ghost", title: "Agrandar o achicar", onclick: () => { const on = d.classList.toggle("max"); store.set("dockMax", on ? "1" : "0"); } }, "⤢"),
-    h("button", { class: "ghost", title: "Minimizar (la llamada sigue)", onclick: () => d.classList.toggle("min") }, "–"));
+    h("button", { class: d.classList.contains("min") ? "primary" : "ghost", title: d.classList.contains("min") ? "Volver a ver la llamada" : "Minimizar (la llamada sigue)", onclick: () => { d.classList.toggle("min"); drawDock(); } }, d.classList.contains("min") ? "▲ Volver a la llamada" : "–"));
   d.replaceChildren(head, frames);
 }
 
