@@ -1124,7 +1124,7 @@ async function chatTrNeed() {
 }
 const chatTrModal = guard(async () => {
   const c = await api("GET", `/api/teams/${S.team.id}/chat/translate-cfg`);
-  const on = h("input", { type: "checkbox", checked: c.enabled }), eng = h("select", {}, h("option", { value: "ai", selected: c.engine === "ai" }, "Una IA del equipo (traduce mejor, gasta tokens)"), h("option", { value: "libre", selected: c.engine === "libre" }, "LibreTranslate propio (gratis, corre en tu red)"));
+  const on = h("input", { type: "checkbox", checked: c.enabled }), eng = h("select", {}, h("option", { value: "libre", selected: c.engine === "libre" }, "LibreTranslate propio (gratis, corre en tu red)"), h("option", { value: "ai", selected: c.engine === "ai" }, "Una IA del equipo (traduce mejor, gasta tokens)"));
   const bot = h("select", {}, h("option", { value: "" }, "— elegí una IA —"), c.bots.map((b) => h("option", { value: b.id, selected: c.bot_id === b.id }, "🤖 " + b.name)));
   const url = h("input", { value: c.url, placeholder: "http://192.168.1.60:5000", maxLength: 200 });
   const box = h("div", { class: "overlay", id: "chattr-modal", onmousedown: (e) => e.target === box && box.remove() });

@@ -32,7 +32,7 @@ async fn cfg(st: &AppState, team: Id) -> Cfg {
         .ok()
         .flatten()
         .map(|r| Cfg { enabled: r.get::<i64, _>(0) != 0, engine: r.get(1), bot: r.get(2), url: r.get(3) })
-        .unwrap_or(Cfg { enabled: false, engine: "ai".into(), bot: None, url: String::new() })
+        .unwrap_or(Cfg { enabled: false, engine: "libre".into(), bot: None, url: String::new() })
 }
 
 async fn get_cfg(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
