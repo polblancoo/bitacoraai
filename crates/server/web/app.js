@@ -352,7 +352,26 @@ async function selectTeam(team) {
     if (profileOf().view && !store.get("view")) S.view = profileOf().view;
     await selectProject(S.projects[0] || null);
     loadOverview();
+    CHAT.unread = {}; CHAT.total = 0; chatUnreadLoad();
   } else render();
+}
+// Mensajes que le llegaron mientras no estaba conectado: cuenta los no leídos y, una vez por equipo, avisa con una burbuja.
+async function chatUnreadLoad() {
+  const tid = S.team?.id; if (!tid) return;
+  try {
+    const u = await api("GET", `/api/teams/${tid}/chat/unread`); if (S.team?.id !== tid) return;
+    CHAT.unread = {}; CHAT.total = 0;
+    for (const d of u.dm) { CHAT.unread["dm" + d.id] = d.n; CHAT.total += d.n; }
+    for (const c of u.shared) { CHAT.unread[c.chan] = c.n; CHAT.total += c.n; }
+    render();
+    CHAT.announced = CHAT.announced || {};
+    if (CHAT.total > 0 && !CHAT.announced[tid]) {
+      CHAT.announced[tid] = true;
+      const first = u.dm[0];
+      chatBubble({ team_id: tid, from: first ? (u.dm.length > 1 ? u.dm.map((d) => d.name).join(", ") : first.name) : "Chat", from_user: first?.id, to_user: first ? S.user.id : null, project_id: null,
+        body: `Tenés ${CHAT.total} mensaje${CHAT.total > 1 ? "s" : ""} sin leer`, id: -1 });
+    }
+  } catch {}
 }
 
 async function selectProject(p) {
@@ -995,6 +1014,7 @@ function chatAdd(m) {
     if (!S.chatOpen) render();
   }
   if (!mine && !seen) chatBubble(m);
+  if (!mine && seen) api("POST", `/api/teams/${m.team_id}/chat/read`, { chan: msgKey(m), last_id: m.id }).catch(() => {});
   chatDraw();
 }
 // Burbuja que avisa de un mensaje nuevo aunque el chat esté cerrado o en otro canal; tocarla abre esa conversación.
@@ -1059,13 +1079,18 @@ const chatAudit = guard(async () => {
 function chatDraw() {
   if (!CHAT.el) return;
   const me = S.user.id, kb = (n) => (n < 1024 ? n + " B" : (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB");
-  CHAT.sel.replaceChildren(h("option", { value: "team", selected: CHAT.chan.t === "team" }, "👥 Todo el equipo" + (CHAT.unread.team ? ` (${CHAT.unread.team})` : "")),
-    ...S.projects.map((p) => h("option", { value: "p" + p.id, selected: CHAT.chan.t === "project" && CHAT.chan.id === p.id }, "📁 " + p.name + (CHAT.unread["p" + p.id] ? ` (${CHAT.unread["p" + p.id]})` : ""))),
-    CHAT.chan.t === "dm" && h("option", { value: "dm", selected: true }, "✉ " + (CHAT.people.find((x) => x.id === CHAT.chan.id)?.username || "directo")));
-  const others = CHAT.people.filter((x) => !x.me);
-  CHAT.who.replaceChildren(h("small", { class: "hint" }, `${CHAT.people.filter((x) => x.online).length} conectados · tocá un nombre para hablarle en privado`),
-    h("div", { class: "chat-chips" }, others.map((x) => h("button", { class: "chip" + (CHAT.chan.t === "dm" && CHAT.chan.id === x.id ? " on" : ""), title: x.online ? "Conectado" : "Desconectado", onclick: () => chatSwitch({ t: "dm", id: x.id }) },
-      h("span", { class: "dot " + (x.online ? "on" : "off") }), AV[x.username] ? AV[x.username] + " " : "", x.username, CHAT.unread["dm" + x.id] ? ` (${CHAT.unread["dm" + x.id]})` : ""))));
+  // un solo combo: equipo, proyectos y personas (conectadas y desconectadas); a quien no está se le deja el mensaje y lo ve al conectarse
+  const others = CHAT.people.filter((x) => !x.me), n = (k) => (CHAT.unread[k] ? ` (${CHAT.unread[k]})` : "");
+  const person = (x) => h("option", { value: "u" + x.id, selected: CHAT.chan.t === "dm" && CHAT.chan.id === x.id }, (AV[x.username] || (x.online ? "🟢" : "⚪")) + " " + x.username + n("dm" + x.id));
+  CHAT.sel.replaceChildren(
+    h("optgroup", { label: "Conversaciones" }, h("option", { value: "team", selected: CHAT.chan.t === "team" }, "👥 Todo el equipo" + n("team")),
+      ...S.projects.map((p) => h("option", { value: "p" + p.id, selected: CHAT.chan.t === "project" && CHAT.chan.id === p.id }, "📁 " + p.name + n("p" + p.id)))),
+    others.some((x) => x.online) && h("optgroup", { label: "🟢 Conectados · mensaje directo" }, others.filter((x) => x.online).map(person)),
+    others.some((x) => !x.online) && h("optgroup", { label: "⚪ Desconectados · lo ven al conectarse" }, others.filter((x) => !x.online).map(person)));
+  const peer = CHAT.chan.t === "dm" ? others.find((x) => x.id === CHAT.chan.id) : null;
+  CHAT.who.replaceChildren(h("small", { class: "hint" }, peer && !peer.online
+    ? `⚪ ${peer.username} está desconectado: el mensaje y los archivos le quedan esperando y los ve al conectarse.`
+    : `${CHAT.people.filter((x) => x.online).length} conectados · elegí a alguien en la lista para escribirle en privado`));
   CHAT.err_.replaceChildren(CHAT.err, ...(CHAT.err && CHAT.https ? [h("div", {}, h("a", { href: CHAT.https + location.pathname, class: "btnlike" }, "🔒 Abrir con conexión segura (HTTPS)"))] : []));
   CHAT.err_.hidden = !CHAT.err;
   CHAT.list.replaceChildren(...CHAT.msgs.map((m) => h("div", { class: "chat-msg" + (m.from_user === me ? " mine" : "") },
@@ -1077,7 +1102,12 @@ function chatDraw() {
 }
 function chatPanel() {
   if (!CHAT.el) {
-    CHAT.sel = h("select", { onchange: (e) => { const v = e.target.value; if (v === "team") chatSwitch({ t: "team" }); else if (v[0] === "p") chatSwitch({ t: "project", id: +v.slice(1) }); } });
+    CHAT.sel = h("select", { onchange: (e) => { const v = e.target.value; if (v === "team") chatSwitch({ t: "team" }); else if (v[0] === "p") chatSwitch({ t: "project", id: +v.slice(1) }); else if (v[0] === "u") chatSwitch({ t: "dm", id: +v.slice(1) }); } });
+    const EMO = [["👍", "Bien"], ["👌", "Ok"], ["👋", "Hola"], ["🎉", "Felicitaciones"], ["👏", "Aplausos"], ["🙏", "Gracias"], ["😊", "Sonrisa"], ["❤️", "Me encanta"]];
+    CHAT.emo = h("div", { class: "chat-emo" }, EMO.map(([e, t]) => h("button", { class: "ghost", title: t, type: "button", onclick: () => {
+      const i = CHAT.inp, a = i.selectionStart ?? i.value.length, z = i.selectionEnd ?? a;
+      i.value = i.value.slice(0, a) + e + i.value.slice(z); i.focus(); i.selectionStart = i.selectionEnd = a + e.length;
+    } }, e)));
     CHAT.who = h("div", { class: "chat-who" }); CHAT.list = h("div", { class: "chat-list" });
     CHAT.err_ = h("div", { class: "chat-err", hidden: true }); CHAT.att = h("div", { class: "chat-att" });
     CHAT.inp = h("textarea", { class: "chat-in", rows: 3, maxLength: 4000, placeholder: "Escribí un mensaje… (Enter envía · Shift+Enter, línea nueva)" });
@@ -1089,9 +1119,9 @@ function chatPanel() {
         h("button", { class: "ghost", title: "Cerrar el chat", onclick: toggleChat }, "✕")),
       h("small", { class: "hint" }, "🔒 Solo por conexión segura; mensajes y archivos se guardan cifrados."),
       CHAT.err_, CHAT.sel, CHAT.who, CHAT.list, CHAT.att,
-      CHAT.inp, h("div", { class: "row" }, h("button", { class: "ghost", title: "Adjuntar un archivo (imágenes, PDF, texto, documentos; hasta 5 MB)", onclick: () => pick.click() }, "📎 Adjuntar"), pick, h("span", { class: "spacer" }), h("button", { class: "primary", onclick: chatSend }, "Enviar")));
+      CHAT.emo, CHAT.inp, h("div", { class: "row" }, h("button", { class: "ghost", title: "Adjuntar un archivo (imágenes, PDF, texto, documentos; hasta 5 MB)", onclick: () => pick.click() }, "📎 Adjuntar"), pick, h("span", { class: "spacer" }), h("button", { class: "primary", onclick: chatSend }, "Enviar")));
   }
-  if (S.team && CHAT.teamId !== S.team.id) { CHAT.teamId = S.team.id; CHAT.chan = { t: "team" }; CHAT.msgs = []; CHAT.unread = {}; CHAT.total = 0; CHAT.people = []; chatHistory(); chatPresence(); }
+  if (S.team && CHAT.teamId !== S.team.id) { CHAT.teamId = S.team.id; CHAT.chan = { t: "team" }; CHAT.msgs = []; CHAT.people = []; chatHistory(); chatPresence(); }
   else chatDraw();
   return CHAT.el;
 }

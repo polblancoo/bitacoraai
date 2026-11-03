@@ -625,3 +625,5 @@ ol.guide pre { margin: 4px 0; }
 .welcome h2 { margin: 0; }
 .welcome p { margin: 0; }
 .welcome .row input { flex: 1; min-width: 0; }
+.chat-emo { display: flex; gap: 2px; flex-wrap: wrap; }
+.chat-emo button { font-size: 17px; padding: 1px 6px; line-height: 1.3; }

@@ -53,6 +53,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/teams/{id}/chat", get(history).post(send))
         .route("/api/teams/{id}/chat/files", post(upload).layer(DefaultBodyLimit::max(FILE_MAX + 4096)))
         .route("/api/teams/{id}/presence", get(presence))
+        .route("/api/teams/{id}/chat/unread", get(unread))
+        .route("/api/teams/{id}/chat/read", post(mark_read))
         .route("/api/teams/{id}/chat/audit", get(audit_list))
         .route("/api/chat/files/{id}", get(download))
 }
@@ -353,8 +355,68 @@ async fn history(
         })
         .collect();
     out.reverse();
+    if q.before.is_none() {
+        if let Some(last) = out.last() {
+            let chan = match (q.with, q.project) { (Some(w), _) => format!("dm{w}"), (None, Some(p)) => format!("p{p}"), _ => "team".into() };
+            set_read(&st, user.id, team, &chan, last.id).await;
+        }
+    }
     audit(&st, &headers, peer, user.id, team, "leyo_historial", match (q.with, q.project) { (Some(w), _) => format!("directo con #{w}"), (None, Some(p)) => format!("proyecto #{p}"), _ => "equipo".into() }).await;
     Ok(Json(out))
+}
+
+async fn set_read(st: &AppState, user: Id, team: Id, chan: &str, last: Id) {
+    let _ = sqlx::query("INSERT INTO chat_reads (user_id, team_id, chan, last_id) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, team_id, chan) DO UPDATE SET last_id = MAX(last_id, excluded.last_id)")
+        .bind(user)
+        .bind(team)
+        .bind(chan)
+        .bind(last)
+        .execute(&st.db)
+        .await;
+}
+
+#[derive(Deserialize)]
+struct ReadBody {
+    chan: String,
+    last_id: Id,
+}
+
+/// Marca una conversación como leída hasta cierto mensaje (cuando llega uno mientras se la está mirando).
+async fn mark_read(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>, Json(b): Json<ReadBody>) -> Result<StatusCode> {
+    user.human_only()?;
+    ensure_member(&st, team, user.id).await?;
+    let ok = b.chan == "team" || b.chan.strip_prefix('p').or_else(|| b.chan.strip_prefix("dm")).is_some_and(|n| n.parse::<Id>().is_ok());
+    if !ok {
+        return Err(AppError::bad("conversación inválida"));
+    }
+    set_read(&st, user.id, team, &b.chan, b.last_id).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Mensajes que le llegaron mientras no estaba: directos (siempre) y de equipo/proyectos que ya había abierto alguna vez.
+async fn unread(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    ensure_member(&st, team, user.id).await?;
+    let dm = sqlx::query(
+        "SELECT m.from_user AS id, (SELECT username FROM users WHERE id = m.from_user) AS name, COUNT(*) AS n FROM chat_messages m \
+         WHERE m.team_id = ?1 AND m.to_user = ?2 AND m.id > COALESCE((SELECT last_id FROM chat_reads WHERE user_id = ?2 AND team_id = ?1 AND chan = 'dm' || m.from_user), 0) GROUP BY m.from_user",
+    )
+    .bind(team)
+    .bind(user.id)
+    .fetch_all(&st.db)
+    .await?;
+    let shared = sqlx::query(
+        "SELECT r.chan AS chan, COUNT(m.id) AS n FROM chat_reads r JOIN chat_messages m ON m.team_id = r.team_id AND m.to_user IS NULL AND m.from_user != r.user_id AND m.id > r.last_id \
+         AND ((r.chan = 'team' AND m.project_id IS NULL) OR r.chan = 'p' || m.project_id) WHERE r.user_id = ? AND r.team_id = ? AND r.chan NOT LIKE 'dm%' GROUP BY r.chan",
+    )
+    .bind(user.id)
+    .bind(team)
+    .fetch_all(&st.db)
+    .await?;
+    Ok(Json(json!({
+        "dm": dm.iter().map(|r| json!({ "id": r.get::<Id, _>("id"), "name": r.get::<String, _>("name"), "n": r.get::<i64, _>("n") })).collect::<Vec<_>>(),
+        "shared": shared.iter().map(|r| json!({ "chan": r.get::<String, _>("chan"), "n": r.get::<i64, _>("n") })).collect::<Vec<_>>(),
+    })))
 }
 
 async fn presence(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {

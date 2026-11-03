@@ -339,3 +339,12 @@ CREATE TABLE IF NOT EXISTS chat_audit (
     ip TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_chat_audit_team ON chat_audit(team_id, id);
+
+-- hasta qué mensaje leyó cada persona en cada conversación del chat (chan: team, p<proyecto> o dm<persona>)
+CREATE TABLE IF NOT EXISTS chat_reads (
+    user_id INTEGER NOT NULL,
+    team_id INTEGER NOT NULL,
+    chan TEXT NOT NULL,
+    last_id INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, team_id, chan)
+);
