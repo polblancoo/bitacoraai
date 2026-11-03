@@ -721,3 +721,7 @@ aside { gap: 10px; }
 .tf-note span { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--card2); color: var(--dim); }
 .tf-note span.warn { background: color-mix(in srgb, var(--yellow) 18%, transparent); color: var(--yellow); }
 @media (max-width: 760px) { .modal.task-form { width: 96vw; } .tf-row { grid-template-columns: 1fr 1fr; } }
+
+.tfolder { display: grid; gap: 8px; padding-top: 6px; }
+.ghost-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px dashed var(--line); border-radius: 8px; cursor: pointer; color: var(--dim); font-size: 13px; }
+.ghost-btn:hover { border-color: var(--blue); color: var(--fg); }

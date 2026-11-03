@@ -138,7 +138,7 @@ async fn goto_step(st: &AppState, team: Id, task: Id, actor: Id, steps: &[Step],
     Ok(t)
 }
 
-async fn finish(st: &AppState, team: Id, task: Id, actor: Id, text: String) -> Result<Task> {
+pub(crate) async fn finish(st: &AppState, team: Id, task: Id, actor: Id, text: String) -> Result<Task> {
     sqlx::query("UPDATE task_flows SET finished = 1 WHERE task_id = ?").bind(task).execute(&st.db).await?;
     sqlx::query("UPDATE tasks SET status = 'done', waiting = 0, updated_at = ? WHERE id = ?").bind(Utc::now()).bind(task).execute(&st.db).await?;
     post_comment(st, team, task, actor, text).await;
@@ -151,7 +151,7 @@ async fn finish(st: &AppState, team: Id, task: Id, actor: Id, text: String) -> R
 }
 
 /// Nombre de carpeta seguro para un usuario (sin barras, puntos dobles ni espacios).
-pub fn safe_name(n: &str) -> String {
+pub(crate) fn safe_name(n: &str) -> String {
     let s: String = n.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
     if s.is_empty() { "usuario".into() } else { s }
 }
@@ -169,7 +169,7 @@ fn copy_tree(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<us
 
 /// Al terminar el flujo: lo que dejó la última etapa de trabajo en `.crewhelm/tareas/<id>/<usuario>/` se copia a `final/`.
 /// Solo funciona si la carpeta del proyecto está en la máquina del servidor.
-async fn publish_final(st: &AppState, team: Id, task: Id, actor: Id, author: &str) {
+pub(crate) async fn publish_final(st: &AppState, team: Id, task: Id, actor: Id, author: &str) {
     let wd: Option<String> = sqlx::query_scalar("SELECT p.work_dir FROM projects p JOIN tasks t ON t.project_id = p.id WHERE t.id = ?").bind(task).fetch_optional(&st.db).await.ok().flatten();
     let Some(wd) = wd.filter(|w| !w.trim().is_empty()) else { return };
     let base = std::path::PathBuf::from(&wd).join(".crewhelm").join("tareas").join(task.to_string());
@@ -212,6 +212,11 @@ pub async fn on_done(st: &AppState, team: Id, user: &AuthUser, role: Role, cur: 
         return Ok(Some(t));
     }
     if idx + 1 >= sts.len() {
+        // última etapa de trabajo: decide quien creó la tarea (si es otra persona, queda esperando su aprobación)
+        if cur.created_by.is_some_and(|c| c != user.id) {
+            let t = hold_for_person(st, team, cur.id, user.id, format!("🧭 {who} terminó la última etapa: queda esperando que quien creó la tarea la apruebe («✅ Aprobar y publicar») o la devuelva con comentarios.")).await?;
+            return Ok(Some(t));
+        }
         sqlx::query("UPDATE task_flows SET finished = 1 WHERE task_id = ?").bind(cur.id).execute(&st.db).await?;
         publish_final(st, team, cur.id, user.id, &who).await;
         return Ok(None);
@@ -239,7 +244,8 @@ async fn verdict(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>,
     if s.kind != "review" {
         return Err(AppError::bad("la etapa actual no es de revisión"));
     }
-    if s.assignee_id != user.id && role < Role::Admin {
+    let creator = routes::fetch_task(&st, id).await.ok().and_then(|t| t.created_by);
+    if s.assignee_id != user.id && creator != Some(user.id) && role < Role::Admin {
         return Err(AppError::forbidden());
     }
     let reason = trunc(b.reason.trim(), INSTRUCTION_MAX);
@@ -383,4 +389,22 @@ async fn project_flows(State(st): State<AppState>, user: AuthUser, Path(project)
         })
         .collect();
     Ok(Json(json!(out)))
+}
+
+/// ¿La tarea tiene un flujo todavía en marcha?
+pub(crate) async fn has_active(st: &AppState, task: Id) -> bool {
+    load(st, task).await.ok().flatten().is_some_and(|f| !f.finished)
+}
+
+/// Flujo parado en su última etapa de trabajo (esperando que quien creó la tarea apruebe): ¿en qué etapa de trabajo y de quién?
+pub(crate) async fn last_work_author(st: &AppState, task: Id) -> Option<String> {
+    let fl = load(st, task).await.ok().flatten()?;
+    let sts = steps(st, task).await.ok()?;
+    let idx = (fl.step as usize).min(sts.len().checked_sub(1)?);
+    (0..=idx).rev().find(|i| sts[*i].kind == "work").map(|i| sts[i].username.clone())
+}
+
+pub(crate) async fn on_last_stage(st: &AppState, task: Id) -> bool {
+    let (Some(fl), Ok(sts)) = (load(st, task).await.ok().flatten(), steps(st, task).await) else { return false };
+    !sts.is_empty() && fl.step as usize + 1 >= sts.len() && sts[fl.step as usize].kind == "work"
 }

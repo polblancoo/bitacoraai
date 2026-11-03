@@ -1226,6 +1226,17 @@ const inviteMessage = (code) => [
   "El código vence en 7 días.",
 ].join("\n");
 
+// ayudas de cada campo de tarea (se ven al pasar el mouse)
+const FIELD_TIPS = {
+  title: "Resumen corto: es lo que se ve en la tarjeta del tablero.",
+  desc: "Lo que tiene que hacer quien la tome. Si el responsable es una IA, este texto es su prompt: sé claro y poné el contexto necesario.",
+  status: "Dónde está la tarea: Por hacer, En curso o Hecho. Una IA la pasa a En curso cuando empieza.",
+  prio: "Qué tan urgente es. Ordena las tarjetas y se muestra como etiqueta de color.",
+  who: "Quién la hace, persona o IA. Si es una IA con su agente conectado, la toma sola.",
+  start: "Cuándo debería empezar. Se ve en el Gantt y el calendario.",
+  due: "Fecha límite: se avisa cuando se acerca y se marca atrasada si pasa.",
+  rec: "Si se repite, al completarla se crea la siguiente automáticamente.",
+};
 // diálogo de "Nueva tarea": ancho de un tercio, prompt grande, atributos en dos filas, atajos y avisos al pie
 function taskForm(status, assignable) {
   return new Promise((resolve) => {
@@ -1252,7 +1263,7 @@ function taskForm(status, assignable) {
       if (!title.value.trim()) { title.focus(); return; }
       done({ title: title.value.trim(), description: desc.value.trim(), status: st.value, priority: pr.value, assignee: as.value, start: start.value, due: due.value, recurrence: rec.value });
     };
-    const fld = (lbl, key, el) => h("label", {}, h("span", {}, lbl, key && h("kbd", {}, key)), el);
+    const fld = (lbl, key, el, tip) => h("label", { title: tip }, h("span", {}, lbl, key && h("kbd", {}, key)), el);
     const jump = { e: st, p: pr, r: as, f: start, v: due, t: title, d: desc };
     const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && done(null) },
       h("div", { class: "modal task-form", onkeydown: (e) => {
@@ -1262,10 +1273,10 @@ function taskForm(status, assignable) {
         else if (e.altKey && jump[e.key.toLowerCase()]) { e.preventDefault(); jump[e.key.toLowerCase()].focus(); }
       } },
         h("h3", {}, "Nueva tarea"),
-        fld("Título", "Alt+T", title),
-        fld("Instrucción / prompt para quien la haga", "Alt+D", desc),
-        h("div", { class: "tf-row" }, fld("Estado", "Alt+E", st), fld("Prioridad", "Alt+P", pr), fld("Responsable", "Alt+R", as)),
-        h("div", { class: "tf-row" }, fld("Empieza", "Alt+F", start), fld("Vence", "Alt+V", due), fld("Repetición", "", rec)),
+        fld("Título", "Alt+T", title, FIELD_TIPS.title),
+        fld("Instrucción / prompt para quien la haga", "Alt+D", desc, FIELD_TIPS.desc),
+        h("div", { class: "tf-row" }, fld("Estado", "Alt+E", st, FIELD_TIPS.status), fld("Prioridad", "Alt+P", pr, FIELD_TIPS.prio), fld("Responsable", "Alt+R", as, FIELD_TIPS.who)),
+        h("div", { class: "tf-row" }, fld("Empieza", "Alt+F", start, FIELD_TIPS.start), fld("Vence", "Alt+V", due, FIELD_TIPS.due), fld("Repetición", "", rec, FIELD_TIPS.rec)),
         h("div", { class: "tf-help" }, h("kbd", {}, "Ctrl+Enter"), " crear · ", h("kbd", {}, "Esc"), " cancelar · ", h("kbd", {}, "Enter"), " en el título pasa al prompt · ", h("kbd", {}, "Alt+letra"), " salta al campo"),
         note,
         h("div", { class: "row" }, h("button", { onclick: () => done(null) }, "Cancelar"), h("button", { class: "primary", onclick: submit }, "Crear tarea"))));
@@ -1593,18 +1604,19 @@ const openTask = guard(async (task) => {
       reviewPanel(),
       h("div", { class: "task-split" },
         h("div", { class: "task-main" },
-          h("label", {}, "Título", title),
-          h("details", { class: "desc-box", open: !cur().description || !S.comments.length }, h("summary", {}, "📝 Descripción de la tarea"), desc),
+          h("label", { title: FIELD_TIPS.title }, "Título", title),
+          h("details", { class: "desc-box", open: !cur().description || !S.comments.length }, h("summary", { title: FIELD_TIPS.desc }, "📝 Descripción de la tarea"), desc),
           flowBox(cur()),
+          folderBox(cur()),
           h("h3", {}, "Conversación"),
           h("div", { class: "comments", id: "comments" }),
           comment,
           h("div", { class: "row" }, h("small", { class: "hint" }, "Ctrl+Enter envía"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: send }, "Enviar"))),
         h("aside", { class: "task-side" },
           h("div", { class: "grid2" },
-            h("label", {}, "Estado", status), h("label", {}, "Prioridad", prio),
-            h("label", {}, "Responsable", who), h("label", {}, "Empieza", start),
-            h("label", {}, "Vence", due), h("label", {}, "Repetición", rec), h("small", { class: "hint" }, whoHint)),
+            h("label", { title: FIELD_TIPS.status }, "Estado", status), h("label", { title: FIELD_TIPS.prio }, "Prioridad", prio),
+            h("label", { title: FIELD_TIPS.who }, "Responsable", who), h("label", { title: FIELD_TIPS.start }, "Empieza", start),
+            h("label", { title: FIELD_TIPS.due }, "Vence", due), h("label", { title: FIELD_TIPS.rec }, "Repetición", rec), h("small", { class: "hint" }, whoHint)),
           can("member") && budgetBox(cur(), title, desc),
           ghBox,
           h("h3", {}, "Etiquetas"), labelBox, newLabel,
@@ -1646,6 +1658,43 @@ const botChatModal = guard(async (b) => {
         close(); toast(on.checked ? `${b.username} ya puede chatear` : `${b.username}: chat apagado`);
       }) }, "Guardar")))));
 });
+
+// ---------- carpeta de la tarea: archivos por responsable y final/ ----------
+function folderBox(task) {
+  const body = h("div", { class: "tfolder" });
+  const kb = (n) => (n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB" : (n / 1048576).toFixed(1) + " MB");
+  const join = (a, b) => (a ? a + "/" : "") + b;
+  const t = () => S.tasks.find((x) => x.id === task.id) || task;
+  const canDecide = () => can("member") && t().status !== "done" && (t().created_by === S.user?.id || can("admin")) && (!S.flows?.[task.id] || (S.flows[task.id].finished || t().waiting));
+  async function show(path) {
+    try {
+      const r = await api("GET", `/api/tasks/${task.id}/folder?path=${encodeURIComponent(path)}`);
+      const parts = path ? path.split("/") : [];
+      const up = guard(async (e) => {
+        const f = e.target.files[0]; if (!f) return;
+        if (f.size > 25 * 1024 * 1024) return toast("Máximo 25 MB por archivo", true);
+        await apiRaw("POST", `/api/tasks/${task.id}/folder/upload?name=${encodeURIComponent(f.name)}`, f);
+        toast("Archivo subido a tu carpeta"); show(path);
+      });
+      const publish = guard(async () => {
+        if (!(await ask("¿Aprobar y publicar? Se copia el trabajo del responsable a la carpeta final y la tarea pasa a Hecha.", "Aprobar y publicar"))) return;
+        upsert(await api("POST", `/api/tasks/${task.id}/publish`)); toast("Publicado en final/ y tarea Hecha"); closeModal(); render();
+      });
+      body.replaceChildren(
+        h("div", { class: "files-path" }, h("a", { onclick: () => show("") }, "📂 tarea"), ...parts.flatMap((p, i) => [" / ", h("a", { onclick: () => show(parts.slice(0, i + 1).join("/")) }, p)])),
+        !r.exists ? h("small", { class: "hint" }, r.reason) : h("div", { class: "files-list" }, path && h("div", { class: "files-row", onclick: () => show(parts.slice(0, -1).join("/")) }, "⬆ .."),
+          r.entries.map((e) => h("div", { class: "files-row", title: e.dir ? "Abrir carpeta" : "Descargar", onclick: () => (e.dir ? show(join(path, e.name)) : saveFile(`/api/tasks/${task.id}/folder/file?path=${encodeURIComponent(join(path, e.name))}`, e.name).catch((x) => toast(x.message, true))) },
+            h("span", {}, (e.dir ? (e.name === "final" && !path ? "✅ " : "📁 ") : "📄 ") + e.name), h("small", {}, e.dir ? "" : kb(e.size)))),
+          !r.entries.length && h("small", { class: "hint" }, "Carpeta vacía")),
+        h("div", { class: "row" },
+          can("member") && h("label", { class: "ghost-btn", title: "Sube un archivo a TU carpeta de esta tarea (para quien trabaja desde otra máquina o con su IA local). No se permiten programas ejecutables." }, "⬆ Subir a mi carpeta", h("input", { type: "file", hidden: true, onchange: up })),
+          h("span", { class: "spacer" }),
+          canDecide() && h("button", { class: "primary", title: "Decide quien creó la tarea (o un admin): copia el trabajo del responsable a final/ y pasa la tarea a Hecha", onclick: publish }, "✅ Aprobar y publicar")));
+    } catch (e) { body.replaceChildren(h("small", { class: "hint" }, e.message)); }
+  }
+  const d = h("details", { class: "desc-box", title: "Cada responsable trabaja en su carpeta; lo aprobado queda en final/. Todos los del equipo pueden mirar y descargar; cada uno escribe solo en la suya.", ontoggle: (e) => e.target.open && show("") }, h("summary", {}, "📂 Carpeta de la tarea"), body);
+  return d;
+}
 
 // ---------- flujo de la tarea: etapas con responsable e instrucción ----------
 function flowBox(task) {
