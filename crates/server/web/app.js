@@ -1209,8 +1209,28 @@ function rolesPanel() {
   return box;
 }
 
+// Comunicación: una sola entrada con dos solapas, chat y videollamada
+function commDraw() {
+  if (!CHAT.el) return;
+  const it = callItem(), tab = CHAT.tab === "video" && it ? "video" : "chat";
+  CHAT.tab = tab;
+  CHAT.tabs.replaceChildren(
+    h("button", { class: "comm-tab" + (tab === "chat" ? " on" : ""), onclick: () => { CHAT.tab = "chat"; commDraw(); } }, "💬 Chat" + (CHAT.total > 0 ? ` (${CHAT.total})` : "")),
+    h("button", { class: "comm-tab" + (tab === "video" ? " on" : ""), onclick: () => { CHAT.tab = "video"; commDraw(); } }, "📹 Videollamada"));
+  CHAT.pane.hidden = tab !== "chat"; CHAT.video.hidden = tab !== "video";
+  if (tab !== "video") return;
+  const c = CHAT.chan, where = c.t === "dm" ? "este mensaje directo" : c.t === "project" ? "este proyecto" : "todo el equipo";
+  CHAT.video.replaceChildren(
+    h("div", { class: "comm-card" }, h("b", {}, "Sala permanente del equipo"), h("small", { class: "hint" }, "Siempre la misma: entra quien del equipo la abra. Sirve para reuniones habituales."),
+      h("button", { class: "primary", onclick: () => openInteg(it) }, "▶ Entrar a la sala")),
+    h("div", { class: "comm-card" }, h("b", {}, "Llamar ahora"), h("small", { class: "hint" }, `Crea una sala nueva y avisa en el chat de ${where} con un botón «Unirme». Solo la ven quienes participan de esa conversación.`),
+      h("button", { onclick: chatCall }, "📞 Iniciar llamada")),
+    can("member") && h("div", { class: "comm-card" }, h("b", {}, "Invitar a alguien de afuera"), h("small", { class: "hint" }, "Proveedor o cliente, sin cuenta: enlace único con vencimiento, para copiar o mandar por email."),
+      h("button", { onclick: inviteModal }, "🔗 Crear invitación")));
+}
 function chatDraw() {
   if (!CHAT.el) return;
+  commDraw();
   const me = S.user.id, kb = (n) => (n < 1024 ? n + " B" : (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB");
   // un solo combo: equipo, proyectos y personas (conectadas y desconectadas); a quien no está se le deja el mensaje y lo ve al conectarse
   const others = CHAT.people.filter((x) => !x.me), n = (k) => (CHAT.unread[k] ? ` (${CHAT.unread[k]})` : "");
@@ -1253,15 +1273,15 @@ function chatPanel() {
     const pick = h("input", { type: "file", hidden: true, onchange: chatPick });
     CHAT.el = h("section", { class: "chat-panel" },
       h("div", { class: "row" }, h("strong", {}, "💬 Comunicación"), h("span", { class: "spacer" }),
-        callItem() && h("button", { class: "ghost", title: "Iniciar una videollamada en esta conversación e invitar por acá", onclick: chatCall }, "📞 Llamar"),
-        callItem() && can("member") && h("button", { class: "ghost", title: "Invitar a alguien de afuera (proveedor, cliente) con un enlace único", onclick: inviteModal }, "🔗"),
         CHAT.trCfg?.enabled && h("button", { class: "ghost" + (trWanted() ? " on" : ""), title: trWanted() ? "Traducción automática activada: tocá para ver todo en su idioma original" : "Traducción automática desactivada: tocá para activarla", onclick: () => { store.set("chatTr", trWanted() ? "0" : "1"); chatDraw(); } }, "🌐"),
         can("admin") && h("button", { class: "ghost", title: "Traducción automática del chat (configurar)", onclick: chatTrModal }, "⚙🌐"),
         can("admin") && h("button", { class: "ghost", title: "Registro de todo lo que pasó en el chat", onclick: chatAudit }, "🧾"),
         h("button", { class: "ghost", title: "Cerrar el chat", onclick: toggleChat }, "✕")),
+      CHAT.tabs = h("div", { class: "comm-tabs" }), CHAT.video = h("div", { class: "comm-video", hidden: true }),
+      CHAT.pane = h("div", { class: "chat-pane" },
       h("small", { class: "hint" }, "🔒 Solo por conexión segura; mensajes y archivos se guardan cifrados."),
       CHAT.err_, CHAT.sel, CHAT.who, CHAT.list, CHAT.att,
-      CHAT.emo, CHAT.inp, h("div", { class: "row" }, h("button", { class: "ghost", title: "Adjuntar un archivo (imágenes, PDF, texto, documentos; hasta 5 MB)", onclick: () => pick.click() }, "📎 Adjuntar"), pick, h("span", { class: "spacer" }), h("button", { class: "primary", onclick: chatSend }, "Enviar")));
+      CHAT.emo, CHAT.inp, h("div", { class: "row" }, h("button", { class: "ghost", title: "Adjuntar un archivo (imágenes, PDF, texto, documentos; hasta 5 MB)", onclick: () => pick.click() }, "📎 Adjuntar"), pick, h("span", { class: "spacer" }), h("button", { class: "primary", onclick: chatSend }, "Enviar"))));
   }
   if (S.team && CHAT.teamId !== S.team.id) { CHAT.teamId = S.team.id; CHAT.chan = { t: "team" }; CHAT.msgs = []; CHAT.people = []; chatHistory(); chatPresence(); }
   else chatDraw();
@@ -2052,7 +2072,7 @@ function appView() {
         h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
   ];
   const barActs = [
-        ...(S.team && !S.portfolio && !S.terms ? (S.integ?.items || []).map((it) => h("button", { onclick: () => openInteg(it), title: it.mode === "panel" ? "Se abre en una pestaña flotante, sin salir del tablero" : "Se abre en una ventana nueva" }, it.icon + " " + it.name)) : []),
+        ...(S.team && !S.portfolio && !S.terms ? (S.integ?.items || []).filter((it) => !it.url.includes("{sala}")).map((it) => h("button", { onclick: () => openInteg(it), title: it.mode === "panel" ? "Se abre en una pestaña flotante, sin salir del tablero" : "Se abre en una ventana nueva" }, it.icon + " " + it.name)) : []),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openSchedules, title: "Tareas que se crean solas a una hora fija: cada día, semana o mes" }, "⏰ Programadas"),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
         S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
@@ -2105,7 +2125,7 @@ function appView() {
       h("button", { class: "cfg-btn", onclick: () => openManual(), title: "Manual con buscador e índice por temas" }, "📖  Manual"),
       h("div", { class: "me" }, h("span", { class: "live" + (S.online ? " on" : ""), title: S.online ? "en vivo" : "desconectado" }),
         h("span", { title: S.team ? `Tu rol en «${S.team.name}»` : "" }, S.user?.username, S.team && h("small", { class: "hint" }, " · " + (ROLES.find(([r]) => r === myRole())?.[1] || ""))), h("span", { class: "spacer" }),
-        S.team && h("button", { class: "ghost" + (S.chatOpen ? " on" : ""), title: "Chat del equipo: ver quién está conectado, charlar y mandar archivos", onclick: toggleChat }, "💬" + (CHAT.total > 0 && !S.chatOpen ? ` ${CHAT.total}` : "")),
+        S.team && h("button", { class: "ghost" + (S.chatOpen ? " on" : ""), title: "Comunicación del equipo: chat, archivos, traducción y videollamadas", onclick: toggleChat }, "💬" + (CHAT.total > 0 && !S.chatOpen ? ` ${CHAT.total}` : "")),
         h("button", { class: "ghost bell" + (S.unread ? " has" : ""), title: "Bandeja de novedades (Alt+K n)", onclick: () => loadInbox(false) }, S.unread ? `🔔 ${S.unread}` : "🔔"),
         h("button", { class: "ghost", onclick: cycleTheme, title: "Tema: " + THEMES[themePref()][1] + " (clic para cambiar)" }, THEMES[themePref()][0]),
         h("button", { class: "ghost", onclick: helpModal, title: "Atajos y ayuda (?)" }, "?"),
@@ -2421,7 +2441,7 @@ const githubProject = guard(async () => {
 // ---------- integraciones: videollamada (Jitsi) y otras herramientas, en una pestaña flotante o en ventana nueva ----------
 async function loadInteg() {
   const id = S.team?.id; if (!id) { S.integ = null; return; }
-  try { const r = await api("GET", `/api/teams/${id}/integrations`); if (S.team?.id === id) { S.integ = r; render(true); } } catch { S.integ = null; }
+  try { const r = await api("GET", `/api/teams/${id}/integrations`); if (S.team?.id === id) { S.integ = r; render(true); if (CHAT.el) chatDraw(); } } catch { S.integ = null; }
 }
 const integUrl = (u, room) => u.replaceAll("{sala}", encodeURIComponent(room || S.integ?.room || "")).replaceAll("{equipo}", encodeURIComponent((S.integ?.team || "").replace(/\s+/g, "-"))).replaceAll("{usuario}", encodeURIComponent(S.user?.username || ""));
 const DOCK = { tabs: [], active: null };

@@ -765,3 +765,11 @@ aside { gap: 10px; }
 .proc h5{margin:12px 0 4px}
 
 .chat-body a { color: var(--blue); word-break: break-all; }
+
+.chat-pane { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+.chat-pane[hidden], .comm-video[hidden] { display: none; }
+.comm-tabs { display: flex; gap: 4px; }
+.comm-tab { flex: 1; padding: 6px 8px; }
+.comm-tab.on { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, var(--card2)); }
+.comm-video { display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.comm-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
