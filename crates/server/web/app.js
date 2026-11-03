@@ -2360,40 +2360,83 @@ const integAdmin = guard(async () => {
       h("span", { class: "spacer" }), h("button", { onclick: () => box.remove() }, "Cancelar"), h("button", { class: "primary", onclick: save }, "Guardar")),
   ].flat().filter(Boolean));
   function wizard() {
-    const st = { step: 1, where: "internet", domain: "", name: "Videollamada", mode: "tab" };
-    const url = () => (st.where === "internet" ? "https://meet.jit.si" : "https://" + st.domain.replace(/^https?:\/\//, "").replace(/\/+$/, "")) + "/crewhelm-{sala}";
+    const st = { step: 1, where: "internet", domain: "", email: "", name: "Videollamada", mode: "tab" };
+    const own = () => st.where !== "internet";
+    const host = () => {
+      let h0 = st.domain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+      if (st.where === "lan" && !/:\d+$/.test(h0)) h0 += ":8443";
+      return h0;
+    };
+    const url = () => (st.where === "internet" ? "https://meet.jit.si" : "https://" + host()) + "/crewhelm-{sala}";
+    const nsteps = () => (own() ? ["Dónde", "Datos", "Instalar", "Probar"] : ["Dónde", "Datos", "Probar"]);
+    const testStep = () => nsteps().length;
+    // un solo bloque para pegar en la máquina del Jitsi: baja, configura y levanta todo
+    const script = () => {
+      const lan = st.where === "lan", h0 = host(), ip = lan ? h0.split(":")[0] : "";
+      return [
+        "set -e",
+        "# Requiere Docker con el plugin compose",
+        "git clone --depth 1 https://github.com/jitsi/docker-jitsi-meet && cd docker-jitsi-meet",
+        "cp env.example .env && ./gen-passwords.sh",
+        "mkdir -p ~/.jitsi-meet-cfg/{web,transcripts,prosody/config,prosody/prosody-plugins-custom,jicofo,jvb}",
+        "cat >> .env <<'EOF'",
+        `PUBLIC_URL=https://${h0}`,
+        lan ? `DOCKER_HOST_ADDRESS=${ip}` : "# DOCKER_HOST_ADDRESS se completa abajo con la IP pública",
+        lan ? "HTTP_PORT=8000\nHTTPS_PORT=8443\nENABLE_LETSENCRYPT=0\nENABLE_AUTH=0" : `HTTP_PORT=80\nHTTPS_PORT=443\nENABLE_LETSENCRYPT=1\nLETSENCRYPT_DOMAIN=${h0}\nLETSENCRYPT_EMAIL=${st.email}\nENABLE_AUTH=1\nENABLE_GUESTS=1\nAUTH_TYPE=internal`,
+        "EOF",
+        ...(lan ? [] : ['echo "DOCKER_HOST_ADDRESS=$(curl -s https://ifconfig.me)" >> .env']),
+        "docker compose up -d",
+        ...(lan ? [] : ['PASS=$(openssl rand -hex 8)', 'sleep 20 && docker compose exec -T prosody prosodyctl --config /config/prosody.cfg.lua register crewhelm meet.jitsi "$PASS"', 'echo "Usuario para crear salas: crewhelm / $PASS"']),
+      ].join("\n");
+    };
     const dd = () => {
-      const steps = ["Dónde", "Datos", "Probar"];
+      const steps = nsteps();
       const head = h("div", { class: "wiz-steps" }, steps.map((x, i) => h("span", { class: "wiz-step" + (st.step === i + 1 ? " on" : st.step > i + 1 ? " ok" : "") }, `${i + 1}. ${x}`)));
+      const opt = (v, mode, title, desc) => h("label", { class: "wiz-opt" }, h("input", { type: "radio", name: "w", checked: st.where === v, onchange: () => { st.where = v; st.mode = mode; } }), h("div", {}, h("b", {}, title), h("small", {}, desc)));
       let main;
       if (st.step === 1) main = [
         h("p", {}, "¿Dónde va a correr la videollamada?"),
-        h("label", { class: "wiz-opt" }, h("input", { type: "radio", name: "w", checked: st.where === "internet", onchange: () => { st.where = "internet"; st.mode = "tab"; } }),
-          h("div", {}, h("b", {}, "🌐 Con salida a internet (recomendado para equipos remotos)"), h("small", {}, "Usa meet.jit.si, el Jitsi público y gratuito. Listo en un minuto, sin instalar nada. El audio y el video pasan por los servidores de Jitsi; la sala tiene un código secreto que no se puede adivinar."))),
-        h("label", { class: "wiz-opt" }, h("input", { type: "radio", name: "w", checked: st.where === "propio", onchange: () => { st.where = "propio"; st.mode = "panel"; } }),
-          h("div", {}, h("b", {}, "🏢 Servidor propio (intranet o máxima privacidad)"), h("small", {}, "Usás tu propio Jitsi (por ejemplo meet.tuempresa.com). Funciona sin internet y nada sale de tu red. Hay que instalarlo aparte; con Docker son pocos pasos y tiene que estar con HTTPS para que el navegador deje usar cámara y micrófono."))),
+        opt("internet", "tab", "🌐 Jitsi público de internet (lo más rápido)", "Usa meet.jit.si, gratis y sin instalar nada: listo en un minuto. El audio y el video pasan por servidores de Jitsi; la sala tiene un código secreto que no se puede adivinar."),
+        opt("lan", "panel", "🏢 Servidor propio, solo en la red interna", "Instalás un Jitsi en una máquina de tu red. Nada sale a internet y funciona sin conexión. Te damos el bloque listo para pegar."),
+        opt("net", "panel", "🔒 Servidor propio, abierto a internet (equipos remotos)", "Tu propio Jitsi con dominio y certificado real, con usuario para crear salas. Es lo que conviene si el equipo trabaja remoto y querés control. Te damos el bloque listo para pegar."),
       ];
-      if (st.step === 2) { const dom = h("input", { value: st.domain, placeholder: "meet.tuempresa.com  o  192.168.1.50:8443", maxLength: 120, oninput: (e) => (st.domain = e.target.value.trim()) }); main = [
-        st.where === "propio" && h("label", {}, "Dirección de tu Jitsi", dom, h("small", { class: "hint" }, "El dominio o la IP (con el puerto si no es el 443), sin la sala. Se abre con https://.")),
+      if (st.step === 2) { const dom = h("input", { value: st.domain, placeholder: st.where === "lan" ? "192.168.1.50" : "meet.tuempresa.com", maxLength: 120, oninput: (e) => (st.domain = e.target.value.trim()) }); main = [
+        own() && h("label", {}, st.where === "lan" ? "IP (o nombre) de la máquina donde va a correr" : "Dominio público (ya apuntando a esa máquina)", dom,
+          h("small", { class: "hint" }, st.where === "lan" ? "Ejemplo: 192.168.1.50. Usa el puerto 8443." : "Ejemplo: meet.tuempresa.com. Usa los puertos 80 y 443.")),
+        st.where === "net" && h("label", {}, "Tu email (para el certificado gratuito Let's Encrypt)", h("input", { type: "email", value: st.email, maxLength: 120, oninput: (e) => (st.email = e.target.value.trim()) })),
         h("label", {}, "Nombre del botón", h("input", { value: st.name, maxLength: 40, oninput: (e) => (st.name = e.target.value) })),
-        st.where === "internet" && h("p", { class: "hint" }, "Ojo: el Jitsi público corta las llamadas a los 5 minutos cuando va incrustado en otra página, y a veces pide que quien abre la sala inicie sesión. Por eso se recomienda «Ventana nueva». Para la pestaña dentro de la app usá tu propio servidor."),
+        st.where === "internet" && h("p", { class: "hint" }, "Ojo: el Jitsi público corta las llamadas a los 5 minutos cuando va incrustado en otra página, y a veces pide que quien abre la sala inicie sesión. Por eso se abre en «Ventana nueva»."),
         h("label", {}, "¿Cómo se abre?", h("select", { onchange: (e) => (st.mode = e.target.value) },
           h("option", { value: "panel", selected: st.mode === "panel" }, "Pestaña flotante dentro de la app (seguís viendo el tablero)"), h("option", { value: "tab", selected: st.mode === "tab" }, "Ventana nueva del navegador"))),
       ]; }
-      if (st.step === 3) main = [
+      if (own() && st.step === 3) { const ports = st.where === "lan" ? "8443/tcp y 10000/udp" : "80/tcp, 443/tcp y 10000/udp"; main = [
+        h("p", {}, "En la máquina del Jitsi (Linux con Docker), pegá este bloque. Baja, configura y levanta todo:"),
+        h("pre", { class: "wiz-script" }, script()),
+        h("button", { onclick: () => copy(script(), "Bloque copiado") }, "📋 Copiar bloque"),
+        h("ul", { class: "wiz-list" },
+          h("li", {}, "Abrí en el firewall" + (st.where === "net" ? " y en el router" : "") + ": " + ports + "."),
+          st.where === "lan" ? h("li", {}, `Cada persona abre una vez https://${host()} y acepta el aviso del certificado (es propio). Sin eso el navegador no deja usar cámara ni micrófono.`)
+            : h("li", {}, "El bloque muestra al final un usuario y clave para crear salas: guardalos. Quien solo se une no necesita cuenta."),
+          h("li", {}, "Cuando termine, seguí con «Probar».")),
+      ]; }
+      if (st.step === testStep()) main = [
         h("p", {}, "Así quedaría el botón:"), h("p", { class: "wiz-url" }, "📹 " + st.name + " → " + url()),
         h("p", { class: "hint" }, "La primera persona que entra crea la sala; el resto entra con el mismo botón. El navegador va a pedir permiso de cámara y micrófono."),
-        h("button", { onclick: () => window.open(integUrl(url()).replace("{sala}", encodeURIComponent(r.room)), "_blank", "noopener,noreferrer") }, "▶ Probar ahora (ventana nueva)"),
+        h("button", { onclick: () => window.open(url().replace("{sala}", encodeURIComponent(r.room)), "_blank", "noopener,noreferrer") }, "▶ Probar ahora (ventana nueva)"),
       ];
       const next = guard(async () => {
-        if (st.step === 2) { if (st.where === "propio" && !/^[\w-]+(\.[\w-]+)*(:\d{2,5})?$/i.test(st.domain.replace(/^https?:\/\//, "").replace(/\/+$/, ""))) throw new Error("escribí el dominio o la IP, con el puerto si no es el 443: meet.tuempresa.com o 192.168.1.50:8443"); if (!st.name.trim()) throw new Error("falta el nombre"); }
-        if (st.step < 3) { st.step++; dd(); return; }
+        if (st.step === 2) {
+          if (own() && !/^[\w-]+(\.[\w-]+)*(:\d{2,5})?$/i.test(host())) throw new Error(st.where === "lan" ? "escribí la IP o el nombre de la máquina, por ejemplo 192.168.1.50" : "escribí el dominio, por ejemplo meet.tuempresa.com");
+          if (st.where === "net" && !/^\S+@\S+\.\S+$/.test(st.email)) throw new Error("falta un email válido para el certificado");
+          if (!st.name.trim()) throw new Error("falta el nombre");
+        }
+        if (st.step < testStep()) { st.step++; dd(); return; }
         items = items.filter((i) => !i.url.includes("{sala}") || !/jit/i.test(i.name + i.url)).concat({ name: st.name.trim(), icon: "📹", url: url(), mode: st.mode });
         wz.remove(); draw();
       });
       wz.querySelector(".modal").replaceChildren(h("h3", {}, "🧙 Videollamada del equipo"), head, h("div", { class: "wiz-main" }, main),
         h("div", { class: "row" }, st.step > 1 && h("button", { onclick: () => { st.step--; dd(); } }, "← Atrás"), h("span", { class: "spacer" }), h("button", { onclick: () => wz.remove() }, "Cancelar"),
-          h("button", { class: "primary", onclick: next }, st.step < 3 ? "Siguiente →" : "Agregar a la lista")));
+          h("button", { class: "primary", onclick: next }, st.step < testStep() ? "Siguiente →" : "Agregar a la lista")));
     };
     const wz = h("div", { class: "overlay", style: "z-index:10000", onmousedown: (e) => e.target === wz && wz.remove() }, h("div", { class: "modal small wiz" }));
     document.body.append(wz); dd();

@@ -749,3 +749,6 @@ aside { gap: 10px; }
 .wiz-opt small { display: block; color: var(--dim); margin-top: 2px; font-size: 12px; }
 .wiz-url { font-family: ui-monospace, monospace; font-size: 12px; background: var(--bg2); padding: 8px; border-radius: 8px; word-break: break-all; }
 @media (max-width: 760px) { .integ-row { grid-template-columns: 1fr 1fr; } .integ-url { grid-column: 1 / -1; } }
+.wiz-script { font: 11px/1.5 ui-monospace, monospace; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 240px; overflow: auto; white-space: pre; user-select: all; }
+.wiz-list { display: grid; gap: 4px; padding-left: 18px; font-size: 13px; color: var(--dim); }
+.modal.wiz { width: min(640px, 94vw); }
