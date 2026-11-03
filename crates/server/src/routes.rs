@@ -924,6 +924,9 @@ async fn update_task(
     let t = fetch_task(&st, id).await?;
     st.emit(team, Event::TaskUpdated(t.clone()));
     emit_parent(&st, team, t.parent_id).await;
+    if t.status == Status::Done && cur.status != Status::Done && t.parent_id.is_some() {
+        crate::flow::on_child_done(&st, team, &user, &t).await?;
+    }
     if t.assignee_id != cur.assignee_id {
         notify_assigned(&st, team, user.id, &t).await;
     }

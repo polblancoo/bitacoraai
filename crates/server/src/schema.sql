@@ -367,6 +367,15 @@ CREATE TABLE IF NOT EXISTS task_flows (
     finished INTEGER NOT NULL DEFAULT 0
 );
 
+-- etapa en paralelo: cada integrante del grupo trabaja en una subtarea; la etapa sigue sola cuando terminan todas
+CREATE TABLE IF NOT EXISTS flow_par (
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    child_id INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    step_pos INTEGER NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS flow_par_task ON flow_par(task_id);
+
 -- plantillas de flujo del equipo: se aplican a una tarea (el responsable de cada etapa puede quedar por elegir)
 CREATE TABLE IF NOT EXISTS flow_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

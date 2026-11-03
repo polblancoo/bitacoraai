@@ -773,3 +773,6 @@ aside { gap: 10px; }
 .comm-tab.on { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, var(--card2)); }
 .comm-video { display: flex; flex-direction: column; gap: 10px; overflow: auto; }
 .comm-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+
+.flow-par { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+.flow-par input { width: auto; }

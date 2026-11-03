@@ -1836,6 +1836,8 @@ function folderBox(task) {
 }
 
 // ---------- flujo de la tarea: etapas con responsable e instrucción ----------
+// la etapa actual y, si empieza un grupo en paralelo, todas las que trabajan a la vez
+const inNow = (f, i) => i === f.step || (i > f.step && f.steps.slice(f.step + 1, i + 1).every((s) => s.par));
 function flowBox(task) {
   const box = h("details", { class: "flow-box" }, h("summary", {}, "🧭 Flujo de la tarea"));
   const body = h("div", { class: "flow-body" }, h("small", { class: "hint" }, "Cargando…")); box.append(body);
@@ -1843,14 +1845,16 @@ function flowBox(task) {
   const who = (id) => S.members.find((m) => m.id === id);
   const edit = (f) => {
     const rows = (f.steps.length ? f.steps : [{ assignee_id: task.assignee_id || S.user.id, kind: "work", instruction: "" }, { assignee_id: "", kind: "review", instruction: "" }])
-      .map((x) => ({ assignee_id: x.assignee_id, kind: x.kind, instruction: x.instruction }));
+      .map((x) => ({ assignee_id: x.assignee_id, kind: x.kind, instruction: x.instruction, par: !!x.par }));
     const max = h("input", { type: "number", min: 1, max: 10, value: f.max_rounds || 3, style: "width:70px" });
     const list = h("div", { class: "flow-edit" });
     const draw = () => list.replaceChildren(...rows.map((r, i) => h("div", { class: "flow-row" },
       h("b", {}, i + 1 + "."),
       h("select", { onchange: (e) => (r.assignee_id = +e.target.value) }, h("option", { value: "" }, "— elegí —"), S.members.map((m) => h("option", { value: m.id, selected: m.id === r.assignee_id }, label(m.username)))),
       h("select", { onchange: (e) => (r.kind = e.target.value) }, [["work", "🛠 Hacer"], ["review", "🔎 Revisar"]].map(([v, l]) => h("option", { value: v, selected: v === r.kind }, l))),
-      h("button", { class: "ghost", title: "Quitar la etapa", onclick: () => { rows.splice(i, 1); draw(); } }, "✕"),
+      i > 0 && h("label", { class: "flow-par", title: "Trabaja a la vez que la etapa anterior: cada una recibe su subtarea y la etapa sigue sola cuando terminan todas" },
+        h("input", { type: "checkbox", checked: !!r.par, onchange: (e) => { r.par = e.target.checked; if (r.par) r.kind = "work"; draw(); } }), " ⚡ en paralelo"),
+      h("button", { class: "ghost", title: "Quitar la etapa", onclick: () => { rows.splice(i, 1); if (rows[0]) rows[0].par = false; draw(); } }, "✕"),
       h("textarea", { rows: 2, maxLength: 2000, placeholder: i === 0 ? "Qué tiene que hacer…" : "Qué espera de esta etapa…", oninput: (e) => (r.instruction = e.target.value) }, r.instruction))));
     draw();
     body.replaceChildren(list,
@@ -1861,11 +1865,11 @@ function flowBox(task) {
         can("member") && h("button", { class: "ghost", title: "Guarda este recorrido (etapas, instrucciones y tipo) para usarlo en otras tareas", onclick: guard(async () => {
           const r = await form("Guardar como plantilla", [{ name: "name", label: "Nombre de la plantilla", max: 60 }], "Guardar");
           if (!r || !r.name.trim()) return;
-          await api("POST", `/api/teams/${S.team.id}/flow-templates`, { name: r.name, max_rounds: +max.value || 3, steps: rows.map((x) => ({ assignee_id: x.assignee_id || null, kind: x.kind, instruction: x.instruction })) });
+          await api("POST", `/api/teams/${S.team.id}/flow-templates`, { name: r.name, max_rounds: +max.value || 3, steps: rows.map((x) => ({ assignee_id: x.assignee_id || null, kind: x.kind, instruction: x.instruction, par: !!x.par })) });
           toast("Plantilla guardada");
         }) }, "💾 Guardar como plantilla"), h("button", { class: "primary", onclick: guard(async () => {
         if (rows.some((r) => !r.assignee_id)) return toast("Elegí el responsable de cada etapa", true);
-        reopen(await api("PUT", `/api/tasks/${task.id}/flow`, { steps: rows, max_rounds: +max.value || 3 }));
+        reopen(await api("PUT", `/api/tasks/${task.id}/flow`, { steps: rows.map((r) => ({ ...r, par: !!r.par })), max_rounds: +max.value || 3 }));
         toast("Flujo armado: la tarea pasó a la etapa 1");
       }) }, "Guardar y arrancar")));
   };
@@ -1894,8 +1898,10 @@ function flowBox(task) {
     const cur_ = f.steps[f.step], myTurn = f.active && cur_?.kind === "review" && (cur_.assignee_id === S.user.id || can("admin"));
     summary.textContent = "🧭 Flujo de la tarea · " + (f.finished ? "terminado" : `etapa ${f.step + 1} de ${f.steps.length}` + (f.round ? ` · vuelta ${f.round}/${f.max_rounds}` : ""));
     body.replaceChildren(
-      h("ol", { class: "flow-list" }, f.steps.map((x, i) => h("li", { class: (!f.finished && i === f.step ? "now" : "") + (f.finished || i < f.step ? " past" : "") },
-        avatar(x.username), h("b", {}, " " + x.username), h("small", {}, x.kind === "review" ? " · 🔎 revisa" : " · 🛠 hace"), !f.finished && i === f.step && h("span", { class: "pill review" }, "ahora"),
+      h("ol", { class: "flow-list" }, f.steps.map((x, i) => h("li", { class: (!f.finished && inNow(f, i) ? "now" : "") + (f.finished || i < f.step ? " past" : "") },
+        avatar(x.username), h("b", {}, " " + x.username), h("small", {}, x.kind === "review" ? " · 🔎 revisa" : " · 🛠 hace"), x.par && h("small", {}, " · ⚡ en paralelo"),
+        (() => { const pt = (f.parts || []).find((q) => q.pos === i); return pt && h("small", {}, pt.done ? " · ✅ terminó" : " · ⏳ trabajando"); })(),
+        !f.finished && inNow(f, i) && h("span", { class: "pill review" }, "ahora"),
         x.instruction && h("div", { class: "flow-ins" }, x.instruction)))),
       myTurn && h("div", { class: "row" },
         h("button", { class: "primary", onclick: guard(async () => { const r = await form("Aprobar", [{ name: "reason", label: "Comentario (opcional)", type: "textarea", max: 2000 }], "Aprobar y seguir"); if (!r) return; reopen(await api("POST", `/api/tasks/${task.id}/flow/verdict`, { ok: true, reason: r.reason || "" })); }) }, "✅ Aprobar y seguir"),
