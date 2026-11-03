@@ -150,6 +150,38 @@ async fn finish(st: &AppState, team: Id, task: Id, actor: Id, text: String) -> R
     Ok(t)
 }
 
+/// Nombre de carpeta seguro para un usuario (sin barras, puntos dobles ni espacios).
+pub fn safe_name(n: &str) -> String {
+    let s: String = n.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
+    if s.is_empty() { "usuario".into() } else { s }
+}
+
+fn copy_tree(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<usize> {
+    std::fs::create_dir_all(to)?;
+    let mut n = 0;
+    for e in std::fs::read_dir(from)? {
+        let e = e?;
+        let (src, dst) = (e.path(), to.join(e.file_name()));
+        if e.file_type()?.is_dir() { n += copy_tree(&src, &dst)?; } else { std::fs::copy(&src, &dst)?; n += 1; }
+    }
+    Ok(n)
+}
+
+/// Al terminar el flujo: lo que dejó la última etapa de trabajo en `.crewhelm/tareas/<id>/<usuario>/` se copia a `final/`.
+/// Solo funciona si la carpeta del proyecto está en la máquina del servidor.
+async fn publish_final(st: &AppState, team: Id, task: Id, actor: Id, author: &str) {
+    let wd: Option<String> = sqlx::query_scalar("SELECT p.work_dir FROM projects p JOIN tasks t ON t.project_id = p.id WHERE t.id = ?").bind(task).fetch_optional(&st.db).await.ok().flatten();
+    let Some(wd) = wd.filter(|w| !w.trim().is_empty()) else { return };
+    let base = std::path::PathBuf::from(&wd).join(".crewhelm").join("tareas").join(task.to_string());
+    let from = base.join(safe_name(author));
+    if !from.is_dir() { return; }
+    let to = base.join("final");
+    let r = tokio::task::spawn_blocking(move || copy_tree(&from, &to)).await;
+    if let Ok(Ok(n)) = r {
+        if n > 0 { post_comment(st, team, task, actor, format!("📦 Entrega final: {n} archivo(s) de {author} copiados a `.crewhelm/tareas/{task}/final/`.")).await; }
+    }
+}
+
 /// Pasa a esperar a una persona (zona «Esperando tu próximo paso») y le avisa a quien creó la tarea.
 async fn hold_for_person(st: &AppState, team: Id, task: Id, actor: Id, text: String) -> Result<Task> {
     sqlx::query("UPDATE tasks SET status = 'doing', waiting = 1, updated_at = ? WHERE id = ?").bind(Utc::now()).bind(task).execute(&st.db).await?;
@@ -181,6 +213,7 @@ pub async fn on_done(st: &AppState, team: Id, user: &AuthUser, role: Role, cur: 
     }
     if idx + 1 >= sts.len() {
         sqlx::query("UPDATE task_flows SET finished = 1 WHERE task_id = ?").bind(cur.id).execute(&st.db).await?;
+        publish_final(st, team, cur.id, user.id, &who).await;
         return Ok(None);
     }
     let out = delivery(st, cur.id, sts[idx].assignee_id, fl.from_comment).await;
@@ -213,6 +246,7 @@ async fn verdict(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>,
     let who = crate::notify::username_of(&st, user.id).await;
     if b.ok {
         if idx + 1 >= sts.len() {
+            if let Some(w) = (0..idx).rev().find(|i| sts[*i].kind == "work") { publish_final(&st, team, id, user.id, &sts[w].username).await; }
             return Ok(Json(finish(&st, team, id, user.id, format!("✅ {who} aprobó{}. El flujo terminó.", if reason.is_empty() { String::new() } else { format!(": {reason}") })).await?));
         }
         let t = goto_step(&st, team, id, user.id, &sts, idx + 1, &format!("✅ {who} aprobó la etapa {}.", idx + 1), "Comentario del revisor", &reason, None).await?;

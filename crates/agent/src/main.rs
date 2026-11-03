@@ -159,7 +159,7 @@ struct Job {
     updated_at: String,
 }
 
-async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path) -> String {
+async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path, mine: &std::path::Path) -> String {
     let comments = api.get(&format!("/api/tasks/{}/comments", job.id)).await.unwrap_or(Value::Null);
     let notes: Vec<String> = comments
         .as_array()
@@ -175,7 +175,7 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path) -> String {
         })
         .unwrap_or_default();
     format!(
-        "{term_note}Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout. Si lo que pedís es que una persona ejecute o permita un comando, escribilo dentro de la pregunta en un bloque de código (tres comillas invertidas, un comando por línea): la app lo muestra en un recuadro para copiar y permitir con un clic.\n\nTrabajá dentro de la carpeta de trabajo. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
+        "{term_note}Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout. Si lo que pedís es que una persona ejecute o permita un comando, escribilo dentro de la pregunta en un bloque de código (tres comillas invertidas, un comando por línea): la app lo muestra en un recuadro para copiar y permitir con un clic.\n\nTrabajá dentro de la carpeta de trabajo. Los archivos que generes y que no sean parte del código del repositorio (informes, presentaciones, datos, borradores) guardalos en tu carpeta de esta tarea: {}. Lo que quede ahí es lo que se entrega a la etapa siguiente, y al aprobarse la última etapa se copia a la carpeta final de la tarea. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
         job.project,
         if job.repo.is_empty() { "(sin definir)" } else { &job.repo },
         dir.display(),
@@ -183,6 +183,7 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path) -> String {
         job.title,
         if job.description.is_empty() { "(sin descripción)" } else { &job.description },
         if notes.is_empty() { String::new() } else { format!("Comentarios recientes:\n{}\n", notes.join("\n")) },
+        mine.display(),
     )
 }
 
@@ -224,7 +225,14 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     };
     log(&format!("▶ #{} «{}» en {}", job.id, job.title, dir.display()));
     api.say(job.id, &format!("▶ Empiezo con esta tarea. Trabajo en `{}`.", dir.display())).await;
-    let prompt = prompt_for(api, job, &dir).await;
+    // carpeta propia de esta tarea: .crewhelm/tareas/<id>/<usuario>/ (y final/, que llena el servidor al aprobarse el flujo)
+    let me_name = api.get("/api/me").await.ok().and_then(|v| v["username"].as_str().map(String::from)).unwrap_or_else(|| "ia".into());
+    let safe: String = me_name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
+    let mine = dir.join(".crewhelm").join("tareas").join(job.id.to_string()).join(safe);
+    let _ = std::fs::create_dir_all(&mine);
+    let _ = std::fs::create_dir_all(mine.parent().unwrap().join("final"));
+    let _ = std::fs::write(dir.join(".crewhelm/.gitignore"), "*\n");
+    let prompt = prompt_for(api, job, &dir, &mine).await;
 
     // Lista de comandos prohibidos que un admin edita desde la app (ficha de la IA).
     let deny = api.get("/api/me/deny").await.ok().and_then(|v| v["deny"].as_str().map(String::from)).unwrap_or_default();
@@ -250,6 +258,7 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
         .env("TM_ALLOW_ALL", if allow_all { "1" } else { "0" })
         .env("TM_LISTS_FROM_APP", if from_app { "1" } else { "0" })
         .env("TM_TASK_ID", job.id.to_string())
+        .env("TM_TASK_DIR", &mine)
         .env("TM_TASK_TITLE", &job.title)
         .env("TM_PROJECT_ID", job.project_id.to_string())
         .env("TM_URL", &api.cfg.url)
