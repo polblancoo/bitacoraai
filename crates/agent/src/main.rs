@@ -181,12 +181,21 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path) -> String {
 
 /// Devuelve el `updated_at` de la tarea tras el último cambio, para no reintentarla sin que nadie la toque.
 async fn run(api: &Api, job: &Job) -> Option<String> {
+    // carpeta de trabajo nueva: se crea sola (ruta absoluta y sin «..»); si no se puede, se explica por qué
+    let wanted = expand_home(&job.work_dir);
+    let mut why = String::new();
+    if !job.work_dir.is_empty() && !wanted.is_dir() && wanted.is_absolute() && !job.work_dir.split(['/', '\\']).any(|c| c == "..") {
+        match std::fs::create_dir_all(&wanted) {
+            Ok(()) => api.say(job.id, &format!("📁 La carpeta de trabajo no existía: la creé en {}.", wanted.display())).await,
+            Err(e) => why = format!(" No pude crearla: {e}."),
+        }
+    }
     let dir = [Some(expand_home(&job.work_dir)).filter(|d| !job.work_dir.is_empty() && d.is_dir()), api.cfg.fallback_dir.clone().filter(|d| d.is_dir())]
         .into_iter()
         .flatten()
         .next();
     let Some(dir) = dir else {
-        api.say(job.id, &format!("⚠️ No puedo empezar: la carpeta de trabajo «{}» no existe en la máquina donde corre este agente (se puede usar TM_AGENT_DIR).", job.work_dir)).await;
+        api.say(job.id, &format!("⚠️ No puedo empezar: la carpeta de trabajo «{}» no existe en la máquina donde corre este agente.{why} Corregí la ruta en Configuración → Proyecto, o definí TM_AGENT_DIR.", job.work_dir)).await;
         return Some(job.updated_at.clone());
     };
     // cuotas: tope de la tarea, cuota mensual del proyecto y del equipo (las fija una persona en la app)

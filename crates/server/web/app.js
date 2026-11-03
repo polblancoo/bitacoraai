@@ -504,7 +504,7 @@ const createTeam = guard(async () => {
 const createProject = guard(async () => {
   const f = await form("Nuevo proyecto", [
     { name: "name", label: "Nombre del proyecto", max: 60 },
-    { name: "work_dir", label: "Carpeta de trabajo, dónde vive el proyecto (opcional)", max: 300, placeholder: "/home/ana/proyectos/app" },
+    { name: "work_dir", label: "Carpeta de trabajo, dónde vive el proyecto (opcional; si no existe, la IA la crea)", max: 300, placeholder: "/home/ana/proyectos/app" },
     { name: "repo", label: "Repositorio (opcional)", max: 300, placeholder: "usuario/repo o URL" },
   ], "Crear"); if (!f) return;
   const p = await api("POST", `/api/teams/${S.team.id}/projects`, { name: f.name, work_dir: f.work_dir, repo: f.repo });
@@ -2457,7 +2457,7 @@ async function openWizard() {
   const close = (done) => { if (done) store.set("wizDone", "1"); document.getElementById("wiz-modal")?.remove(); render(); };
   const teamIn = h("input", { placeholder: "Ej.: Mi empresa, Backend, Equipo A", maxLength: 60, value: S.team?.name || "" });
   const projIn = h("input", { placeholder: "Ej.: App de ventas", maxLength: 60 });
-  const dirIn = h("input", { placeholder: "Carpeta del código, en la máquina del servidor (opcional) · /home/ana/app", maxLength: 300 });
+  const dirIn = h("input", { placeholder: "Carpeta del código, en la máquina del servidor (opcional; si no existe, la IA la crea)", maxLength: 300 });
   const sample = h("input", { type: "checkbox", checked: true });
   const profSel = h("select", {}, h("option", { value: "" }, "Elegir más tarde"), Object.entries(PROFILES).map(([id, p]) => h("option", { value: id, selected: S.profile === id }, p.name)));
   const profEx = h("input", { type: "checkbox" });
