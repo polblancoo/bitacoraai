@@ -1029,6 +1029,14 @@ async fn add_comment(
         .bind(task)
         .fetch_optional(&st.db)
         .await?;
+        // si la tarea sigue en Por hacer con una IA, un comentario de una persona la «toca»: así el agente la retoma
+        // (por ejemplo, cuando había avisado que no podía empezar y la persona ya lo resolvió o contestó)
+        let touched = reopen.is_none()
+            && sqlx::query("UPDATE tasks SET updated_at = ? WHERE id = ? AND status = 'todo' AND assignee_id IN (SELECT user_id FROM api_tokens)").bind(Utc::now()).bind(task).execute(&st.db).await?.rows_affected() > 0;
+        if touched {
+            let t = fetch_task(&st, task).await?;
+            st.emit(team, Event::TaskUpdated(t));
+        }
         if reopen.is_some() {
             sqlx::query("UPDATE tasks SET status = 'todo', waiting = 0, updated_at = ? WHERE id = ?").bind(Utc::now()).bind(task).execute(&st.db).await?;
             let t = fetch_task(&st, task).await?;

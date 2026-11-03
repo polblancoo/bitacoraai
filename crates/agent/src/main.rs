@@ -79,6 +79,12 @@ fn expand_home(p: &str) -> PathBuf {
     }
 }
 
+/// Carpeta por defecto de un proyecto sin ruta: ~/proyectos/<nombre en minúsculas y con guiones>.
+fn default_dir(project: &str) -> PathBuf {
+    let slug: String = project.to_lowercase().chars().map(|c| if c.is_alphanumeric() { c } else { '-' }).collect::<String>().split('-').filter(|x| !x.is_empty()).collect::<Vec<_>>().join("-");
+    expand_home("~/proyectos").join(if slug.is_empty() { "proyecto" } else { &slug })
+}
+
 fn env_num<T: std::str::FromStr>(key: &str, default: T) -> T {
     std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
 }
@@ -181,21 +187,23 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path) -> String {
 
 /// Devuelve el `updated_at` de la tarea tras el último cambio, para no reintentarla sin que nadie la toque.
 async fn run(api: &Api, job: &Job) -> Option<String> {
-    // carpeta de trabajo nueva: se crea sola (ruta absoluta y sin «..»); si no se puede, se explica por qué
-    let wanted = expand_home(&job.work_dir);
+    // carpeta de trabajo: si el proyecto no tiene una (y no hay TM_AGENT_DIR) se usa ~/proyectos/<nombre del proyecto>;
+    // si no existe se crea sola (ruta absoluta y sin «..»); si no se puede, se explica por qué
+    let own = !job.work_dir.is_empty();
+    let wanted = if own || api.cfg.fallback_dir.is_some() { expand_home(&job.work_dir) } else { default_dir(&job.project) };
     let mut why = String::new();
-    if !job.work_dir.is_empty() && !wanted.is_dir() && wanted.is_absolute() && !job.work_dir.split(['/', '\\']).any(|c| c == "..") {
+    if (own || api.cfg.fallback_dir.is_none()) && !wanted.is_dir() && wanted.is_absolute() && !wanted.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
         match std::fs::create_dir_all(&wanted) {
-            Ok(()) => api.say(job.id, &format!("📁 La carpeta de trabajo no existía: la creé en {}.", wanted.display())).await,
+            Ok(()) => api.say(job.id, &format!("📁 {} Creé la carpeta {}.", if own { "La carpeta de trabajo no existía." } else { "El proyecto no tenía carpeta de trabajo; usé una por defecto." }, wanted.display())).await,
             Err(e) => why = format!(" No pude crearla: {e}."),
         }
     }
-    let dir = [Some(expand_home(&job.work_dir)).filter(|d| !job.work_dir.is_empty() && d.is_dir()), api.cfg.fallback_dir.clone().filter(|d| d.is_dir())]
+    let dir = [Some(wanted.clone()).filter(|d| (own || api.cfg.fallback_dir.is_none()) && d.is_dir()), api.cfg.fallback_dir.clone().filter(|d| d.is_dir())]
         .into_iter()
         .flatten()
         .next();
     let Some(dir) = dir else {
-        api.say(job.id, &format!("⚠️ No puedo empezar: la carpeta de trabajo «{}» no existe en la máquina donde corre este agente.{why} Corregí la ruta en Configuración → Proyecto, o definí TM_AGENT_DIR.", job.work_dir)).await;
+        api.say(job.id, &format!("⚠️ No puedo empezar: la carpeta de trabajo «{}» no existe en la máquina donde corre este agente.{why} Corregí la ruta en Configuración → Proyecto, o definí TM_AGENT_DIR.", wanted.display())).await;
         return Some(job.updated_at.clone());
     };
     // cuotas: tope de la tarea, cuota mensual del proyecto y del equipo (las fija una persona en la app)
