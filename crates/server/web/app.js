@@ -379,7 +379,12 @@ async function selectProject(p) {
   S.ghCi = "";
   if (p) api("GET", `/api/projects/${p.id}/github/settings`).then((c) => { if (c.ci_status && S.project?.id === p.id) { S.ghCi = c.ci_state; render(); } }).catch(() => {});
   render();
-  loadReviews();
+  loadReviews(); loadFlows();
+}
+// recorrido de las tareas con flujo (para dibujarlo en las tarjetas)
+async function loadFlows() {
+  const id = S.project?.id; if (!id) return;
+  try { const r = await api("GET", `/api/projects/${id}/flows`); if (S.project?.id === id) { S.flows = Object.fromEntries(r.map((f) => [f.task_id, f])); render(); } } catch {}
 }
 // revisión humana del trabajo de las IAs (función de los planes pagos): interruptor del proyecto y tareas esperando revisión
 async function loadReviews() {
@@ -418,6 +423,7 @@ function onEvent({ type, data }) {
   if (S.portfolio) { clearTimeout(onEvent.pf); onEvent.pf = setTimeout(() => loadPortfolio(true), 800); }
   if (type === "task_created" || type === "task_updated") {
     if (data.project_id === S.project?.id) {
+      clearTimeout(onEvent.fl); onEvent.fl = setTimeout(loadFlows, 700);
       const i = S.tasks.findIndex((t) => t.id === data.id);
       i >= 0 ? (S.tasks[i] = data) : S.tasks.push(data);
       if (S.reviews) { clearTimeout(onEvent.rv); onEvent.rv = setTimeout(loadReviews, 600); }
@@ -1535,6 +1541,7 @@ const openTask = guard(async (task) => {
         h("div", { class: "task-main" },
           h("label", {}, "Título", title),
           h("details", { class: "desc-box", open: !cur().description || !S.comments.length }, h("summary", {}, "📝 Descripción de la tarea"), desc),
+          flowBox(cur()),
           h("h3", {}, "Conversación"),
           h("div", { class: "comments", id: "comments" }),
           comment,
@@ -1559,6 +1566,56 @@ const openTask = guard(async (task) => {
   renderComments();
   title.focus();
 });
+
+// ---------- flujo de la tarea: etapas con responsable e instrucción ----------
+function flowBox(task) {
+  const box = h("details", { class: "flow-box" }, h("summary", {}, "🧭 Flujo de la tarea"));
+  const body = h("div", { class: "flow-body" }, h("small", { class: "hint" }, "Cargando…")); box.append(body);
+  const reopen = (t) => { const i = S.tasks.findIndex((x) => x.id === t.id); if (i >= 0) S.tasks[i] = t; loadFlows(); closeModal(); openTask(t); };
+  const who = (id) => S.members.find((m) => m.id === id);
+  const edit = (f) => {
+    const rows = (f.steps.length ? f.steps : [{ assignee_id: task.assignee_id || S.user.id, kind: "work", instruction: "" }, { assignee_id: "", kind: "review", instruction: "" }])
+      .map((x) => ({ assignee_id: x.assignee_id, kind: x.kind, instruction: x.instruction }));
+    const max = h("input", { type: "number", min: 1, max: 10, value: f.max_rounds || 3, style: "width:70px" });
+    const list = h("div", { class: "flow-edit" });
+    const draw = () => list.replaceChildren(...rows.map((r, i) => h("div", { class: "flow-row" },
+      h("b", {}, i + 1 + "."),
+      h("select", { onchange: (e) => (r.assignee_id = +e.target.value) }, h("option", { value: "" }, "— elegí —"), S.members.map((m) => h("option", { value: m.id, selected: m.id === r.assignee_id }, label(m.username)))),
+      h("select", { onchange: (e) => (r.kind = e.target.value) }, [["work", "🛠 Hacer"], ["review", "🔎 Revisar"]].map(([v, l]) => h("option", { value: v, selected: v === r.kind }, l))),
+      h("button", { class: "ghost", title: "Quitar la etapa", onclick: () => { rows.splice(i, 1); draw(); } }, "✕"),
+      h("textarea", { rows: 2, maxLength: 2000, placeholder: i === 0 ? "Qué tiene que hacer…" : "Qué espera de esta etapa…", oninput: (e) => (r.instruction = e.target.value) }, r.instruction))));
+    draw();
+    body.replaceChildren(list,
+      h("div", { class: "row" }, h("button", { class: "ghost", onclick: () => { rows.push({ assignee_id: "", kind: "work", instruction: "" }); draw(); } }, "+ Etapa"), h("span", { class: "spacer" }),
+        h("small", {}, "Tope de vueltas "), max),
+      h("small", { class: "hint" }, "Al guardar, la tarea vuelve a la etapa 1 y pasa a su responsable. La primera etapa es de trabajo; una etapa de revisión aprueba (sigue) o devuelve a la etapa de trabajo anterior."),
+      h("div", { class: "row" }, h("button", { onclick: () => draw_(f) }, "Cancelar"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: guard(async () => {
+        if (rows.some((r) => !r.assignee_id)) return toast("Elegí el responsable de cada etapa", true);
+        reopen(await api("PUT", `/api/tasks/${task.id}/flow`, { steps: rows, max_rounds: +max.value || 3 }));
+        toast("Flujo armado: la tarea pasó a la etapa 1");
+      }) }, "Guardar y arrancar")));
+  };
+  const draw_ = (f) => {
+    if (!f.steps.length) {
+      body.replaceChildren(h("small", { class: "hint" }, "Armá un recorrido: por ejemplo XXX hace, ZZZ revisa (y si hace falta, la devuelve a XXX con lo que hay que corregir), y después otro sigue. La salida de cada etapa pasa sola a la siguiente."),
+        can("member") && h("div", { class: "row" }, h("button", { onclick: () => edit(f) }, "🧭 Armar flujo")));
+      return;
+    }
+    const cur_ = f.steps[f.step], myTurn = f.active && cur_?.kind === "review" && (cur_.assignee_id === S.user.id || can("admin"));
+    summary.textContent = "🧭 Flujo de la tarea · " + (f.finished ? "terminado" : `etapa ${f.step + 1} de ${f.steps.length}` + (f.round ? ` · vuelta ${f.round}/${f.max_rounds}` : ""));
+    body.replaceChildren(
+      h("ol", { class: "flow-list" }, f.steps.map((x, i) => h("li", { class: (!f.finished && i === f.step ? "now" : "") + (f.finished || i < f.step ? " past" : "") },
+        avatar(x.username), h("b", {}, " " + x.username), h("small", {}, x.kind === "review" ? " · 🔎 revisa" : " · 🛠 hace"), !f.finished && i === f.step && h("span", { class: "pill review" }, "ahora"),
+        x.instruction && h("div", { class: "flow-ins" }, x.instruction)))),
+      myTurn && h("div", { class: "row" },
+        h("button", { class: "primary", onclick: guard(async () => { const r = await form("Aprobar", [{ name: "reason", label: "Comentario (opcional)", type: "textarea", max: 2000 }], "Aprobar y seguir"); if (!r) return; reopen(await api("POST", `/api/tasks/${task.id}/flow/verdict`, { ok: true, reason: r.reason || "" })); }) }, "✅ Aprobar y seguir"),
+        h("button", { class: "danger", onclick: guard(async () => { const r = await form("Devolver", [{ name: "reason", label: "Qué hay que corregir", type: "textarea", max: 2000 }], "Devolver"); if (!r) return; if (!r.reason.trim()) return toast("Explicá qué hay que corregir", true); reopen(await api("POST", `/api/tasks/${task.id}/flow/verdict`, { ok: false, reason: r.reason })); }) }, "↩ Devolver")),
+      can("member") && h("div", { class: "row" }, h("button", { class: "ghost", onclick: () => edit(f) }, "✏️ Editar flujo"), h("button", { class: "ghost", onclick: guard(async () => { await api("DELETE", `/api/tasks/${task.id}/flow`); loadFlows(); draw_({ steps: [] }); summary.textContent = "🧭 Flujo de la tarea"; toast("Flujo quitado"); }) }, "Quitar flujo")));
+  };
+  const summary = box.querySelector("summary");
+  api("GET", `/api/tasks/${task.id}/flow`).then((f) => { if (f.steps.length) box.open = true; draw_(f); }).catch(() => body.replaceChildren(h("small", { class: "hint" }, "No se pudo cargar el flujo.")));
+  return box;
+}
 
 // ---------- vistas ----------
 function loginView() {
@@ -1626,6 +1683,15 @@ const openFiles = guard(async () => {
   show("");
 });
 
+// Recorrido del flujo en la tarjeta: quién la tiene ahora (resaltado), quién sigue y cuántas vueltas lleva.
+function flowStrip(t) {
+  const f = S.flows?.[t.id]; if (!f) return null;
+  return h("div", { class: "flow-strip" + (f.finished ? " done" : ""), title: f.finished ? "Flujo terminado" : `Flujo: etapa ${f.step + 1} de ${f.steps.length}` + (f.round ? ` · vuelta ${f.round} de ${f.max_rounds}` : "") },
+    f.steps.map((x, i) => h("span", { class: "fs-step" + (!f.finished && i === f.step ? " now" : "") + (f.finished || i < f.step ? " past" : "") + (x.kind === "review" ? " rev" : "") },
+      i > 0 && h("i", {}, "→"), avatar(x.username), x.kind === "review" && h("small", {}, "🔎"))),
+    f.round > 0 && !f.finished && h("span", { class: "fs-round" }, "↻" + f.round));
+}
+
 function taskCard(t) {
   const late = t.due && t.status !== "done" && new Date(t.due) < new Date();
   const card = h("div", { class: "card", draggable: true, onclick: () => openTask(t) },
@@ -1633,6 +1699,7 @@ function taskCard(t) {
     t.labels?.length > 0 && h("div", { class: "chips" }, t.labels.map((l) => h("span", { class: "chip on", style: `--c:${l.color}` }, l.name))),
     aiRunning(t) && h("div", { class: "ai-run", title: "Una IA está trabajando en esta tarea (el tiempo cuenta desde la última vez que se movió)" },
       h("div", { class: "ai-bar" }), h("small", { class: "ai-since", "data-since": t.updated_at }, "🤖 " + sinceTxt(t.updated_at))),
+    flowStrip(t),
     t.subtasks_total > 0 && h("div", { class: "progress", title: `${t.subtasks_done}/${t.subtasks_total} subtareas` },
       h("div", { class: "bar", style: `width:${Math.round(100 * t.subtasks_done / t.subtasks_total)}%` })),
     h("div", { class: "meta" },

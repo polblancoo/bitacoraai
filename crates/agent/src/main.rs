@@ -33,6 +33,7 @@ TM_PROJECT_ID, TM_URL y TM_TOKEN en el entorno. Si termina bien, la tarea pasa a
 vuelve a Por hacer con un comentario y, mientras el agente siga corriendo, no se reintenta
 hasta que alguien la modifique.
 
+Flujo de tareas: una IA revisora cierra su etapa con `tm-agent verdict ok \"comentario\"` o `tm-agent verdict return \"qué corregir\"`.
 Alarma de asistencia: dentro del agente, `tm-agent ask \"¿Puedo borrar X?\"` comenta en la tarea con 🙋
 (avisa a admins y responsables, por la web, Telegram y email) y espera la respuesta humana: la imprime
 por stdout y el agente la recibe como resultado del comando. TM_ASK_TIMEOUT = segundos de espera (900).";
@@ -354,7 +355,7 @@ fn parse_usage(stdout: &str) -> Option<Usage> {
 async fn wrote_while_working(api: &Api, task: i64, since: &str) -> bool {
     let Ok(me) = api.get("/api/me").await else { return false };
     let me = me["id"].as_i64();
-    let auto = ["↪", "✅", "📤", "❌", "📝", "🙋", "🔁", "▶"];
+    let auto = ["↪", "✅", "📤", "❌", "📝", "🙋", "🔁", "▶", "↩", "🧭", "⛔"];
     api.get(&format!("/api/tasks/{task}/comments")).await.ok().and_then(|c| c.as_array().cloned()).is_some_and(|a| {
         a.iter().any(|c| c["user_id"].as_i64() != me && c["created_at"].as_str().unwrap_or("") > since && !auto.iter().any(|p| c["body"].as_str().unwrap_or("").starts_with(p)))
     })
@@ -438,6 +439,34 @@ async fn ask(question: String) -> Result<()> {
     bail!("nadie respondió en {wait} s; seguí sin esa respuesta o dejá la tarea documentada")
 }
 
+/// `tm-agent verdict ok|return «texto»`: el veredicto de una IA revisora en el flujo de la tarea actual (aprueba y sigue, o devuelve a la etapa de trabajo con el motivo).
+async fn verdict(args: Vec<String>) -> Result<()> {
+    let ok = match args.first().map(String::as_str) {
+        Some("ok") => true,
+        Some("return") => false,
+        _ => bail!("uso: tm-agent verdict ok \"comentario opcional\"  |  tm-agent verdict return \"qué hay que corregir\""),
+    };
+    let reason = args[1..].join(" ");
+    if !ok && reason.trim().is_empty() {
+        bail!("para devolver hay que explicar qué corregir: tm-agent verdict return \"qué hay que corregir\"");
+    }
+    let task: i64 = std::env::var("TM_TASK_ID").ok().and_then(|v| v.parse().ok()).context("falta TM_TASK_ID (lo define tm-agent al lanzar al agente)")?;
+    let cfg = Cfg {
+        url: std::env::var("TM_URL").unwrap_or_else(|_| "http://127.0.0.1:7878".into()).trim_end_matches('/').into(),
+        token: std::env::var("TM_TOKEN").context("falta TM_TOKEN")?,
+        cmd: String::new(),
+        poll: 5,
+        timeout: 0,
+        max: 1,
+        fallback_dir: None,
+        once: true,
+    };
+    let api = Api { http: reqwest::Client::new(), cfg };
+    api.call(Method::POST, &format!("/api/tasks/{task}/flow/verdict"), Some(json!({ "ok": ok, "reason": reason.trim() }))).await?;
+    println!("{}", if ok { "Aprobado: la tarea pasó a la etapa siguiente." } else { "Devuelta: la tarea volvió a la etapa de trabajo con tu motivo." });
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     if std::env::args().any(|a| a == "--help" || a == "-h") {
@@ -447,6 +476,9 @@ async fn main() -> Result<()> {
     if std::env::args().any(|a| a == "--version" || a == "-V") {
         println!("tm-agent {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
+    }
+    if std::env::args().nth(1).as_deref() == Some("verdict") {
+        return verdict(std::env::args().skip(2).collect()).await;
     }
     if std::env::args().nth(1).as_deref() == Some("ask") {
         return ask(std::env::args().skip(2).collect::<Vec<_>>().join(" ")).await;

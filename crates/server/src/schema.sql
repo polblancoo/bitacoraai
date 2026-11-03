@@ -348,3 +348,21 @@ CREATE TABLE IF NOT EXISTS chat_reads (
     last_id INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, team_id, chan)
 );
+
+-- flujo de una tarea: etapas con responsable e instrucción; task_flows guarda en qué etapa va y cuántas vueltas lleva
+CREATE TABLE IF NOT EXISTS flow_steps (
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    pos INTEGER NOT NULL,
+    assignee_id INTEGER NOT NULL REFERENCES users(id),
+    kind TEXT NOT NULL DEFAULT 'work',
+    instruction TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (task_id, pos)
+);
+CREATE TABLE IF NOT EXISTS task_flows (
+    task_id INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    step INTEGER NOT NULL DEFAULT 0,
+    round INTEGER NOT NULL DEFAULT 0,
+    max_rounds INTEGER NOT NULL DEFAULT 3,
+    from_comment INTEGER NOT NULL DEFAULT 0,
+    finished INTEGER NOT NULL DEFAULT 0
+);

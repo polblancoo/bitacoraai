@@ -62,7 +62,7 @@ pub(crate) async fn ensure_member(st: &AppState, team: Id, user: Id) -> Result<(
 }
 
 /// Una IA solo modifica o borra tareas que creó ella o que le asignaron; las personas siguen las reglas de rol.
-async fn bot_owns(st: &AppState, user: &AuthUser, task: Id) -> Result<()> {
+pub(crate) async fn bot_owns(st: &AppState, user: &AuthUser, task: Id) -> Result<()> {
     if !user.bot {
         return Ok(());
     }
@@ -876,6 +876,12 @@ async fn update_task(
     };
     // si cambia el vencimiento o el responsable, los recordatorios vuelven a empezar
     let reminders_reset = due != cur.due || assignee != cur.assignee_id;
+    // tarea con flujo: terminar la etapa actual la pasa a la siguiente (no se cierra hasta que termina la última)
+    if p.status == Some(Status::Done) && cur.status != Status::Done {
+        if let Some(t) = crate::flow::on_done(&st, team, &user, caller, &cur).await? {
+            return Ok(Json(t));
+        }
+    }
     // proyecto con revisión humana: lo que una IA da por terminado queda en revisión en vez de pasar a Hecha
     let mut new_status = p.status.unwrap_or(cur.status);
     let held = crate::review::holds(&st, &user, &cur, new_status).await;
