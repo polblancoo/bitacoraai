@@ -365,7 +365,7 @@ async function selectTeam(team) {
     if (profileOf().view && !store.get("view")) S.view = profileOf().view;
     await selectProject(S.projects[0] || null);
     loadOverview();
-    CHAT.unread = {}; CHAT.total = 0; chatUnreadLoad(); loadInteg();
+    CHAT.unread = {}; CHAT.total = 0; chatUnreadLoad(); loadInteg(); CHAT.tr = {}; loadTrCfg();
   } else render();
 }
 // Mensajes que le llegaron mientras no estaba conectado: cuenta los no leídos y, una vez por equipo, avisa con una burbuja.
@@ -995,7 +995,7 @@ const togglePanel = () => {
 
 // ---------- chat del equipo (panel lateral) ----------
 // El panel se arma una sola vez y se vuelve a colocar en cada dibujo de la pantalla, así no pierde lo que se está escribiendo.
-const CHAT = { el: null, chan: { t: "team" }, msgs: [], people: [], unread: {}, pending: null, err: "", teamId: null, timer: null, total: 0 };
+const CHAT = { tr: {}, orig: {}, trCfg: null, trBusy: false, el: null, chan: { t: "team" }, msgs: [], people: [], unread: {}, pending: null, err: "", teamId: null, timer: null, total: 0 };
 const chanKey = (c) => (c.t === "dm" ? "dm" + c.id : c.t === "project" ? "p" + c.id : "team");
 const msgKey = (m) => (m.to_user != null ? "dm" + (m.from_user === S.user.id ? m.to_user : m.from_user) : m.project_id != null ? "p" + m.project_id : "team");
 const inChan = (m, c) => msgKey(m) === chanKey(c);
@@ -1095,6 +1095,54 @@ const chatAudit = guard(async () => {
       h("div", { class: "audit-list" }, rows.length ? rows.map((r) => h("div", { class: "audit-row" }, h("small", {}, new Date(r.at).toLocaleString()), h("b", {}, r.who || "?"), h("span", {}, r.action.replace(/_/g, " ")), h("span", { class: "hint" }, r.detail), h("small", {}, r.ip))) : h("small", {}, "Todavía no hay movimientos."))));
   document.body.append(m);
 });
+// ---------- traducción del chat: cada uno escribe en su idioma y lee en el suyo ----------
+const trWanted = () => !!CHAT.trCfg?.enabled && store.get("chatTr") !== "0";
+async function loadTrCfg() {
+  const id = S.team?.id; if (!id) { CHAT.trCfg = null; return; }
+  try { const r = await api("GET", `/api/teams/${id}/chat/translate-cfg`); if (S.team?.id === id) { CHAT.trCfg = r; chatDraw(); } } catch { CHAT.trCfg = null; }
+}
+function chatBody(m) {
+  const k = tr.lang + ":" + m.id, t = CHAT.tr[k], foreign = m.from_user !== S.user.id && typeof t === "string" && t !== "=";
+  if (foreign && trWanted() && !CHAT.orig[m.id])
+    return h("div", { class: "chat-body" }, t, h("small", { class: "chat-tr", title: "Mostrar lo que escribió la otra persona", onclick: () => { CHAT.orig[m.id] = 1; chatDraw(); } }, " 🌐 traducido · ver original"));
+  if (foreign && trWanted()) return h("div", { class: "chat-body" }, m.body, h("small", { class: "chat-tr", onclick: () => { delete CHAT.orig[m.id]; chatDraw(); } }, " 🌐 ver traducción"));
+  return h("div", { class: "chat-body" }, m.body);
+}
+// pide las traducciones que faltan (una tanda por vez); lo que ya está en el idioma de quien lee queda marcado con «=»
+async function chatTrNeed() {
+  if (!trWanted() || CHAT.trBusy || !S.team) return;
+  const ids = CHAT.msgs.filter((m) => m.body && m.from_user !== S.user.id && CHAT.tr[tr.lang + ":" + m.id] === undefined).map((m) => m.id).slice(-30);
+  if (!ids.length) return;
+  CHAT.trBusy = true;
+  for (const id of ids) CHAT.tr[tr.lang + ":" + id] = null;
+  try {
+    const r = await api("POST", `/api/teams/${S.team.id}/chat/translate`, { ids, lang: tr.lang });
+    for (const id of ids) { const v = r.tr?.[id]; if (typeof v === "string") CHAT.tr[tr.lang + ":" + id] = v; else delete CHAT.tr[tr.lang + ":" + id]; }
+    if (r.error) { CHAT.trCfg = { ...CHAT.trCfg, enabled: false }; toast("Traducción del chat: " + r.error, true); }
+  } catch (e) { for (const id of ids) delete CHAT.tr[tr.lang + ":" + id]; CHAT.trCfg = { ...CHAT.trCfg, enabled: false }; toast("Traducción del chat: " + e.message, true); }
+  CHAT.trBusy = false; chatDraw();
+}
+const chatTrModal = guard(async () => {
+  const c = await api("GET", `/api/teams/${S.team.id}/chat/translate-cfg`);
+  const on = h("input", { type: "checkbox", checked: c.enabled }), eng = h("select", {}, h("option", { value: "ai", selected: c.engine === "ai" }, "Una IA del equipo (traduce mejor, gasta tokens)"), h("option", { value: "libre", selected: c.engine === "libre" }, "LibreTranslate propio (gratis, corre en tu red)"));
+  const bot = h("select", {}, h("option", { value: "" }, "— elegí una IA —"), c.bots.map((b) => h("option", { value: b.id, selected: c.bot_id === b.id }, "🤖 " + b.name)));
+  const url = h("input", { value: c.url, placeholder: "http://192.168.1.60:5000", maxLength: 200 });
+  const box = h("div", { class: "overlay", id: "chattr-modal", onmousedown: (e) => e.target === box && box.remove() });
+  const draw = () => { botRow.hidden = eng.value !== "ai"; urlRow.hidden = eng.value !== "libre"; };
+  const botRow = h("label", {}, "IA que traduce", bot, h("small", { class: "hint" }, "Usa su proveedor y su tope diario de gasto (Configuración → IAs → 💬 Chat). Conviene una IA barata, tipo «haiku».")),
+    urlRow = h("label", {}, "Dirección del LibreTranslate", url, h("small", { class: "hint" }, "Instalación: docker run -ti --rm -p 5000:5000 libretranslate/libretranslate. Nada sale de tu red.")); eng.onchange = draw;
+  const save = guard(async () => {
+    const r = await api("PUT", `/api/teams/${S.team.id}/chat/translate-cfg`, { enabled: on.checked, engine: eng.value, bot_id: bot.value ? +bot.value : null, url: url.value });
+    CHAT.trCfg = r; CHAT.tr = {}; toast(r.enabled ? "Traducción del chat activada" : "Traducción del chat apagada"); box.remove(); chatDraw(); chatTrNeed();
+  });
+  box.append(h("div", { class: "modal small" }, h("h3", {}, "🌐 Traducir el chat"),
+    h("p", { class: "hint" }, "Cada persona escribe en su idioma y lee en el suyo (español, inglés o portugués, el que eligió en Configuración). El mensaje original no se modifica y se puede ver con un toque."),
+    h("label", { class: "sub" }, on, "Activar la traducción en este equipo"), h("label", {}, "Motor", eng), botRow, urlRow,
+    h("p", { class: "warn" }, "Ojo con la privacidad: al traducir, el texto de los mensajes se envía al motor elegido. Con una IA de internet sale de tu servidor; con LibreTranslate propio, no."),
+    h("div", { class: "row" }, h("button", { onclick: () => box.remove() }, "Cancelar"), h("button", { class: "primary", onclick: save }, "Guardar"))));
+  document.body.append(box); draw();
+});
+
 function chatDraw() {
   if (!CHAT.el) return;
   const me = S.user.id, kb = (n) => (n < 1024 ? n + " B" : (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB");
@@ -1118,9 +1166,10 @@ function chatDraw() {
   CHAT.err_.hidden = !CHAT.err;
   CHAT.list.replaceChildren(...CHAT.msgs.map((m) => h("div", { class: "chat-msg" + (m.from_user === me ? " mine" : "") },
     h("div", {}, h("b", {}, (botInfo(m.from) ? "🤖 " : AV[m.from] ? AV[m.from] + " " : "") + m.from), " ", h("small", {}, new Date(m.created_at).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))),
-    m.body && h("div", { class: "chat-body" }, m.body),
+    m.body && chatBody(m),
     m.file && h("button", { class: "ghost chat-file", title: "Descargar", onclick: guard(() => saveFile(`/api/chat/files/${m.file.id}`, m.file.name)) }, `📎 ${m.file.name} (${kb(m.file.size)})`))));
   CHAT.list.scrollTop = CHAT.list.scrollHeight;
+  chatTrNeed();
   CHAT.att.replaceChildren(...(CHAT.pending ? [h("span", {}, "📎 " + CHAT.pending.name + " "), h("button", { class: "ghost", onclick: () => { CHAT.pending = null; chatDraw(); } }, "✕")] : []));
 }
 function chatPanel() {
@@ -1138,6 +1187,8 @@ function chatPanel() {
     const pick = h("input", { type: "file", hidden: true, onchange: chatPick });
     CHAT.el = h("section", { class: "chat-panel" },
       h("div", { class: "row" }, h("strong", {}, "💬 Chat"), h("span", { class: "spacer" }),
+        CHAT.trCfg?.enabled && h("button", { class: "ghost" + (trWanted() ? " on" : ""), title: trWanted() ? "Traducción automática activada: tocá para ver todo en su idioma original" : "Traducción automática desactivada: tocá para activarla", onclick: () => { store.set("chatTr", trWanted() ? "0" : "1"); chatDraw(); } }, "🌐"),
+        can("admin") && h("button", { class: "ghost", title: "Traducción automática del chat (configurar)", onclick: chatTrModal }, "⚙🌐"),
         can("admin") && h("button", { class: "ghost", title: "Registro de todo lo que pasó en el chat", onclick: chatAudit }, "🧾"),
         h("button", { class: "ghost", title: "Cerrar el chat", onclick: toggleChat }, "✕")),
       h("small", { class: "hint" }, "🔒 Solo por conexión segura; mensajes y archivos se guardan cifrados."),

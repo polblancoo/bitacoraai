@@ -58,11 +58,11 @@ pub async fn cfg_of(st: &AppState, bot: Id) -> Cfg {
     c
 }
 
-fn today() -> String {
+pub(crate) fn today() -> String {
     Utc::now().format("%Y-%m-%d").to_string()
 }
 
-async fn spent_today(st: &AppState, bot: Id) -> (f64, i64) {
+pub(crate) async fn spent_today(st: &AppState, bot: Id) -> (f64, i64) {
     sqlx::query("SELECT usd, tokens FROM bot_chat_usage WHERE user_id = ? AND day = ?")
         .bind(bot)
         .bind(today())
@@ -152,10 +152,10 @@ async fn put_cfg(State(st): State<AppState>, user: AuthUser, Path(bot): Path<Id>
     get_cfg(State(st), user, Path(bot)).await
 }
 
-struct Reply {
-    text: String,
-    tokens: i64,
-    usd: f64,
+pub(crate) struct Reply {
+    pub text: String,
+    pub tokens: i64,
+    pub usd: f64,
 }
 
 fn claude_model(m: &str) -> String {
@@ -215,7 +215,7 @@ async fn call_claude_cli(c: &Cfg, system: &str, user: &str, budget_left: f64) ->
     Ok(Reply { text: v["result"].as_str().unwrap_or("").to_string(), tokens, usd: v["total_cost_usd"].as_f64().unwrap_or(0.0) })
 }
 
-async fn call_llm(c: &Cfg, system: &str, user: &str, budget_left: f64) -> std::result::Result<Reply, String> {
+pub(crate) async fn call_llm(c: &Cfg, system: &str, user: &str, budget_left: f64) -> std::result::Result<Reply, String> {
     if c.kind == "claude-cli" {
         return call_claude_cli(c, system, user, budget_left).await;
     }

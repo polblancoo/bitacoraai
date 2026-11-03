@@ -404,3 +404,17 @@ CREATE TABLE IF NOT EXISTS integrations (
     position INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS integrations_team ON integrations(team_id);
+
+CREATE TABLE IF NOT EXISTS chat_tr_cfg (
+    team_id INTEGER PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    engine TEXT NOT NULL DEFAULT 'ai',
+    bot_id INTEGER,
+    url TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS chat_tr (
+    msg_id INTEGER NOT NULL,
+    lang TEXT NOT NULL,
+    text TEXT NOT NULL,
+    PRIMARY KEY (msg_id, lang)
+);

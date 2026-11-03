@@ -752,3 +752,5 @@ aside { gap: 10px; }
 .wiz-script { font: 11px/1.5 ui-monospace, monospace; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 240px; overflow: auto; white-space: pre; user-select: all; }
 .wiz-list { display: grid; gap: 4px; padding-left: 18px; font-size: 13px; color: var(--dim); }
 .modal.wiz { width: min(640px, 94vw); }
+.chat-tr { color: var(--blue); cursor: pointer; opacity: .85; margin-left: 4px; white-space: nowrap; }
+.chat-tr:hover { text-decoration: underline; opacity: 1; }
