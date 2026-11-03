@@ -1857,16 +1857,38 @@ function flowBox(task) {
       h("div", { class: "row" }, h("button", { class: "ghost", onclick: () => { rows.push({ assignee_id: "", kind: "work", instruction: "" }); draw(); } }, "+ Etapa"), h("span", { class: "spacer" }),
         h("small", {}, "Tope de vueltas "), max),
       h("small", { class: "hint" }, "Al guardar, la tarea vuelve a la etapa 1 y pasa a su responsable. La primera etapa es de trabajo; una etapa de revisión aprueba (sigue) o devuelve a la etapa de trabajo anterior."),
-      h("div", { class: "row" }, h("button", { onclick: () => draw_(f) }, "Cancelar"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: guard(async () => {
+      h("div", { class: "row" }, h("button", { onclick: () => draw_(f) }, "Cancelar"), h("span", { class: "spacer" }),
+        can("member") && h("button", { class: "ghost", title: "Guarda este recorrido (etapas, instrucciones y tipo) para usarlo en otras tareas", onclick: guard(async () => {
+          const r = await form("Guardar como plantilla", [{ name: "name", label: "Nombre de la plantilla", max: 60 }], "Guardar");
+          if (!r || !r.name.trim()) return;
+          await api("POST", `/api/teams/${S.team.id}/flow-templates`, { name: r.name, max_rounds: +max.value || 3, steps: rows.map((x) => ({ assignee_id: x.assignee_id || null, kind: x.kind, instruction: x.instruction })) });
+          toast("Plantilla guardada");
+        }) }, "💾 Guardar como plantilla"), h("button", { class: "primary", onclick: guard(async () => {
         if (rows.some((r) => !r.assignee_id)) return toast("Elegí el responsable de cada etapa", true);
         reopen(await api("PUT", `/api/tasks/${task.id}/flow`, { steps: rows, max_rounds: +max.value || 3 }));
         toast("Flujo armado: la tarea pasó a la etapa 1");
       }) }, "Guardar y arrancar")));
   };
+  // plantillas del equipo: se cargan en el editor (los responsables sin definir se eligen ahí) y se pueden borrar
+  const tplPick = (f) => {
+    const sel = h("select", { title: "Usar una plantilla guardada del equipo" }, h("option", { value: "" }, "📋 Usar plantilla…")), del = h("button", { class: "ghost", hidden: true, title: "Borrar esta plantilla", onclick: guard(async () => {
+      const t = TPL.find((x) => x.id === +sel.value); if (!t || !confirm(`¿Borrar la plantilla «${t.name}»?`)) return;
+      TPL = await api("DELETE", `/api/teams/${S.team.id}/flow-templates/${t.id}`); fill(); toast("Plantilla borrada");
+    }) }, "🗑");
+    let TPL = [];
+    const fill = () => { sel.replaceChildren(h("option", { value: "" }, TPL.length ? "📋 Usar plantilla…" : "📋 Sin plantillas guardadas"), TPL.map((t) => h("option", { value: t.id }, `${t.name} (${t.steps.length} etapas)`))); del.hidden = true; };
+    sel.onchange = () => {
+      const t = TPL.find((x) => x.id === +sel.value); del.hidden = !t; if (!t) return;
+      edit({ steps: t.steps.map((s) => ({ ...s, assignee_id: s.assignee_id || "" })), max_rounds: t.max_rounds });
+      toast("Plantilla cargada: completá los responsables que falten y guardá");
+    };
+    api("GET", `/api/teams/${S.team.id}/flow-templates`).then((r) => { TPL = r; fill(); }).catch(() => {});
+    return h("span", { class: "row" }, sel, del);
+  };
   const draw_ = (f) => {
     if (!f.steps.length) {
       body.replaceChildren(h("small", { class: "hint" }, "Armá un recorrido: por ejemplo XXX hace, ZZZ revisa (y si hace falta, la devuelve a XXX con lo que hay que corregir), y después otro sigue. La salida de cada etapa pasa sola a la siguiente."),
-        can("member") && h("div", { class: "row" }, h("button", { onclick: () => edit(f) }, "🧭 Armar flujo")));
+        can("member") && h("div", { class: "row" }, h("button", { onclick: () => edit(f) }, "🧭 Armar flujo"), tplPick(f)));
       return;
     }
     const cur_ = f.steps[f.step], myTurn = f.active && cur_?.kind === "review" && (cur_.assignee_id === S.user.id || can("admin"));

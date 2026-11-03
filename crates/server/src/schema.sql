@@ -367,6 +367,24 @@ CREATE TABLE IF NOT EXISTS task_flows (
     finished INTEGER NOT NULL DEFAULT 0
 );
 
+-- plantillas de flujo del equipo: se aplican a una tarea (el responsable de cada etapa puede quedar por elegir)
+CREATE TABLE IF NOT EXISTS flow_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    max_rounds INTEGER NOT NULL DEFAULT 3,
+    created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS flow_template_steps (
+    template_id INTEGER NOT NULL REFERENCES flow_templates(id) ON DELETE CASCADE,
+    pos INTEGER NOT NULL,
+    assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL DEFAULT 'work',
+    instruction TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (template_id, pos)
+);
+
 -- chat con IAs: qué IAs contestan en el chat y con qué topes; gasto del día; y a quién ya se le aclararon los límites
 CREATE TABLE IF NOT EXISTS bot_chat (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

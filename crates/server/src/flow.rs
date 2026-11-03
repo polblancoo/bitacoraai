@@ -28,6 +28,92 @@ pub fn router() -> Router<AppState> {
         .route("/api/tasks/{id}/flow", get(get_flow).put(put_flow).delete(delete_flow))
         .route("/api/tasks/{id}/flow/verdict", post(verdict))
         .route("/api/projects/{id}/flows", get(project_flows))
+        .route("/api/teams/{id}/flow-templates", get(templates).post(template_save))
+        .route("/api/teams/{id}/flow-templates/{tid}", axum::routing::delete(template_delete))
+}
+
+const MAX_TEMPLATES: i64 = 50;
+
+async fn templates(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
+    routes::ensure_member(&st, team, user.id).await?;
+    let ts = sqlx::query("SELECT t.id, t.name, t.max_rounds, u.username FROM flow_templates t JOIN users u ON u.id = t.created_by WHERE t.team_id = ? ORDER BY t.name").bind(team).fetch_all(&st.db).await?;
+    let mut out = vec![];
+    for t in &ts {
+        let id: Id = t.get(0);
+        let rows = sqlx::query("SELECT s.assignee_id, s.kind, s.instruction, m.user_id IS NOT NULL FROM flow_template_steps s LEFT JOIN team_members m ON m.team_id = ? AND m.user_id = s.assignee_id WHERE s.template_id = ? ORDER BY s.pos").bind(team).bind(id).fetch_all(&st.db).await?;
+        out.push(json!({
+            "id": id, "name": t.get::<String, _>(1), "max_rounds": t.get::<i64, _>(2), "by": t.get::<String, _>(3),
+            // si la persona ya no es del equipo, la etapa queda por elegir
+            "steps": rows.iter().map(|r| json!({ "assignee_id": if r.get::<bool, _>(3) { r.get::<Option<Id>, _>(0) } else { None }, "kind": r.get::<String, _>(1), "instruction": r.get::<String, _>(2) })).collect::<Vec<_>>(),
+        }));
+    }
+    Ok(Json(json!(out)))
+}
+
+#[derive(Deserialize)]
+struct TplStep {
+    #[serde(default)]
+    assignee_id: Option<Id>,
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    instruction: String,
+}
+#[derive(Deserialize)]
+struct TplIn {
+    name: String,
+    steps: Vec<TplStep>,
+    max_rounds: Option<i64>,
+}
+
+async fn template_save(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>, Json(b): Json<TplIn>) -> Result<Json<Value>> {
+    user.human_only()?;
+    routes::require(&st, team, user.id, Role::Member).await?;
+    let name = b.name.trim();
+    if name.is_empty() || name.chars().count() > 60 || name.chars().any(|c| c.is_control()) {
+        return Err(AppError::bad("poné un nombre de hasta 60 caracteres"));
+    }
+    if b.steps.len() < 2 || b.steps.len() > MAX_STEPS || b.steps[0].kind != "work" {
+        return Err(AppError::bad("una plantilla necesita entre 2 y 8 etapas y la primera de trabajo"));
+    }
+    for s in &b.steps {
+        if !matches!(s.kind.as_str(), "work" | "review") || s.instruction.chars().count() > INSTRUCTION_MAX {
+            return Err(AppError::bad("etapa no válida"));
+        }
+        if let Some(a) = s.assignee_id {
+            let m: Option<i64> = sqlx::query_scalar("SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?").bind(team).bind(a).fetch_optional(&st.db).await?;
+            m.ok_or_else(|| AppError::bad("cada responsable tiene que ser del equipo"))?;
+        }
+    }
+    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM flow_templates WHERE team_id = ?").bind(team).fetch_one(&st.db).await?;
+    let dup: Option<Id> = sqlx::query_scalar("SELECT id FROM flow_templates WHERE team_id = ? AND name = ? COLLATE NOCASE").bind(team).bind(name).fetch_optional(&st.db).await?;
+    if dup.is_none() && n >= MAX_TEMPLATES {
+        return Err(AppError::bad("máximo 50 plantillas por equipo"));
+    }
+    let mut tx = st.db.begin().await?;
+    let id = match dup {
+        Some(id) => {
+            sqlx::query("UPDATE flow_templates SET max_rounds = ? WHERE id = ?").bind(b.max_rounds.unwrap_or(3).clamp(1, 10)).bind(id).execute(&mut *tx).await?;
+            sqlx::query("DELETE FROM flow_template_steps WHERE template_id = ?").bind(id).execute(&mut *tx).await?;
+            id
+        }
+        None => sqlx::query("INSERT INTO flow_templates (team_id, name, max_rounds, created_by) VALUES (?, ?, ?, ?)").bind(team).bind(name).bind(b.max_rounds.unwrap_or(3).clamp(1, 10)).bind(user.id).execute(&mut *tx).await?.last_insert_rowid(),
+    };
+    for (i, s) in b.steps.iter().enumerate() {
+        sqlx::query("INSERT INTO flow_template_steps (template_id, pos, assignee_id, kind, instruction) VALUES (?, ?, ?, ?, ?)").bind(id).bind(i as i64).bind(s.assignee_id).bind(&s.kind).bind(s.instruction.trim()).execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
+    templates(State(st), user, Path(team)).await
+}
+
+async fn template_delete(State(st): State<AppState>, user: AuthUser, Path((team, tid)): Path<(Id, Id)>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let role = routes::require(&st, team, user.id, Role::Member).await?;
+    let r = sqlx::query("DELETE FROM flow_templates WHERE id = ? AND team_id = ? AND (? OR created_by = ?)").bind(tid).bind(team).bind(role >= Role::Admin).bind(user.id).execute(&st.db).await?;
+    if r.rows_affected() == 0 {
+        return Err(AppError::forbidden());
+    }
+    templates(State(st), user, Path(team)).await
 }
 
 struct Step {
