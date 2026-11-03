@@ -1,6 +1,6 @@
-<p align="center"><a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/crates/agent/README.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/crates/agent/README.pt.md">Português</a></p>
+<p align="center"><a href="https://github.com/polblancoo/crewhelm/blob/main/crates/agent/README.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/crewhelm/blob/main/crates/agent/README.pt.md">Português</a></p>
 
-# rust-tui-manager-agent (`tm-agent`)
+# crewhelm-agent (`tm-agent`)
 
 > **0.6.3**: `TM_AGENT_TERMINAL=1` abre terminales web en la carpeta del proyecto; el agente pasa `TM_ALLOW` (comandos autorizados desde la tarea), informa tokens y costo reales y respeta las cuotas. Licencia **AGPL-3.0-only**.
 >
@@ -16,9 +16,9 @@ Lo que no vimos junto en ninguna otra herramienta (comprobalo, y avisanos si enc
 - 📊 **Portafolio de varios proyectos**, con costo y horas de la IA. *(costo y horas: llegan en la 0.6.3)*
 - 🏠 **Autoalojado**: tus datos y tus claves quedan en tu servidor.
 
-Pone a trabajar a una IA cuando le asignan una tarea en el [tablero de comando Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager): vigila el servidor, abre un agente en la **carpeta de trabajo del proyecto**, comenta y pasa la tarea a **En curso** y **Hecho**.
+Pone a trabajar a una IA cuando le asignan una tarea en el [tablero de comando Rust TUI Manager](https://github.com/polblancoo/crewhelm): vigila el servidor, abre un agente en la **carpeta de trabajo del proyecto**, comenta y pasa la tarea a **En curso** y **Hecho**.
 
-Instructivo completo: [docs/AGENTES.md](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.md).
+Instructivo completo: [docs/AGENTES.md](https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.md).
 
 ```bash
 TM_URL=https://tasks.example.com \
@@ -55,4 +55,4 @@ El comando recibe `TM_TASK_PROMPT`, `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_I
 
 ## Licencia
 
-**AGPL-3.0-only.** Gratis para usar y autoalojar. Si ofrecés una versión modificada como servicio, tenés que publicar tus cambios con la misma licencia. Hay licencia comercial sin esa obligación: consultala en [los issues](https://github.com/polblancoo/Rust_tuiManager/issues). Las versiones publicadas hasta la 0.6.2 siguen siendo MIT.
+**AGPL-3.0-only.** Gratis para usar y autoalojar. Si ofrecés una versión modificada como servicio, tenés que publicar tus cambios con la misma licencia. Hay licencia comercial sin esa obligación: consultala en [los issues](https://github.com/polblancoo/crewhelm/issues). Las versiones publicadas hasta la 0.6.2 siguen siendo MIT.

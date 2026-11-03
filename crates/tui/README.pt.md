@@ -1,6 +1,6 @@
-<p align="center"><a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/crates/tui/README.md">English</a> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/crates/tui/README.es.md">Español</a> · <b>Português</b></p>
+<p align="center"><a href="https://github.com/polblancoo/crewhelm/blob/main/crates/tui/README.md">English</a> · <a href="https://github.com/polblancoo/crewhelm/blob/main/crates/tui/README.es.md">Español</a> · <b>Português</b></p>
 
-# rust-tui-manager
+# crewhelm
 
 > **0.6.3**: licença **AGPL-3.0-only**; o servidor ganha terminal no navegador, consumo e cotas.
 >
@@ -18,25 +18,25 @@ O que não vimos junto em nenhuma outra ferramenta (confira, e avise se achar um
 - 📊 **Portfólio de vários projetos**, com custo e horas da IA. *(custo e horas: chegam na 0.6.3)*
 - 🏠 **Auto-hospedado**: seus dados e suas chaves ficam no seu servidor.
 
-Cliente de terminal (ratatui) do gerenciador de tarefas colaborativo [Rust TUI Manager](https://github.com/polblancoo/Rust_tuiManager). Precisa de um servidor [`rust-tui-manager-server`](https://crates.io/crates/rust-tui-manager-server) em execução.
+Cliente de terminal (ratatui) do gerenciador de tarefas colaborativo [Rust TUI Manager](https://github.com/polblancoo/crewhelm). Precisa de um servidor [`crewhelm-server`](https://crates.io/crates/crewhelm-server) em execução.
 
 > **Versões 0.2 em diante**: este crate deixou de ser um gerenciador local de notas e snippets e passou a ser um cliente de rede. O código anterior está na pasta `legacy/` do repositório e nas versões 0.1.x.
 
-![Quadro no terminal](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/tui-board.png)
+![Quadro no terminal](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/tui-board.png)
 
-![Detalhe de uma tarefa: subtarefas, etiquetas e comentários](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/tui-detail.png)
+![Detalhe de uma tarefa: subtarefas, etiquetas e comentários](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/tui-detail.png)
 
-> 👉 **[Guia passo a passo: seu primeiro projeto](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIA.pt.md)**, com capturas de tela.
+> 👉 **[Guia passo a passo: seu primeiro projeto](https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.pt.md)**, com capturas de tela.
 
 ## 🤖 Agentes de IA como integrantes da equipe
 
-Os assistentes de código (Claude Code, Cursor, Windsurf, Zed ou qualquer cliente MCP) podem **entrar numa equipe humana**: cada IA tem seu usuário, token, papel e modelo (ex.: `claude:Opus`), cria e conclui tarefas, **atribui-as a pessoas** e recebe as que você atribuir. São adicionadas pela barra lateral do app web ou de desktop (**🤖 IAs → «+»**); o token é mostrado uma vez e é trocado ou revogado com um clique. Uma IA não pode administrar equipes, convidar nem mexer em tarefas alheias. Detalhes no [README principal](https://github.com/polblancoo/Rust_tuiManager/blob/main/README.pt.md); com o **`tm-agent`** uma IA pega sozinha as tarefas que você atribuir (veja o [guia de agentes](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.pt.md)); o binário `tm-mcp` está em desenvolvimento. Neste cliente, as contas de IA aparecem como membros.
+Os assistentes de código (Claude Code, Cursor, Windsurf, Zed ou qualquer cliente MCP) podem **entrar numa equipe humana**: cada IA tem seu usuário, token, papel e modelo (ex.: `claude:Opus`), cria e conclui tarefas, **atribui-as a pessoas** e recebe as que você atribuir. São adicionadas pela barra lateral do app web ou de desktop (**🤖 IAs → «+»**); o token é mostrado uma vez e é trocado ou revogado com um clique. Uma IA não pode administrar equipes, convidar nem mexer em tarefas alheias. Detalhes no [README principal](https://github.com/polblancoo/crewhelm/blob/main/README.pt.md); com o **`tm-agent`** uma IA pega sozinha as tarefas que você atribuir (veja o [guia de agentes](https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.pt.md)); o binário `tm-mcp` está em desenvolvimento. Neste cliente, as contas de IA aparecem como membros.
 
 ## Uso
 
 ```sh
-cargo install rust-tui-manager
-rust-tui-manager http://127.0.0.1:7878
+cargo install crewhelm
+crewhelm http://127.0.0.1:7878
 ```
 
 Na tela de acesso, `F2` alterna entre entrar e criar conta. A sessão é guardada em `~/.config/rust-tui-manager/client.json` (permissões `0600`) e o servidor é lembrado para a próxima vez.
@@ -85,8 +85,8 @@ Na tela de acesso, `F2` alterna entre entrar e criar conta. A sessão é guardad
 
 O cabeçalho marca os papéis: `★` dono, `⚙` admin, `👁` leitor. O ponto verde no canto indica conexão ao vivo.
 
-Mais informações, segurança e configuração do servidor no [README do projeto](https://github.com/polblancoo/Rust_tuiManager/blob/main/README.pt.md).
+Mais informações, segurança e configuração do servidor no [README do projeto](https://github.com/polblancoo/crewhelm/blob/main/README.pt.md).
 
 ## Licença
 
-**AGPL-3.0-only.** Grátis para usar e auto-hospedar. Se você oferecer uma versão modificada como serviço, precisa publicar suas mudanças com a mesma licença. Há licença comercial sem essa obrigação: pergunte nas [issues](https://github.com/polblancoo/Rust_tuiManager/issues). As versões publicadas até a 0.6.2 continuam em MIT.
+**AGPL-3.0-only.** Grátis para usar e auto-hospedar. Se você oferecer uma versão modificada como serviço, precisa publicar suas mudanças com a mesma licença. Há licença comercial sem essa obrigação: pergunte nas [issues](https://github.com/polblancoo/crewhelm/issues). As versões publicadas até a 0.6.2 continuam em MIT.

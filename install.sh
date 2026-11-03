@@ -1,10 +1,10 @@
 #!/bin/sh
 # Instalador de CrewHelm (tm-server) para Linux: sin sudo, todo dentro de tu usuario.
-#   curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh
 # Opciones (después de «sh -s --»):  --port 7878   --no-service   --with-agent   --with-opencode   --with-claude   --with-gemini   --with-codex   --with-all-ais   --version v0.7.1
 set -eu
 
-REPO="polblancoo/Rust_tuiManager"
+REPO="polblancoo/crewhelm"
 PORT=7878; SERVICE=1; AGENT=0; OPENCODE=0; CLAUDE=0; GEMINI=0; CODEX=0; VERSION="latest"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -26,7 +26,7 @@ say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [ "$(uname -s)" = "Linux" ] || die "este instalador es para Linux (Windows y macOS: próximamente)"
-case "$(uname -m)" in x86_64|amd64) ARCH=x86_64 ;; *) die "arquitectura $(uname -m) no soportada todavía (probá: cargo install rust-tui-manager-server)" ;; esac
+case "$(uname -m)" in x86_64|amd64) ARCH=x86_64 ;; *) die "arquitectura $(uname -m) no soportada todavía (probá: cargo install crewhelm-server)" ;; esac
 command -v curl >/dev/null 2>&1 || die "falta curl"
 command -v sha256sum >/dev/null 2>&1 || die "falta sha256sum"
 
@@ -48,7 +48,7 @@ install_one() { # install_one <binario>
   if fetch "$1-linux-$ARCH.tar.gz"; then install -m 755 "$TMP/$1" "$BIN/$1"
   elif command -v cargo >/dev/null 2>&1; then
     say "No pude bajar el binario; lo compilo con cargo (tarda unos minutos)"
-    case "$1" in tm-server) crate=rust-tui-manager-server ;; *) crate=rust-tui-manager-agent ;; esac
+    case "$1" in tm-server) crate=crewhelm-server ;; *) crate=crewhelm-agent ;; esac
     cargo install "$crate" --root "$HOME/.local"
   else die "no pude descargar $1 y cargo no está instalado"; fi
 }

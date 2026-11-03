@@ -14,7 +14,7 @@ use tokio::{process::Command, sync::Semaphore};
 
 mod term;
 
-const HELP: &str = "tm-agent: pone a trabajar a una IA cuando le asignan una tarea en rust-tui-manager.
+const HELP: &str = "tm-agent: pone a trabajar a una IA cuando le asignan una tarea en CrewHelm.
 
 Variables de entorno:
   TM_TOKEN          token de la IA (obligatorio; se crea en la web: 🤖 IAs → «+»)

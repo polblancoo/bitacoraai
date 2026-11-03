@@ -1,6 +1,6 @@
-<p align="center"><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/logo/logo-512.png" width="140" alt="Rust TUI Manager logo"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/logo/logo-512.png" width="140" alt="Rust TUI Manager logo"></p>
 
-<p align="center"><b>English</b> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/README.es.md">Español</a> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/README.pt.md">Português</a></p>
+<p align="center"><b>English</b> · <a href="https://github.com/polblancoo/crewhelm/blob/main/README.es.md">Español</a> · <a href="https://github.com/polblancoo/crewhelm/blob/main/README.pt.md">Português</a></p>
 
 # Rust TUI Manager
 
@@ -8,7 +8,7 @@
 
 Run **several projects at once from a single place**, with **people and AI agents working on the same board**. A CTO, an operations manager or an agency owner sets up the projects, assigns resources (humans and AIs of different models), delegates each one to a lead and **sees how everything is going, moment by moment**.
 
-![Command board: projects, AIs and the team's tasks](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-01-tablero.png)
+![Command board: projects, AIs and the team's tasks](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-01-tablero.png)
 
 ### Why it is different
 
@@ -45,31 +45,31 @@ What we have not seen together in any other tool (check, and tell us if you find
 
 Every project knows **where its work lives** (folder and repository); per-project leads are on the [roadmap](ROADMAP.md). Everything is **self-hosted**: your data stays on your server.
 
-> 👉 **First time? Follow the [step-by-step guide: your first project](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIDE.md)** (install, create the team, add people and AIs, assign work and follow progress, with screenshots).
+> 👉 **First time? Follow the [step-by-step guide: your first project](https://github.com/polblancoo/crewhelm/blob/main/docs/GUIDE.md)** (install, create the team, add people and AIs, assign work and follow progress, with screenshots).
 
 **How it is built:** a collaborative, multi-user, self-hosted task manager written in Rust. One server and three clients: a **TUI** (ratatui), a **desktop app** (Tauri 2) and a **web app** served by the server itself, with real-time updates for everyone connected.
 
 | Piece | Crate / path | What it is |
 |---|---|---|
-| Server | [`rust-tui-manager-server`](crates/server) (binary `tm-server`) | REST API + WebSocket on axum and SQLite |
-| Terminal client | [`rust-tui-manager`](crates/tui) | Kanban board with ratatui |
-| AI agent | [`rust-tui-manager-agent`](crates/agent) (binary `tm-agent`) | Watches the board and puts an AI to work when a task is assigned to it |
+| Server | [`crewhelm-server`](crates/server) (binary `tm-server`) | REST API + WebSocket on axum and SQLite |
+| Terminal client | [`crewhelm`](crates/tui) | Kanban board with ratatui |
+| AI agent | [`crewhelm-agent`](crates/agent) (binary `tm-agent`) | Watches the board and puts an AI to work when a task is assigned to it |
 | Desktop client | [`apps/desktop`](apps/desktop) | Tauri 2 app (the same interface as the web, in its own window) |
 | Web client | [`crates/server/web`](crates/server/web) | Graphical interface served by `tm-server` at `/`: board, calendar, Gantt, whiteboard, inbox |
-| Shared models | [`rust-tui-manager-core`](crates/core) | Types and events used by everything |
+| Shared models | [`crewhelm-core`](crates/core) | Types and events used by everything |
 
 > Version 0.1.x of `rust-tui-manager` was a local notes and snippets manager. That code still lives in [`legacy/`](legacy/) and in the 0.1.x releases of the crate.
 
-![Kanban board in the desktop client](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/desktop-board.png)
+![Kanban board in the desktop client](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-board.png)
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/desktop-task.png" alt="Task detail with labels, subtasks and comments"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/desktop-calendar.png" alt="Calendar view by due date"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-task.png" alt="Task detail with labels, subtasks and comments"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-calendar.png" alt="Calendar view by due date"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/desktop-team.png" alt="Team management: roles and invitations by code"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/tui-board.png" alt="Terminal client (ratatui)"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-team.png" alt="Team management: roles and invitations by code"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/tui-board.png" alt="Terminal client (ratatui)"></td>
   </tr>
 </table>
 
@@ -79,23 +79,23 @@ Every project knows **where its work lives** (folder and repository); per-projec
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-gantt.png" alt="Gantt chart with task dependencies"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-canvas.png" alt="Collaborative whiteboard with notes, task cards and connections"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-gantt.png" alt="Gantt chart with task dependencies"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-canvas.png" alt="Collaborative whiteboard with notes, task cards and connections"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-inbox.png" alt="Inbox of news shown at sign-in"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-mindmap.png" alt="Mind map of a task"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-inbox.png" alt="Inbox of news shown at sign-in"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-mindmap.png" alt="Mind map of a task"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-settings.png" alt="Settings menu: account, Telegram, team and preferences"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-message.png" alt="Message to the team (inbox, email and Telegram)"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-settings.png" alt="Settings menu: account, Telegram, team and preferences"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-message.png" alt="Message to the team (inbox, email and Telegram)"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-team.png" alt="Team: search registered users, generate an invitation code, members"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-activity.png" alt="Project activity"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-team.png" alt="Team: search registered users, generate an invitation code, members"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-activity.png" alt="Project activity"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-invite.png" alt="Generated invitation code"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-invite.png" alt="Generated invitation code"></td>
   </tr>
 </table>
 
@@ -108,7 +108,7 @@ Coding assistants (Claude Code, Cursor, Windsurf, Zed or any [MCP](https://model
 - **Human control**: the token is **rotated or revoked with one click**; the role is viewer or member; an AI **cannot** create or delete teams, invite people, change roles or touch other people's tasks (except to comment).
 - **A command board**: you assign work to your agents from the web, the desktop app or the terminal, and watch live what each one is doing.
 
-> 🚀 **Let them work on their own**: **`tm-agent`** watches the board and, when you assign a task to an AI, opens your agent (Claude Code, Gemini CLI…) in the project's folder, moves the task to *In progress*, comments on it and leaves it in *Done*. An agent can also raise a 🙋 **help alarm** (`tm-agent ask "..."`) and wait for a human answer. Step by step in the **[agents guide](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTS.md)**; inside the app it is under *Settings → AI agents*. The `tm-mcp` binary (MCP tools) is still in development (see [ROADMAP.md](ROADMAP.md)).
+> 🚀 **Let them work on their own**: **`tm-agent`** watches the board and, when you assign a task to an AI, opens your agent (Claude Code, Gemini CLI…) in the project's folder, moves the task to *In progress*, comments on it and leaves it in *Done*. An agent can also raise a 🙋 **help alarm** (`tm-agent ask "..."`) and wait for a human answer. Step by step in the **[agents guide](https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTS.md)**; inside the app it is under *Settings → AI agents*. The `tm-mcp` binary (MCP tools) is still in development (see [ROADMAP.md](ROADMAP.md)).
 
 ## What's new in 0.7.1
 
@@ -133,18 +133,18 @@ Rust TUI Manager is still **AGPL-3.0-only and free**. If you use it in a company
 ### 💻 Terminal in the browser and Terminals view
 A **💻 Terminal** button on every task (owners only) opens a console in the project folder. Two ways: **through the agent** (`TM_AGENT_TERMINAL=1`, the connection starts from the project machine: no keys, no open ports) or **SSH with a key** (the app generates the key and pins the host fingerprint). Each session leaves a `.tm/terminal-tarea-N.md` note the AI reads when it resumes. The **🖥️ Terminals** view shows up to 8 panes and each AI's state.
 
-![Terminals view](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-14-terminales.png)
+![Terminals view](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-14-terminales.png)
 
 ### 💰 Usage and quotas
 Tokens, cost and hours per task, project, team and AI, with **quotas** checked before every run and a token **estimate** (🧮) to set the task cap.
 
-![Usage](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-15-consumo.png)
-![Token cap on the task](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-17-tokens.png)
+![Usage](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-15-consumo.png)
+![Token cap on the task](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-17-tokens.png)
 
 ### ✅ Allow commands from the task
 When an AI asks for a command, **✅ Allow command…** explains what it does and authorizes it **once** or **always** (or with `/permitir` in a comment).
 
-![Allow command](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-16-permitir.png)
+![Allow command](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-16-permitir.png)
 
 ### License
 From 0.6.3 the project is **AGPL-3.0-only** (earlier versions stay MIT). It bundles xterm.js (MIT).
@@ -154,17 +154,17 @@ From 0.6.3 the project is **AGPL-3.0-only** (earlier versions stay MIT). It bund
 ### 📊 Portfolio: all your projects on one screen
 Progress, overdue work, resources, who works on what and which project is at risk (🟢 on track · 🔴 overdue · 🟡 stalled for 7 days · ✅ finished). Click a card to open the project; it updates live.
 
-![Portfolio with all projects](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png)
+![Portfolio with all projects](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-11-portafolio.png)
 
 ### 🙋 When an AI needs you, it asks, and you answer in the same message
 If an AI hits something it cannot do alone (a blocked command, a permission), it runs `tm-agent ask`: the server creates a **request task** for an authorized person, with the command ready to copy (**📋 Copy**). The task opens with a panel: copy each command, run it in your terminal, paste the output in the box and press **📤 Send** (or **✅ Authorize / ❌ Reject** for a decision): it reaches the AI on its own. Who gets it: the task's creator if they have the new **Executor** permission, otherwise the executor with the fewest open tasks, otherwise an admin. Each AI also has an editable list of **🚫 forbidden commands**.
 
-![An AI's request: task created and command to copy](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
+![An AI's request: task created and command to copy](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-12-pedido.png)
 
 ### 📖 Manual inside the app, tooltips and three languages
 A manual with **search and a topic index** (button **📖 Manual**), a tooltip on every button, and the whole interface in **Spanish, English and Portuguese** (Settings → Preferences → Language). The task detail can be **maximized** to read long comments.
 
-![The manual inside the app, with search](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-13-manual.png)
+![The manual inside the app, with search](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-13-manual.png)
 
 ### Also new
 - Numbered tasks (`#12`) and **manual ordering by drag and drop**.
@@ -177,18 +177,18 @@ A manual with **search and a topic index** (button **📖 Manual**), a tooltip o
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-google.png" alt="Settings with Google Calendar connected and a “?” help button on every row"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-google-help.png" alt="Google Calendar help: what it does and what the server admin configures"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-google.png" alt="Settings with Google Calendar connected and a “?” help button on every row"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-google-help.png" alt="Google Calendar help: what it does and what the server admin configures"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-config-help.png" alt="Help for a row: “If you are a user” and “If you run the server”"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-invite.png" alt="Invitation code with “Copy invitation” and “Send by email”"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-config-help.png" alt="Help for a row: “If you are a user” and “If you run the server”"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-invite.png" alt="Invitation code with “Copy invitation” and “Send by email”"></td>
   </tr>
 </table>
 
 - **Team panel** («👥 Team» button, right column): members with their role (editable in place), since when they are in, who added them and whether they joined with a code, and how many open tasks each one has; invitations with their uses, expiry and **who joined with each code**; and team settings (edit name and description, transfer ownership, leave or delete the team with name confirmation).
 
-<img src="https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/web-team-panel.png" alt="Team panel: members, invitations and settings">
+<img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-team-panel.png" alt="Team panel: members, invitations and settings">
 
 - **Google Calendar** (optional, one-way): each user connects their account from *Settings → Google Calendar* and their dated tasks (assigned to them or unassigned, from their teams) show up as all-day events in their main calendar. If they change, finish or are deleted, the event is updated or removed automatically (every minute); “Disconnect” cleans up whatever the app created. **The server admin enables it once** with `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET` and `TM_GOOGLE_REDIRECT` (a Google Cloud “Web application” OAuth client); while the Google app is in *Testing* mode only the Gmail accounts added as test users can connect.
 - **Help on every Settings row**: a “?” button per row explains what it does for the regular user and what must be configured if you run the server (SMTP, Telegram, Google, HTTPS…).
@@ -223,26 +223,26 @@ A manual with **search and a topic index** (button **📖 Manual**), a tooltip o
 
 ## Quick install
 
-**Download**: [latest release](https://github.com/polblancoo/Rust_tuiManager/releases/latest) (Linux: `.deb`, `.rpm`, AppImage and `tar.gz`; **Windows and macOS coming soon**) · Website: https://polblancoo.github.io/rust_tuiManager/
+**Download**: [latest release](https://github.com/polblancoo/crewhelm/releases/latest) (Linux: `.deb`, `.rpm`, AppImage and `tar.gz`; **Windows and macOS coming soon**) · Website: https://polblancoo.github.io/rust_tuiManager/
 
 
 **One line (Linux, no sudo)**: downloads `tm-server`, verifies its SHA-256, sets it up as a user service and tells you the URL. The first time you open the page a short illustrated guide walks you through team, project and AI.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh
 ```
 
 ```sh
-cargo install rust-tui-manager-server   # installs the `tm-server` binary
-cargo install rust-tui-manager          # terminal client
-cargo install rust-tui-manager-agent    # installs `tm-agent` (optional, for AI agents)
+cargo install crewhelm-server   # installs the `tm-server` binary
+cargo install crewhelm          # terminal client
+cargo install crewhelm-agent    # installs `tm-agent` (optional, for AI agents)
 ```
 
 Or from this repository:
 
 ```sh
-cargo run -p rust-tui-manager-server                          # server on 0.0.0.0:7878
-cargo run -p rust-tui-manager -- http://127.0.0.1:7878        # TUI client (F2 = create account)
+cargo run -p crewhelm-server                          # server on 0.0.0.0:7878
+cargo run -p crewhelm -- http://127.0.0.1:7878        # TUI client (F2 = create account)
 cargo run -p tm-desktop                                       # desktop client
 ```
 
@@ -319,4 +319,4 @@ legacy/          previous local manager (0.1.x)
 
 ## License
 
-**AGPL-3.0-only.** Free to use and to self-host. If you offer a modified version as a service, you must publish your changes under the same license. A commercial license without that obligation is available: ask in [the issues](https://github.com/polblancoo/Rust_tuiManager/issues). Versions published up to 0.6.2 remain under MIT.
+**AGPL-3.0-only.** Free to use and to self-host. If you offer a modified version as a service, you must publish your changes under the same license. A commercial license without that obligation is available: ask in [the issues](https://github.com/polblancoo/crewhelm/issues). Versions published up to 0.6.2 remain under MIT.

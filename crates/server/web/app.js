@@ -1,5 +1,5 @@
 "use strict";
-// Cliente de rust-tui-manager. Todo el contenido de usuario se inserta con textContent (sin innerHTML).
+// Cliente de CrewHelm. Todo el contenido de usuario se inserta con textContent (sin innerHTML).
 
 const STATUS = [
   { id: "todo", label: "Por hacer", color: "var(--blue)" },
@@ -562,7 +562,7 @@ function agentsGuide() {
       h("ol", { class: "guide" },
         h("li", {}, "Creá la IA en la barra lateral (🤖 IAs → «+») y copiá su token."),
         h("li", {}, "Definí la carpeta de trabajo del proyecto (⚙ Proyecto): tiene que existir en la máquina donde corre tm-agent."),
-        h("li", {}, "Instalá tm-agent en esa máquina: cargo install --git https://github.com/polblancoo/Rust_tuiManager rust-tui-manager-agent"),
+        h("li", {}, "Instalá tm-agent en esa máquina: cargo install --git https://github.com/polblancoo/crewhelm crewhelm-agent"),
         h("li", {}, "Ejecutalo con el token y el comando de tu agente (Claude Code, Gemini CLI, un script…). Ejemplo:"),
         h("pre", { class: "bot-cfg" }, agentCmd()),
         h("li", {}, "Con Gemini CLI usá este (no entiende --permission-mode; la clave sale de aistudio.google.com/apikey, o iniciá sesión una vez con «gemini»). Si algo falla, el motivo queda como comentario ❌ en la tarea de la IA:"),
@@ -732,7 +732,7 @@ const runnerModal = async (b) => {
   const box = h("div", { class: "overlay", id: "runner-modal", onmousedown: (e) => e.target === box && box.remove() },
     h("div", { class: "modal small" }, h("h3", {}, `⚙ ${b.username}: ejecución en el servidor`), h("p", {}, st),
       !av.allowed ? h("p", { class: "warn" }, "Solo la primera persona registrada puede activar esto, y el servidor no debe tener TM_RUNNER=0.") : [
-        !av.agent_found && h("p", { class: "warn" }, "El servidor no encuentra el programa tm-agent: instalalo en la misma máquina (cargo install rust-tui-manager-agent)."),
+        !av.agent_found && h("p", { class: "warn" }, "El servidor no encuentra el programa tm-agent: instalalo en la misma máquina (cargo install crewhelm-agent)."),
         h("label", {}, "¿Qué IA es?", kind), h("label", {}, "Modelo", model, dl), urlL, orL, tool,
         h("small", { class: "hint" }, "La clave de la IA se toma de las variables de entorno del servidor (ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY) o de su sesión iniciada. No se guarda acá."),
         h("div", { class: "row" }, cur.enabled && h("button", { class: "danger", onclick: save(false) }, "Detener"), h("span", { class: "spacer" }),
@@ -1213,7 +1213,7 @@ function teamPanel() {
         !admin && h("small", {}, "Solo un admin o el dueño puede cambiar los datos del equipo y gestionar miembros."))));
   return box;
 }
-const RELEASES_URL = "https://github.com/polblancoo/Rust_tuiManager/releases/latest";
+const RELEASES_URL = "https://github.com/polblancoo/crewhelm/releases/latest";
 const inviteMessage = (code) => [
   `Te invito al equipo «${S.team.name}» en ${APP_NAME}.`,
   "",
@@ -2095,7 +2095,7 @@ const CFG_HELP = {
   message: ["Mensaje al equipo", "Escribe un aviso que le llega a todos los miembros del equipo por bandeja, y por email y Telegram a quienes lo tengan conectado.", null],
   members: ["Miembros e invitaciones", "Mirá quiénes están en el equipo. Si sos admin o dueño: buscá a alguien ya registrado y agregalo, o generá un código de invitación (y «Copiar invitación» arma el texto con el enlace de instalación para pegar en un chat).", null],
   agents: ["Agentes de IA (tm-agent)", "Para que una IA trabaje sola cuando le asignás una tarea, instalás tm-agent en la máquina donde está la carpeta del proyecto. Tocá «Ver instructivo» para los pasos y el comando listo.",
-    "tm-agent no es parte del servidor: es otro programa que se conecta al servidor con el token de la IA. Se instala con cargo install --git https://github.com/polblancoo/Rust_tuiManager rust-tui-manager-agent y se deja como servicio (systemd, launchd o el Programador de tareas)."],
+    "tm-agent no es parte del servidor: es otro programa que se conecta al servidor con el token de la IA. Se instala con cargo install --git https://github.com/polblancoo/crewhelm crewhelm-agent y se deja como servicio (systemd, launchd o el Programador de tareas)."],
   join: ["Unirme con un código", "Si un admin te pasó un código de invitación, pegalo acá para entrar a su equipo.", null],
   newTeam: ["Crear un equipo", "Creás un equipo nuevo y quedás como Dueño. Después invitás a la gente desde «Miembros, roles e invitaciones».", null],
   project: ["Proyecto", "Un proyecto agrupa las tareas del equipo (tablero, calendario, Gantt y pizarra). Creá uno con «Nuevo proyecto».", null],
@@ -2183,7 +2183,7 @@ const githubProject = guard(async () => {
   if (info.repo !== fromProject && /^[\w.-]+\/[\w.-]+$/.test(fromProject)) {
     await api("PUT", `/api/projects/${p.id}/github`, { repo: fromProject }); info.repo = fromProject;
   }
-  const repo = h("input", { value: info.repo || "", placeholder: "dueño/repositorio, ej. polblancoo/Rust_tuiManager", maxLength: 200 });
+  const repo = h("input", { value: info.repo || "", placeholder: "dueño/repositorio, ej. polblancoo/crewhelm", maxLength: 200 });
   const list = h("div", { class: "subs" });
   const picked = new Set();
   const load = guard(async () => {

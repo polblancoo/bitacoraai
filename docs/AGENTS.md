@@ -1,4 +1,4 @@
-<p align="center"><b>English</b> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.md">Español</a> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.pt.md">Português</a></p>
+<p align="center"><b>English</b> · <a href="https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.md">Español</a> · <a href="https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.pt.md">Português</a></p>
 
 # Guide: let an AI work on its own with `tm-agent`
 
@@ -17,13 +17,13 @@ Everything shows live on the board. This guide is for **whoever installs it** an
 
 The same guide is **inside the app**: *Settings → AI agents → View guide*, and when you create an AI the ready-to-run command with its token is shown.
 
-![tm-agent guide inside the app](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-10-agentes.png)
+![tm-agent guide inside the app](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-10-agentes.png)
 
 ## What you need
 
 - The server running and an account that is **admin or owner** of the team.
 - A machine with the **project folder** and with the agent you want to use installed and signed in (for example `claude`).
-- Rust (`cargo`) to install `tm-agent`. Ready-made installers: see the [ROADMAP](https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md).
+- Rust (`cargo`) to install `tm-agent`. Ready-made installers: see the [ROADMAP](https://github.com/polblancoo/crewhelm/blob/main/ROADMAP.md).
 
 ## Step by step
 
@@ -40,7 +40,7 @@ With **⚙ Project** fill in **Work folder** (for example `/home/ana/projects/ap
 On the project machine:
 
 ```bash
-cargo install rust-tui-manager-agent
+cargo install crewhelm-agent
 ```
 
 ### 4. Choose the agent command
@@ -113,9 +113,9 @@ The command also receives `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_UR
 
 **Asking a human.** Inside a task the AI can run `tm-agent ask "question"`: it raises a 🙋 alarm for the team's owners and admins (in the app and by Telegram) and waits for the answer as a comment.
 
-When the AI asks, the server also **creates a request task** for a person (the task's creator if they have the **Executor** permission; otherwise the executor with the fewest open tasks; with no executors, an admin). The comment says which task and that you can answer right there; commands in the request show with a **📋 Copy** button. See the [guide, chapter 10](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIDE.md#10-when-an-ai-needs-you-to-do-something).
+When the AI asks, the server also **creates a request task** for a person (the task's creator if they have the **Executor** permission; otherwise the executor with the fewest open tasks; with no executors, an admin). The comment says which task and that you can answer right there; commands in the request show with a **📋 Copy** button. See the [guide, chapter 10](https://github.com/polblancoo/crewhelm/blob/main/docs/GUIDE.md#10-when-an-ai-needs-you-to-do-something).
 
-**Ready-to-use example.** In [`examples/`](https://github.com/polblancoo/Rust_tuiManager/tree/main/examples) there is a `run-claude.sh` with allowed and forbidden command lists (`whitelist.txt`, `blacklist.txt`) to use as `TM_AGENT_CMD`.
+**Ready-to-use example.** In [`examples/`](https://github.com/polblancoo/crewhelm/tree/main/examples) there is a `run-claude.sh` with allowed and forbidden command lists (`whitelist.txt`, `blacklist.txt`) to use as `TM_AGENT_CMD`.
 
 ## How it behaves
 

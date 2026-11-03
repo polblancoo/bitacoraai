@@ -1,17 +1,17 @@
 [package]
-name = "rust-tui-manager"
+name = "crewhelm"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Cliente de terminal (ratatui) del tablero de comando rust-tui-manager: proyectos y tareas con personas e IAs"
+description = "Cliente de terminal (ratatui) del tablero de comando CrewHelm: proyectos y tareas con personas e IAs"
 readme = "README.md"
 keywords = ["project-management", "tasks", "ai-agents", "collaboration", "self-hosted"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-tm-core = { package = "rust-tui-manager-core", path = "../core", version = "0.7.1" }
+tm-core = { package = "crewhelm-core", path = "../core", version = "0.7.1" }
 ratatui = "0.29"
 crossterm = "0.28"
 tokio = { version = "1", features = ["full"] }

@@ -1,4 +1,4 @@
-<p align="center"><a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIDE.md">English</a> · <a href="https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/GUIA.md">Español</a> · <b>Português</b></p>
+<p align="center"><a href="https://github.com/polblancoo/crewhelm/blob/main/docs/GUIDE.md">English</a> · <a href="https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.md">Español</a> · <b>Português</b></p>
 
 # Guia passo a passo: seu primeiro projeto no painel de comando
 
@@ -31,13 +31,13 @@ O Rust TUI Manager é um **painel de comando**: um lugar onde você vê e dirige
 
 O servidor guarda tudo (equipes, tarefas, usuários) e serve a web. Instala-se uma vez.
 
-1. Baixe `tm-server-linux-x86_64.tar.gz` da [última versão](https://github.com/polblancoo/Rust_tuiManager/releases/latest) (ou `cargo install rust-tui-manager-server`).
+1. Baixe `tm-server-linux-x86_64.tar.gz` da [última versão](https://github.com/polblancoo/crewhelm/releases/latest) (ou `cargo install crewhelm-server`).
 2. Descompacte e execute `./tm-server`.
 3. Abra `http://localhost:7878` no navegador.
 
-Para que outras pessoas entrem de outras máquinas, coloque o servidor num endereço que elas alcancem (idealmente com HTTPS: veja a [configuração do servidor](https://github.com/polblancoo/Rust_tuiManager/blob/main/README.pt.md)). Se for só para testar, `localhost` basta.
+Para que outras pessoas entrem de outras máquinas, coloque o servidor num endereço que elas alcancem (idealmente com HTTPS: veja a [configuração do servidor](https://github.com/polblancoo/crewhelm/blob/main/README.pt.md)). Se for só para testar, `localhost` basta.
 
-**Instalação de uma linha (Linux x86_64, sem sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/install.sh | sh`. Baixa o servidor do release, **verifica o SHA256** (se não bater, não instala), deixa em `~/.local/bin` e cria um serviço de usuário que inicia sozinho. Opções: `--port N`, `--no-service`, `--with-agent`, `--with-claude`, `--with-gemini`, `--with-codex`, `--with-opencode` (install that AI's program; `--with-all-ais` all four), `--version X`. Na primeira vez que você entra, um **guia de início** com desenhos leva você por equipe, projeto e IA (repita em Configurações → Preferências → 🧭 Guia de início).
+**Instalação de uma linha (Linux x86_64, sem sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh`. Baixa o servidor do release, **verifica o SHA256** (se não bater, não instala), deixa em `~/.local/bin` e cria um serviço de usuário que inicia sozinho. Opções: `--port N`, `--no-service`, `--with-agent`, `--with-claude`, `--with-gemini`, `--with-codex`, `--with-opencode` (install that AI's program; `--with-all-ais` all four), `--version X`. Na primeira vez que você entra, um **guia de início** com desenhos leva você por equipe, projeto e IA (repita em Configurações → Preferências → 🧭 Guia de início).
 
 Se preferir terminal ou janela própria, também há um cliente de terminal e um app de desktop na mesma página de downloads.
 
@@ -52,15 +52,15 @@ Uma **equipe** é o grupo de pessoas e IAs que compartilham projetos. Você pode
 
 Em **Projetos → «+»** crie um para cada coisa que queira levar adiante. No exemplo: um app, uma planilha e um processo, cada um com sua cor.
 
-![Quadro do projeto «App móvel de reservas»](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-01-tablero.png)
+![Quadro do projeto «App móvel de reservas»](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-01-tablero.png)
 
 Cada projeto tem seu **quadro** (A fazer · Em andamento · Concluído). Com **+ Nova tarefa** você carrega o trabalho: título, descrição, prioridade, datas e responsável. Os mesmos dados aparecem também em **calendário**, **Gantt** e **lousa**.
 
-![Outro projeto: uma planilha de orçamento, com responsáveis humanos e de IA](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-08-otro-proyecto.png)
+![Outro projeto: uma planilha de orçamento, com responsáveis humanos e de IA](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-08-otro-proyecto.png)
 
 Cada projeto guarda **onde vive o seu trabalho**: com **⚙ Projeto** (admin ou dono) você define a pasta de trabalho e o repositório, e eles aparecem acima do quadro.
 
-![Editar o projeto: nome, pasta de trabalho e repositório](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-09-proyecto.png)
+![Editar o projeto: nome, pasta de trabalho e repositório](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-09-proyecto.png)
 
 > 💡 Dica: não precisa ser software. Uma planilha, um processo de onboarding ou uma auditoria se tocam do mesmo jeito: tarefas com responsável e data.
 
@@ -71,7 +71,7 @@ Botão **👥 Equipe** (canto superior direito) → **➕ Adicionar / convidar**
 - **Já tem conta**: digite parte do nome, escolha o papel e **Adicionar**.
 - **Ainda não tem conta**: escolha um papel e **Gerar código**. Use **Copiar convite** (texto pronto para WhatsApp ou e-mail com link de download, servidor e código) ou **Enviar por e-mail**.
 
-![Convidar com um código](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-07-invitar.png)
+![Convidar com um código](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-07-invitar.png)
 
 | Papel | O que pode fazer |
 |---|---|
@@ -82,7 +82,7 @@ Botão **👥 Equipe** (canto superior direito) → **➕ Adicionar / convidar**
 
 O painel da equipe mostra cada integrante com seu papel, desde quando está, quem o adicionou e quantas tarefas abertas tem:
 
-![Painel da equipe com pessoas e IAs](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-06-panel-equipo.png)
+![Painel da equipe com pessoas e IAs](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-06-panel-equipo.png)
 
 ## 5. Adicionar IAs
 
@@ -91,15 +91,15 @@ As IAs (Claude Code, Cursor, Windsurf, Zed, Gemini ou outro cliente compatível 
 1. Na barra lateral, **🤖 IAs → «+»**.
 2. Coloque um nome que diga o que ela é (`claude-backend`, `gemini-dados`) e o papel: **Membro** (cria e edita as suas tarefas) ou **Leitor** (só olha).
 
-   ![Nova IA na equipe](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-02-nueva-ia.png)
+   ![Nova IA na equipe](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-02-nueva-ia.png)
 
 3. Mostra-se **o token uma única vez**, com a configuração MCP pronta para copiar. É a «chave» dessa IA.
 
-   ![Token da IA e configuração MCP](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-03-token.png)
+   ![Token da IA e configuração MCP](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-03-token.png)
 
 4. Se perder ou quiser cortar: clique na IA → **Novo token** (o anterior deixa de valer) ou **Revogar**.
 
-   ![Ficha de uma IA](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-03-ia.png)
+   ![Ficha de uma IA](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-03-ia.png)
 
 **O que uma IA pode e não pode fazer**
 
@@ -107,7 +107,7 @@ As IAs (Claude Code, Cursor, Windsurf, Zed, Gemini ou outro cliente compatível 
 - ❌ Criar ou apagar equipes, convidar pessoas, mudar papéis, ou mexer em tarefas alheias (exceto comentar).
 - Tudo o que faz fica **em seu nome** na atividade, e aparece com 🤖 no painel.
 
-> 🚧 **Estado**: as contas de IA e seus tokens já funcionam contra a API do servidor. O binário `tm-mcp` e o *skill* que as conectam direto à sua plataforma de código estão em desenvolvimento (veja o [ROADMAP](https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md)). Enquanto isso, o **`tm-agent`** já permite que uma IA pegue sozinha as tarefas atribuídas: veja o [guia de agentes](https://github.com/polblancoo/Rust_tuiManager/blob/main/docs/AGENTES.pt.md).
+> 🚧 **Estado**: as contas de IA e seus tokens já funcionam contra a API do servidor. O binário `tm-mcp` e o *skill* que as conectam direto à sua plataforma de código estão em desenvolvimento (veja o [ROADMAP](https://github.com/polblancoo/crewhelm/blob/main/ROADMAP.md)). Enquanto isso, o **`tm-agent`** já permite que uma IA pegue sozinha as tarefas atribuídas: veja o [guia de agentes](https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.pt.md).
 
 ## 6. Montar e atribuir tarefas
 
@@ -128,9 +128,9 @@ Tudo se atualiza **ao vivo**: não precisa recarregar.
 | **Calendário** | O que vence a cada dia. |
 | **🔔 Caixa de entrada** | Novidades: atribuições, menções, mensagens. Também por e-mail e Telegram. |
 
-![Gantt do projeto, com tarefas de pessoas e de IAs](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-04-gantt.png)
+![Gantt do projeto, com tarefas de pessoas e de IAs](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-04-gantt.png)
 
-![Atividade: o histórico do projeto, com as ações das IAs em seu nome](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-05-actividad.png)
+![Atividade: o histórico do projeto, com as ações das IAs em seu nome](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-05-actividad.png)
 
 Além disso, o **Google Calendar** (suas tarefas com data aparecem na sua agenda) é conectado em **Configurações**.
 
@@ -138,7 +138,7 @@ Além disso, o **Google Calendar** (suas tarefas com data aparecem na sua agenda
 
 Hoje, para delegar um projeto: adicione a pessoa com o papel **Admin** (pode atribuir tarefas, adicionar gente e gerar convites) e atribua a ela as tarefas principais. Ela monta a sua parte e traz a sua gente.
 
-> 🚧 **Em breve**: **líder por projeto** (com alcance só nesse projeto), **escopo configurável por IA** (em quais projetos mexe, se pode convidar outras IAs) e **relatórios de andamento** com gráficos. Veja o [roteiro](https://github.com/polblancoo/Rust_tuiManager/blob/main/ROADMAP.md).
+> 🚧 **Em breve**: **líder por projeto** (com alcance só nesse projeto), **escopo configurável por IA** (em quais projetos mexe, se pode convidar outras IAs) e **relatórios de andamento** com gráficos. Veja o [roteiro](https://github.com/polblancoo/crewhelm/blob/main/ROADMAP.md).
 
 ## 9. Dirigir vários projetos ao mesmo tempo
 
@@ -149,7 +149,7 @@ Hoje, para delegar um projeto: adicione a pessoa com o papel **Admin** (pode atr
 - **Estado**: 🟢 em dia · 🔴 com tarefas atrasadas · 🟡 sem movimento há 7 dias · ✅ concluído · ⚪ sem tarefas.
 - **Embaixo**: o que as IAs fizeram por último. Um clique no cartão abre o projeto, e tudo se atualiza ao vivo.
 
-![Portfólio com todos os projetos](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-11-portafolio.png)
+![Portfólio com todos os projetos](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-11-portafolio.png)
 
 **Tarefas numeradas.** Cada tarefa mostra seu número (`#12`) no cartão e no detalhe, para citá-la sem ambiguidade em mensagens e comentários.
 
@@ -165,7 +165,7 @@ Uma IA pode esbarrar em algo que não faz sozinha: um comando bloqueado, uma per
 4. Se o pedido é uma **decisão ou permissão** («posso apagar X?»), use **✅ Autorizar** ou **❌ Rejeitar** (com o motivo na caixa). Para um comando que a IA tem bloqueado, «autorizar» não basta: execute você e envie a saída.
 5. A IA lê na próxima consulta (a cada 10 s) e segue. Ao enviar, o pedido passa sozinho para Concluída.
 
-![Pedido de uma IA: tarefa criada, comando para copiar](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-12-pedido.png)
+![Pedido de uma IA: tarefa criada, comando para copiar](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-12-pedido.png)
 
 **Para quem vai?** Para os membros com a permissão **Executor** (janela da equipe → caixa *Executor* ao lado de cada pessoa; só um admin altera, e as IAs não podem ser executoras):
 
@@ -181,7 +181,7 @@ Uma IA pode esbarrar em algo que não faz sozinha: um comando bloqueado, uma per
 - **Tooltips**: passe o cursor sobre um botão para ver o que faz.
 - **Este manual** fica dentro do app: botão **📖 Manual** (embaixo à esquerda, ou *Configurações → Ajuda*). Tem busca e um índice por temas com links.
 
-![O manual dentro do app, com busca](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-13-manual.png)
+![O manual dentro do app, com busca](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-13-manual.png)
 
 ## 12. Configurar o email do servidor
 
@@ -230,7 +230,7 @@ Depois: `systemctl --user daemon-reload && systemctl --user restart tm-server`. 
 
 Quando uma IA pede um comando, abra a tarefa de pedido e toque em **✅ Permitir comando…**. A caixa mostra o comando, **explica o que ele faz** (aviso vermelho se for perigoso) e deixa escolher **uma vez** ou **sempre**. Também dá para escrever `/permitir cmd` (uma vez) ou `/permitir siempre cmd` (só owners e admins) num comentário. A IA recebe as permissões em `TM_ALLOW` e retoma a tarefa.
 
-![Permitir comando](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-16-permitir.png)
+![Permitir comando](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-16-permitir.png)
 
 ## 14. Terminal no navegador
 
@@ -241,14 +241,14 @@ Só para **owners**. O botão **💻 Terminal** da tarefa abre um console na pas
 
 Cada sessão deixa um comentário 📝 e uma nota `.tm/terminal-tarea-N.md` na pasta do projeto, que a IA lê ao retomar. No menu, **🖥️ Terminais** mostra até 8 painéis e o estado de cada IA (🙋 precisa de você · ⚙️ trabalhando · ⏳ na fila · ✅ terminou).
 
-![Vista Terminais](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-14-terminales.png)
+![Vista Terminais](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-14-terminales.png)
 
 ## 15. Consumo e cotas
 
 **💰 Consumo** mostra tokens, custo e horas por IA e por tarefa, com barras de **cota** da equipe, do projeto e da tarefa. Numa tarefa, **🪙 Tokens a gastar** define um teto e **🧮 Estimar** sugere um valor pelo histórico. A cota é verificada **antes** de cada execução: se faltar, a IA não começa e avisa num comentário. Para cortar em dólares use `TM_AGENT_MAX_USD` no agente (1 USD ou mais). O Portfólio soma o consumo do mês.
 
-![Consumo](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-15-consumo.png)
-![Teto de tokens](https://raw.githubusercontent.com/polblancoo/Rust_tuiManager/main/docs/screenshots/guia-17-tokens.png)
+![Consumo](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-15-consumo.png)
+![Teto de tokens](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-17-tokens.png)
 
 ## 16. Licença comercial e aviso de instalação
 
@@ -279,7 +279,7 @@ O **aviso** no topo aparece com mais de 3 pessoas ou 2 IAs, ou se você declarar
 
 ---
 
-**Algo não ficou claro?** Cada opção de **Configurações** tem um «?» com ajuda. E se encontrar um problema, abra uma [issue](https://github.com/polblancoo/Rust_tuiManager/issues).
+**Algo não ficou claro?** Cada opção de **Configurações** tem um «?» com ajuda. E se encontrar um problema, abra uma [issue](https://github.com/polblancoo/crewhelm/issues).
 
 ## 17. Novidades da interface (0.7.1)
 

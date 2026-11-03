@@ -1,11 +1,11 @@
 [package]
-name = "rust-tui-manager-agent"
+name = "crewhelm-agent"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "tm-agent: vigila el tablero de comando rust-tui-manager y pone a trabajar a una IA cuando le asignan una tarea"
+description = "tm-agent: vigila el tablero de comando CrewHelm y pone a trabajar a una IA cuando le asignan una tarea"
 readme = "README.md"
 keywords = ["project-management", "ai-agents", "automation", "mcp", "self-hosted"]
 categories = ["command-line-utilities"]

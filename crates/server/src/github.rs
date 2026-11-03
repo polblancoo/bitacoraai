@@ -278,7 +278,7 @@ async fn set_project_repo(State(st): State<AppState>, user: AuthUser, Path(proje
         return Ok(Json(json!({ "repo": null })));
     }
     if !valid_repo(&repo) {
-        return Err(AppError::bad("Escribilo como dueño/repositorio, por ejemplo polblancoo/Rust_tuiManager"));
+        return Err(AppError::bad("Escribilo como dueño/repositorio, por ejemplo polblancoo/crewhelm"));
     }
     sqlx::query("INSERT INTO project_github (project_id, repo) VALUES (?, ?) ON CONFLICT(project_id) DO UPDATE SET repo = excluded.repo")
         .bind(project)
