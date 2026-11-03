@@ -1907,7 +1907,8 @@ function appView() {
         h("button", { class: "ghost", onclick: logoutAll, title: "Cierra la sesión en todos los dispositivos" }, "⏻"))),
     h("main", {},
       barTop.length > 0 && h("div", { class: "bars" }, barTop),
-      S.project && !S.portfolio && !S.terms && (S.project.work_dir || S.project.repo) && h("div", { class: "proj-meta" },
+      S.project && !S.portfolio && !S.terms && h("div", { class: "proj-meta" },
+        !S.project.work_dir && !S.project.repo && h("span", { class: "hint" }, "Sin carpeta de trabajo ni repositorio ", can("admin") && h("button", { class: "ghost", onclick: editProject, title: "Definir la carpeta de trabajo y el repositorio" }, "✏️ Definir")),
         S.project.work_dir && h("span", { title: "Carpeta de trabajo" }, "📁 " + S.project.work_dir, " ",
           h("button", { class: "ghost", title: "Abre la carpeta si estás en la máquina del servidor; desde otra máquina copia la ruta", onclick: async () => {
             try { await api("POST", `/api/projects/${S.project.id}/open-folder`); toast("Carpeta abierta"); }
