@@ -1254,6 +1254,7 @@ function chatPanel() {
     CHAT.el = h("section", { class: "chat-panel" },
       h("div", { class: "row" }, h("strong", {}, "💬 Comunicación"), h("span", { class: "spacer" }),
         callItem() && h("button", { class: "ghost", title: "Iniciar una videollamada en esta conversación e invitar por acá", onclick: chatCall }, "📞 Llamar"),
+        callItem() && can("member") && h("button", { class: "ghost", title: "Invitar a alguien de afuera (proveedor, cliente) con un enlace único", onclick: inviteModal }, "🔗"),
         CHAT.trCfg?.enabled && h("button", { class: "ghost" + (trWanted() ? " on" : ""), title: trWanted() ? "Traducción automática activada: tocá para ver todo en su idioma original" : "Traducción automática desactivada: tocá para activarla", onclick: () => { store.set("chatTr", trWanted() ? "0" : "1"); chatDraw(); } }, "🌐"),
         can("admin") && h("button", { class: "ghost", title: "Traducción automática del chat (configurar)", onclick: chatTrModal }, "⚙🌐"),
         can("admin") && h("button", { class: "ghost", title: "Registro de todo lo que pasó en el chat", onclick: chatAudit }, "🧾"),
@@ -2447,6 +2448,38 @@ const chatCall = guard(async () => {
   if (c.t === "dm") payload.to = c.id; else if (c.t === "project") payload.project_id = c.id;
   const m = await api("POST", `/api/teams/${S.team.id}/chat`, payload);
   chatAdd(m); openCall(room);
+});
+// invitar a alguien de afuera (proveedor, cliente): sala propia, código único con vencimiento, copiar o mandar por email
+const inviteModal = guard(async () => {
+  if (!callItem()) { toast(can("admin") ? "Primero configurá la videollamada en Configuración → Integraciones" : "El administrador todavía no configuró la videollamada", true); return; }
+  document.getElementById("invite-modal")?.remove();
+  const label = h("input", { placeholder: "Para quién (opcional): Proveedor X, cliente…", maxLength: 60 });
+  const hours = h("select", {}, [["1", "1 hora"], ["4", "4 horas"], ["24", "24 horas"], ["168", "7 días"]].map(([v, t]) => h("option", { value: v, selected: v === "24" }, "Vale " + t)));
+  const out = h("div", {}), list = h("div", { class: "inv-list" }), box = h("div", { class: "overlay", id: "invite-modal", onmousedown: (e) => e.target === box && box.remove() });
+  const link = (code) => `${location.origin}/j/${code}`;
+  const showList = async () => {
+    const r = await api("GET", `/api/teams/${S.team.id}/call-invites`);
+    list.replaceChildren(r.items.length > 0 && h("h5", {}, "Invitaciones vigentes"), r.items.map((i) => h("div", { class: "cfg-line" },
+      h("span", { class: "grow" }, `${i.label || "Sin nombre"} · ${i.by} · vence ${i.expires_at.slice(5, 16)} UTC · usada ${i.uses}×`),
+      h("button", { class: "ghost", title: "Copiar el enlace", onclick: () => copy(link(i.code), "Enlace copiado") }, "📋"),
+      h("button", { class: "ghost", title: "Anular: el enlace deja de funcionar", onclick: guard(async () => { await api("DELETE", `/api/teams/${S.team.id}/call-invites/${i.code}`); showList(); }) }, "🚫"))));
+    return r;
+  };
+  const crear = guard(async () => {
+    const r = await api("POST", `/api/teams/${S.team.id}/call-invites`, { label: label.value, hours: +hours.value });
+    const url = link(r.code), mail = h("input", { type: "email", placeholder: "email de la persona invitada", maxLength: 120 });
+    out.replaceChildren(h("p", { class: "hint" }, "Quien tenga este enlace entra a esta sala, sin cuenta y sin ver nada más de CrewHelm. Anulalo cuando termine."),
+      h("input", { readonly: true, value: url, onfocus: (e) => e.target.select() }),
+      h("div", { class: "row" }, h("button", { class: "primary", onclick: () => copy(url, "Enlace copiado") }, "📋 Copiar enlace"), h("button", { onclick: () => { openCall(r.room); box.remove(); } }, "📞 Entrar yo ahora")),
+      r.email_available ? h("div", { class: "row" }, mail, h("button", { onclick: guard(async () => { await api("POST", `/api/teams/${S.team.id}/call-invites/${r.code}/email`, { to: mail.value, origin: location.origin }); toast("Invitación enviada por email"); }) }, "✉ Enviar por email"))
+        : h("small", { class: "hint" }, "Este servidor no tiene el envío de emails configurado: copiá el enlace y mandalo por tu medio."));
+    showList();
+  });
+  box.append(h("div", { class: "modal small" }, h("h3", {}, "🔗 Invitar a alguien de afuera"),
+    h("p", { class: "hint" }, "Genera una sala nueva y un enlace único con vencimiento para un proveedor, cliente o cualquier persona que no es del equipo."),
+    label, hours, h("div", { class: "row" }, h("button", { class: "primary", onclick: crear }, "Crear invitación")), out, list,
+    h("div", { class: "row" }, h("button", { onclick: () => box.remove() }, "Cerrar"))));
+  document.body.append(box); showList();
 });
 function drawDock() {
   let d = document.getElementById("integ-dock");

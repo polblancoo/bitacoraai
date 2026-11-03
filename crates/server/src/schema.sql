@@ -405,6 +405,19 @@ CREATE TABLE IF NOT EXISTS integrations (
 );
 CREATE INDEX IF NOT EXISTS integrations_team ON integrations(team_id);
 
+-- invitaciones a una videollamada para gente de afuera (proveedores, clientes): código único, con vencimiento y revocable
+CREATE TABLE IF NOT EXISTS call_invites (
+    code TEXT PRIMARY KEY,
+    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    room TEXT NOT NULL,
+    created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    label TEXT NOT NULL DEFAULT '',
+    expires_at TEXT NOT NULL,
+    revoked INTEGER NOT NULL DEFAULT 0,
+    uses INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS chat_tr_cfg (
     team_id INTEGER PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE,
     enabled INTEGER NOT NULL DEFAULT 0,
