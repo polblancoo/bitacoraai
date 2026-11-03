@@ -725,3 +725,27 @@ aside { gap: 10px; }
 .tfolder { display: grid; gap: 8px; padding-top: 6px; }
 .ghost-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px dashed var(--line); border-radius: 8px; cursor: pointer; color: var(--dim); font-size: 13px; }
 .ghost-btn:hover { border-color: var(--blue); color: var(--fg); }
+
+/* integraciones */
+#integ-dock { position: fixed; right: 16px; bottom: 16px; width: min(460px, 94vw); height: 340px; z-index: 60; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 40px #0006; overflow: hidden; }
+#integ-dock.max { width: min(1100px, 96vw); height: min(720px, 88vh); }
+#integ-dock.min { height: 40px; }
+#integ-dock.min .dock-frames { display: none; }
+.dock-head { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--line); background: var(--bg2); }
+.dock-tab { padding: 4px 8px; font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+.dock-tab.on { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, var(--card2)); }
+.dock-x { opacity: .6; } .dock-x:hover { opacity: 1; color: var(--red); }
+.dock-frames { flex: 1; min-height: 0; display: flex; }
+.dock-frames iframe { flex: 1; border: 0; width: 100%; background: #000; }
+.integ-body { display: grid; gap: 10px; }
+.integ-row { display: grid; grid-template-columns: 52px 1fr 2fr 150px 34px; gap: 6px; align-items: center; }
+.integ-ico { text-align: center; }
+.wiz-steps { display: flex; gap: 6px; flex-wrap: wrap; }
+.wiz-step { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--card2); color: var(--dim); }
+.wiz-step.on { background: var(--blue); color: #fff; } .wiz-step.ok { color: var(--green); }
+.wiz-main { display: grid; gap: 10px; }
+.modal .wiz-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; color: var(--fg); font-size: 14px; }
+.wiz-opt:hover { border-color: var(--blue); } .wiz-opt input { width: auto; margin-top: 4px; }
+.wiz-opt small { display: block; color: var(--dim); margin-top: 2px; font-size: 12px; }
+.wiz-url { font-family: ui-monospace, monospace; font-size: 12px; background: var(--bg2); padding: 8px; border-radius: 8px; word-break: break-all; }
+@media (max-width: 760px) { .integ-row { grid-template-columns: 1fr 1fr; } .integ-url { grid-column: 1 / -1; } }

@@ -35,12 +35,31 @@ struct Q {
     name: String,
 }
 
-/// Carpeta de la tarea en la máquina del servidor (None si el proyecto no tiene carpeta o no está acá).
-async fn task_dir(st: &AppState, task: Id) -> Option<PathBuf> {
+/// `<carpeta del proyecto>/.crewhelm` en la máquina del servidor (None si el proyecto no tiene carpeta o no está acá).
+async fn crew_dir(st: &AppState, task: Id) -> Option<PathBuf> {
     let wd: Option<String> = sqlx::query_scalar("SELECT p.work_dir FROM projects p JOIN tasks t ON t.project_id = p.id WHERE t.id = ?").bind(task).fetch_optional(&st.db).await.ok().flatten();
     let wd = wd.filter(|w| !w.trim().is_empty())?;
-    let base = std::fs::canonicalize(&wd).ok()?;
-    Some(base.join(".crewhelm").join("tareas").join(task.to_string()))
+    Some(std::fs::canonicalize(&wd).ok()?.join(".crewhelm"))
+}
+
+/// Disposición: `.crewhelm/<usuario>/<tarea>/` (el «home» de cada responsable) y `.crewhelm/_tareas/<tarea>/final/` (la entrega).
+fn user_dir(root: &std::path::Path, user: &str, task: Id) -> PathBuf {
+    root.join(flow::safe_name(user)).join(task.to_string())
+}
+fn final_dir(root: &std::path::Path, task: Id) -> PathBuf {
+    root.join("_tareas").join(task.to_string()).join("final")
+}
+
+/// Traduce una ruta de la vista («final/x», «pablo/informe.txt») a la real; rechaza todo lo que salga de su carpeta.
+fn resolve(root: &std::path::Path, task: Id, rel: &str) -> Result<PathBuf> {
+    let mut parts = rel.split('/').filter(|p| !p.is_empty());
+    let first = parts.next().ok_or_else(|| AppError::bad("ruta no permitida"))?;
+    if first.starts_with('.') || first.starts_with('_') || first != flow::safe_name(first) && first != "final" {
+        return Err(AppError::bad("ruta no permitida"));
+    }
+    let base = if first == "final" { final_dir(root, task) } else { user_dir(root, first, task) };
+    let rest: Vec<&str> = parts.collect();
+    inside(&base, &rest.join("/"))
 }
 
 /// Une partes de ruta ya validadas: sin «..», sin vacíos ni NUL, y el resultado (con enlaces resueltos) no sale de `root`.
@@ -64,24 +83,34 @@ async fn list(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>, Qu
     user.human_only()?;
     let team = routes::team_of_task(&st, id).await?;
     routes::require(&st, team, user.id, Role::Viewer).await?;
-    let Some(root) = task_dir(&st, id).await.filter(|d| d.is_dir()) else {
-        let has = sqlx::query_scalar::<_, String>("SELECT p.work_dir FROM projects p JOIN tasks t ON t.project_id = p.id WHERE t.id = ?").bind(id).fetch_optional(&st.db).await.ok().flatten().is_some_and(|w| !w.trim().is_empty());
-        return Ok(Json(json!({ "exists": false, "entries": [], "path": "", "reason": if has { "Todavía no hay archivos de esta tarea (o la carpeta del proyecto no está en la máquina del servidor)." } else { "El proyecto no tiene carpeta de trabajo." } })));
+    let path = q.path.trim_matches('/').to_string();
+    let none = |why: &str| Json(json!({ "exists": false, "entries": [], "path": "", "reason": why }));
+    let Some(root) = crew_dir(&st, id).await.filter(|d| d.is_dir()) else {
+        return Ok(none("Todavía no hay archivos de esta tarea (o la carpeta del proyecto no está en la máquina del servidor)."));
     };
-    let dir = inside(&root, &q.path)?;
-    let mut items: Vec<(bool, String, u64)> = std::fs::read_dir(&dir).map_err(|_| AppError::bad("no es una carpeta"))?
-        .flatten()
-        .filter_map(|e| {
-            let real = std::fs::canonicalize(e.path()).ok().filter(|p| p.starts_with(std::fs::canonicalize(&root).unwrap_or_default()))?;
-            let md = std::fs::metadata(&real).ok()?;
-            Some((md.is_dir(), e.file_name().to_string_lossy().into_owned(), md.len()))
-        })
-        .collect();
-    items.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.to_lowercase().cmp(&b.1.to_lowercase())));
+    let mut items: Vec<(bool, String, u64)> = Vec::new();
+    if path.is_empty() {
+        // raíz de la tarea: la carpeta de cada participante que trabajó en ella, y final/
+        for e in std::fs::read_dir(&root).map_err(|_| AppError::bad("no se pudo leer"))?.flatten() {
+            let n = e.file_name().to_string_lossy().into_owned();
+            if n.starts_with('.') || n.starts_with('_') || !e.path().join(id.to_string()).is_dir() { continue; }
+            items.push((true, n, 0));
+        }
+        if final_dir(&root, id).is_dir() { items.push((true, "final".into(), 0)); }
+    } else {
+        let dir = resolve(&root, id, &path)?;
+        let base = std::fs::canonicalize(dir.ancestors().find(|a| a.file_name().is_some_and(|n| *n == *id.to_string()) || a.ends_with("final")).unwrap_or(&dir)).unwrap_or_else(|_| dir.clone());
+        for e in std::fs::read_dir(&dir).map_err(|_| AppError::bad("no es una carpeta"))?.flatten() {
+            let Some(real) = std::fs::canonicalize(e.path()).ok().filter(|p| p.starts_with(&base)) else { continue };
+            let Ok(md) = std::fs::metadata(&real) else { continue };
+            items.push((md.is_dir(), e.file_name().to_string_lossy().into_owned(), md.len()));
+        }
+    }
+    items.sort_by(|a, b| (a.1 != "final").cmp(&(b.1 != "final")).then(b.0.cmp(&a.0)).then(a.1.to_lowercase().cmp(&b.1.to_lowercase())));
     let truncated = items.len() > ENTRIES_MAX;
     items.truncate(ENTRIES_MAX);
     Ok(Json(json!({
-        "exists": true, "path": q.path.trim_matches('/'), "truncated": truncated,
+        "exists": true, "path": path, "truncated": truncated,
         "entries": items.iter().map(|(d, n, s)| json!({ "name": n, "dir": d, "size": s })).collect::<Vec<_>>(),
     })))
 }
@@ -90,8 +119,8 @@ async fn download(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>
     user.human_only()?;
     let team = routes::team_of_task(&st, id).await?;
     routes::require(&st, team, user.id, Role::Viewer).await?;
-    let root = task_dir(&st, id).await.ok_or_else(|| AppError::bad("la tarea no tiene carpeta"))?;
-    let file = inside(&root, &q.path)?;
+    let root = crew_dir(&st, id).await.ok_or_else(|| AppError::bad("la tarea no tiene carpeta"))?;
+    let file = resolve(&root, id, &q.path)?;
     let md = std::fs::metadata(&file).map_err(|_| AppError::bad("no existe"))?;
     if !md.is_file() {
         return Err(AppError::bad("no es un archivo"));
@@ -132,13 +161,13 @@ async fn upload(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>, 
     if body.len() > FILE_MAX {
         return Err(AppError(axum::http::StatusCode::PAYLOAD_TOO_LARGE, "máximo 25 MB por archivo".into()));
     }
-    let root = task_dir(&st, id).await.ok_or_else(|| AppError::bad("el proyecto no tiene carpeta de trabajo en la máquina del servidor"))?;
+    let root = crew_dir(&st, id).await.ok_or_else(|| AppError::bad("el proyecto no tiene carpeta de trabajo en la máquina del servidor"))?;
     let me = crate::notify::username_of(&st, user.id).await;
-    let dir = root.join(flow::safe_name(&me));
+    let dir = user_dir(&root, &me, id);
     std::fs::create_dir_all(&dir).map_err(|_| AppError::bad("no se pudo crear la carpeta"))?;
-    let _ = std::fs::create_dir_all(root.join("final"));
-    let gi = root.parent().and_then(|p| p.parent()).map(|p| p.join(".gitignore"));
-    if let Some(gi) = gi.filter(|g| !g.exists()) { let _ = std::fs::write(gi, "*\n"); }
+    let _ = std::fs::create_dir_all(final_dir(&root, id));
+    let gi = root.join(".gitignore");
+    if !gi.exists() { let _ = std::fs::write(gi, "*\n"); }
     std::fs::write(dir.join(&name), &body).map_err(|_| AppError::bad("no se pudo guardar"))?;
     crate::extras::log_task(&st, id, user.id, format!("subió «{name}» a su carpeta de la tarea")).await;
     Ok(Json(json!({ "ok": true, "path": format!("{}/{}", flow::safe_name(&me), name) })))
@@ -160,5 +189,5 @@ async fn publish(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>)
     let author = if let Some(a) = flow_author { a } else { match t.assignee_id { Some(a) => crate::notify::username_of(&st, a).await, None => crate::notify::username_of(&st, user.id).await } };
     let who = crate::notify::username_of(&st, user.id).await;
     flow::publish_final(&st, team, id, user.id, &author).await;
-    Ok(Json(flow::finish(&st, team, id, user.id, format!("✅ {who} aprobó y publicó el trabajo de {author} en `.crewhelm/tareas/{id}/final/`.")).await?))
+    Ok(Json(flow::finish(&st, team, id, user.id, format!("✅ {who} aprobó y publicó el trabajo de {author} en `.crewhelm/_tareas/{id}/final/`.")).await?))
 }

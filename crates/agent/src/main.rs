@@ -225,12 +225,12 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     };
     log(&format!("▶ #{} «{}» en {}", job.id, job.title, dir.display()));
     api.say(job.id, &format!("▶ Empiezo con esta tarea. Trabajo en `{}`.", dir.display())).await;
-    // carpeta propia de esta tarea: .crewhelm/tareas/<id>/<usuario>/ (y final/, que llena el servidor al aprobarse el flujo)
+    // carpeta propia de esta tarea: .crewhelm/<usuario>/<id>/ (y final/, que llena el servidor al aprobarse el flujo)
     let me_name = api.get("/api/me").await.ok().and_then(|v| v["username"].as_str().map(String::from)).unwrap_or_else(|| "ia".into());
     let safe: String = me_name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
-    let mine = dir.join(".crewhelm").join("tareas").join(job.id.to_string()).join(safe);
+    let mine = dir.join(".crewhelm").join(safe).join(job.id.to_string());
     let _ = std::fs::create_dir_all(&mine);
-    let _ = std::fs::create_dir_all(mine.parent().unwrap().join("final"));
+    let _ = std::fs::create_dir_all(dir.join(".crewhelm/_tareas").join(job.id.to_string()).join("final"));
     let _ = std::fs::write(dir.join(".crewhelm/.gitignore"), "*\n");
     let prompt = prompt_for(api, job, &dir, &mine).await;
 

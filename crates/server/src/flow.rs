@@ -167,18 +167,18 @@ fn copy_tree(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<us
     Ok(n)
 }
 
-/// Al terminar el flujo: lo que dejó la última etapa de trabajo en `.crewhelm/tareas/<id>/<usuario>/` se copia a `final/`.
+/// Al terminar el flujo: lo que dejó la última etapa de trabajo en `.crewhelm/<usuario>/<id>/` se copia a `final/`.
 /// Solo funciona si la carpeta del proyecto está en la máquina del servidor.
 pub(crate) async fn publish_final(st: &AppState, team: Id, task: Id, actor: Id, author: &str) {
     let wd: Option<String> = sqlx::query_scalar("SELECT p.work_dir FROM projects p JOIN tasks t ON t.project_id = p.id WHERE t.id = ?").bind(task).fetch_optional(&st.db).await.ok().flatten();
     let Some(wd) = wd.filter(|w| !w.trim().is_empty()) else { return };
-    let base = std::path::PathBuf::from(&wd).join(".crewhelm").join("tareas").join(task.to_string());
-    let from = base.join(safe_name(author));
+    let crew = std::path::PathBuf::from(&wd).join(".crewhelm");
+    let from = crew.join(safe_name(author)).join(task.to_string());
     if !from.is_dir() { return; }
-    let to = base.join("final");
+    let to = crew.join("_tareas").join(task.to_string()).join("final");
     let r = tokio::task::spawn_blocking(move || copy_tree(&from, &to)).await;
     if let Ok(Ok(n)) = r {
-        if n > 0 { post_comment(st, team, task, actor, format!("📦 Entrega final: {n} archivo(s) de {author} copiados a `.crewhelm/tareas/{task}/final/`.")).await; }
+        if n > 0 { post_comment(st, team, task, actor, format!("📦 Entrega final: {n} archivo(s) de {author} copiados a `.crewhelm/_tareas/{task}/final/`.")).await; }
     }
 }
 

@@ -393,3 +393,14 @@ CREATE TABLE IF NOT EXISTS bot_chat_intro (
     user_id INTEGER NOT NULL,
     PRIMARY KEY (bot_id, user_id)
 );
+
+CREATE TABLE IF NOT EXISTS integrations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT '🔌',
+    url TEXT NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'tab',
+    position INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS integrations_team ON integrations(team_id);

@@ -72,6 +72,6 @@ pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
         .layer(set(header::CACHE_CONTROL, "no-cache"))
         .layer(set(
             header::CONTENT_SECURITY_POLICY,
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src https: http:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
         ))
 }

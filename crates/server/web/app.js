@@ -365,7 +365,7 @@ async function selectTeam(team) {
     if (profileOf().view && !store.get("view")) S.view = profileOf().view;
     await selectProject(S.projects[0] || null);
     loadOverview();
-    CHAT.unread = {}; CHAT.total = 0; chatUnreadLoad();
+    CHAT.unread = {}; CHAT.total = 0; chatUnreadLoad(); loadInteg();
   } else render();
 }
 // Mensajes que le llegaron mientras no estaba conectado: cuenta los no leídos y, una vez por equipo, avisa con una burbuja.
@@ -1933,6 +1933,7 @@ function appView() {
         h("div", { class: "members" }, S.members.map((m) => avatar(m.username))),
   ];
   const barActs = [
+        ...(S.team && !S.portfolio && !S.terms ? (S.integ?.items || []).map((it) => h("button", { onclick: () => openInteg(it), title: it.mode === "panel" ? "Se abre en una pestaña flotante, sin salir del tablero" : "Se abre en una ventana nueva" }, it.icon + " " + it.name)) : []),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openSchedules, title: "Tareas que se crean solas a una hora fija: cada día, semana o mes" }, "⏰ Programadas"),
         S.project && !S.portfolio && !S.terms && h("button", { onclick: openUsage, title: "Cuánto gastaron las IAs en este proyecto: tokens, costo, horas y cuotas" }, "💰 Consumo"),
         S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
@@ -2151,6 +2152,7 @@ const CFG_HELP = {
   perfil: ["Perfil de uso", "Prepara la interfaz según para qué usan el equipo: cambia los nombres de las columnas y oculta lo técnico (terminales, carpeta del código) si no hace falta. «Cargar ejemplo» crea un proyecto de muestra con tareas; «Eliminar ejemplo» lo borra entero y deja todo limpio. No toca tus proyectos reales.", null],
   duplicate: ["Usar como plantilla", "Crea un proyecto nuevo copiando las tareas, etiquetas y dependencias del actual, para repetir un proceso sin armarlo de cero.", null],
   export: ["Exportar", "Descarga todas las tareas del proyecto en CSV (para planilla) o JSON (para copia de seguridad o scripts).", null],
+  integrations: ["Integraciones", "Sumá herramientas externas (por ejemplo una videollamada con Jitsi) como botones en la barra de arriba. Con el asistente queda lista en tres pasos, con salida a internet o con tu propio servidor. Las configura un administrador y las usa todo el equipo.", null],
   bars: ["Posición de los botones", "Elegí si los botones del proyecto (Programadas, Consumo, GitHub, Proyecto, Equipo…) y las vistas con el buscador (Tablero, Calendario, Gantt…) van arriba o abajo de la pantalla. Se guarda solo en este dispositivo.", null],
   chatExts: ["Archivos del chat", "Qué tipos de archivo se pueden mandar por el chat (hasta 5 MB cada uno). Rige para todo el servidor y lo cambia el dueño de un equipo. Los programas, scripts, HTML y SVG nunca se pueden enviar. Los comprimidos (zip, rar…) vienen apagados porque pueden esconder programas.", null],
   avatar: ["Tu avatar", "El dibujito (emoji) que ven los demás junto a tu nombre: en el chat, el equipo y las tareas. Si no elegís, se ven tus iniciales.", null],
@@ -2297,6 +2299,108 @@ const githubProject = guard(async () => {
   document.body.append(box);
   if (info.repo) load();
 });
+// ---------- integraciones: videollamada (Jitsi) y otras herramientas, en una pestaña flotante o en ventana nueva ----------
+async function loadInteg() {
+  const id = S.team?.id; if (!id) { S.integ = null; return; }
+  try { const r = await api("GET", `/api/teams/${id}/integrations`); if (S.team?.id === id) { S.integ = r; render(true); } } catch { S.integ = null; }
+}
+const integUrl = (u) => u.replaceAll("{sala}", encodeURIComponent(S.integ?.room || "")).replaceAll("{equipo}", encodeURIComponent((S.integ?.team || "").replace(/\s+/g, "-"))).replaceAll("{usuario}", encodeURIComponent(S.user?.username || ""));
+const DOCK = { tabs: [], active: null };
+function openInteg(it) {
+  if (it.mode !== "panel") { window.open(integUrl(it.url), "_blank", "noopener,noreferrer"); return; }
+  if (!DOCK.tabs.some((t) => t.id === it.id)) DOCK.tabs.push({ id: it.id, name: it.name, icon: it.icon, src: integUrl(it.url) });
+  DOCK.active = it.id; drawDock();
+}
+function drawDock() {
+  let d = document.getElementById("integ-dock");
+  if (!DOCK.tabs.length) { d?.remove(); return; }
+  if (!d) { d = h("div", { id: "integ-dock", class: store.get("dockMax") === "1" ? "max" : "" }); document.body.append(d); }
+  const frames = d.querySelector(".dock-frames") || h("div", { class: "dock-frames" });
+  // los marcos se conservan entre redibujos para no cortar la llamada
+  for (const t of DOCK.tabs) {
+    let f = frames.querySelector(`[data-tab="${t.id}"]`);
+    if (!f) { f = h("iframe", { "data-tab": t.id, src: t.src, allow: "camera; microphone; display-capture; fullscreen; autoplay; clipboard-write", sandbox: "allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads", referrerpolicy: "no-referrer" }); frames.append(f); }
+    f.hidden = t.id !== DOCK.active;
+  }
+  for (const f of [...frames.children]) if (!DOCK.tabs.some((t) => String(t.id) === f.dataset.tab)) f.remove();
+  const cur = DOCK.tabs.find((t) => t.id === DOCK.active);
+  const head = h("div", { class: "dock-head" },
+    DOCK.tabs.map((t) => h("button", { class: "dock-tab" + (t.id === DOCK.active ? " on" : ""), onclick: () => { DOCK.active = t.id; drawDock(); } }, t.icon + " " + t.name,
+      h("span", { class: "dock-x", title: "Cerrar esta pestaña (corta la llamada)", onclick: (e) => { e.stopPropagation(); DOCK.tabs = DOCK.tabs.filter((x) => x.id !== t.id); DOCK.active = DOCK.tabs[0]?.id ?? null; drawDock(); } }, "✕"))),
+    h("span", { class: "spacer" }),
+    cur && h("button", { class: "ghost", title: "Abrir en una ventana aparte", onclick: () => window.open(cur.src, "_blank", "noopener,noreferrer") }, "↗"),
+    h("button", { class: "ghost", title: "Agrandar o achicar", onclick: () => { const on = d.classList.toggle("max"); store.set("dockMax", on ? "1" : "0"); } }, "⤢"),
+    h("button", { class: "ghost", title: "Minimizar (la llamada sigue)", onclick: () => d.classList.toggle("min") }, "–"));
+  d.replaceChildren(head, frames);
+}
+
+// administración: lista editable y asistente paso a paso para la videollamada estándar
+const integAdmin = guard(async () => {
+  const r = await api("GET", `/api/teams/${S.team.id}/integrations`);
+  let items = r.items.map((i) => ({ ...i }));
+  const box = h("div", { class: "overlay", id: "integ-modal", onmousedown: (e) => e.target.id === "integ-modal" && box.remove() });
+  const body = h("div", { class: "integ-body" });
+  const save = guard(async () => {
+    const res = await api("PUT", `/api/teams/${S.team.id}/integrations`, { items });
+    S.integ = res; toast("Integraciones guardadas"); box.remove(); render();
+  });
+  const draw = () => body.replaceChildren(...[
+    h("p", { class: "hint" }, "Herramientas externas que se abren desde la barra de arriba. En la dirección podés usar {sala} (código secreto del equipo), {equipo} y {usuario}."),
+    !items.length && h("p", { class: "hint" }, "Todavía no hay ninguna. Probá el asistente de videollamada."),
+    items.map((it, i) => h("div", { class: "integ-row" },
+      h("input", { value: it.icon, maxLength: 4, class: "integ-ico", title: "Ícono (un emoji)", oninput: (e) => (it.icon = e.target.value) }),
+      h("input", { value: it.name, maxLength: 40, placeholder: "Nombre", title: "Nombre del botón", oninput: (e) => (it.name = e.target.value) }),
+      h("input", { value: it.url, maxLength: 400, placeholder: "https://…", class: "integ-url", title: "Dirección que se abre", oninput: (e) => (it.url = e.target.value) }),
+      h("select", { title: "Cómo se abre: pestaña flotante dentro de la app (podés seguir usando el tablero) o ventana nueva", onchange: (e) => (it.mode = e.target.value) },
+        h("option", { value: "panel", selected: it.mode === "panel" }, "Pestaña en la app"), h("option", { value: "tab", selected: it.mode !== "panel" }, "Ventana nueva")),
+      h("button", { class: "ghost danger", title: "Quitar", onclick: () => { items.splice(i, 1); draw(); } }, "✕"))),
+    h("div", { class: "row" },
+      h("button", { onclick: () => { items.push({ name: "", icon: "🔌", url: "https://", mode: "tab" }); draw(); } }, "+ Agregar"),
+      h("button", { onclick: () => wizard() }, "🧙 Asistente: videollamada"),
+      h("span", { class: "spacer" }), h("button", { onclick: () => box.remove() }, "Cancelar"), h("button", { class: "primary", onclick: save }, "Guardar")),
+  ].flat().filter(Boolean));
+  function wizard() {
+    const st = { step: 1, where: "internet", domain: "", name: "Videollamada", mode: "tab" };
+    const url = () => (st.where === "internet" ? "https://meet.jit.si" : "https://" + st.domain.replace(/^https?:\/\//, "").replace(/\/+$/, "")) + "/crewhelm-{sala}";
+    const dd = () => {
+      const steps = ["Dónde", "Datos", "Probar"];
+      const head = h("div", { class: "wiz-steps" }, steps.map((x, i) => h("span", { class: "wiz-step" + (st.step === i + 1 ? " on" : st.step > i + 1 ? " ok" : "") }, `${i + 1}. ${x}`)));
+      let main;
+      if (st.step === 1) main = [
+        h("p", {}, "¿Dónde va a correr la videollamada?"),
+        h("label", { class: "wiz-opt" }, h("input", { type: "radio", name: "w", checked: st.where === "internet", onchange: () => { st.where = "internet"; st.mode = "tab"; } }),
+          h("div", {}, h("b", {}, "🌐 Con salida a internet (recomendado para equipos remotos)"), h("small", {}, "Usa meet.jit.si, el Jitsi público y gratuito. Listo en un minuto, sin instalar nada. El audio y el video pasan por los servidores de Jitsi; la sala tiene un código secreto que no se puede adivinar."))),
+        h("label", { class: "wiz-opt" }, h("input", { type: "radio", name: "w", checked: st.where === "propio", onchange: () => { st.where = "propio"; st.mode = "panel"; } }),
+          h("div", {}, h("b", {}, "🏢 Servidor propio (intranet o máxima privacidad)"), h("small", {}, "Usás tu propio Jitsi (por ejemplo meet.tuempresa.com). Funciona sin internet y nada sale de tu red. Hay que instalarlo aparte; con Docker son pocos pasos y tiene que estar con HTTPS para que el navegador deje usar cámara y micrófono."))),
+      ];
+      if (st.step === 2) { const dom = h("input", { value: st.domain, placeholder: "meet.tuempresa.com", maxLength: 120, oninput: (e) => (st.domain = e.target.value.trim()) }); main = [
+        st.where === "propio" && h("label", {}, "Dirección de tu Jitsi", dom, h("small", { class: "hint" }, "Solo el dominio, sin la sala. Debe abrir con https://.")),
+        h("label", {}, "Nombre del botón", h("input", { value: st.name, maxLength: 40, oninput: (e) => (st.name = e.target.value) })),
+        st.where === "internet" && h("p", { class: "hint" }, "Ojo: el Jitsi público corta las llamadas a los 5 minutos cuando va incrustado en otra página, y a veces pide que quien abre la sala inicie sesión. Por eso se recomienda «Ventana nueva». Para la pestaña dentro de la app usá tu propio servidor."),
+        h("label", {}, "¿Cómo se abre?", h("select", { onchange: (e) => (st.mode = e.target.value) },
+          h("option", { value: "panel", selected: st.mode === "panel" }, "Pestaña flotante dentro de la app (seguís viendo el tablero)"), h("option", { value: "tab", selected: st.mode === "tab" }, "Ventana nueva del navegador"))),
+      ]; }
+      if (st.step === 3) main = [
+        h("p", {}, "Así quedaría el botón:"), h("p", { class: "wiz-url" }, "📹 " + st.name + " → " + url()),
+        h("p", { class: "hint" }, "La primera persona que entra crea la sala; el resto entra con el mismo botón. El navegador va a pedir permiso de cámara y micrófono."),
+        h("button", { onclick: () => window.open(integUrl(url()).replace("{sala}", encodeURIComponent(r.room)), "_blank", "noopener,noreferrer") }, "▶ Probar ahora (ventana nueva)"),
+      ];
+      const next = guard(async () => {
+        if (st.step === 2) { if (st.where === "propio" && !/^[\w.-]+\.[a-z]{2,}(:\d+)?$/i.test(st.domain.replace(/^https?:\/\//, "").replace(/\/+$/, ""))) throw new Error("escribí el dominio, por ejemplo meet.tuempresa.com"); if (!st.name.trim()) throw new Error("falta el nombre"); }
+        if (st.step < 3) { st.step++; dd(); return; }
+        items = items.filter((i) => !i.url.includes("{sala}") || !/jit/i.test(i.name + i.url)).concat({ name: st.name.trim(), icon: "📹", url: url(), mode: st.mode });
+        wz.remove(); draw();
+      });
+      wz.querySelector(".modal").replaceChildren(h("h3", {}, "🧙 Videollamada del equipo"), head, h("div", { class: "wiz-main" }, main),
+        h("div", { class: "row" }, st.step > 1 && h("button", { onclick: () => { st.step--; dd(); } }, "← Atrás"), h("span", { class: "spacer" }), h("button", { onclick: () => wz.remove() }, "Cancelar"),
+          h("button", { class: "primary", onclick: next }, st.step < 3 ? "Siguiente →" : "Agregar a la lista")));
+    };
+    const wz = h("div", { class: "overlay", style: "z-index:10000", onmousedown: (e) => e.target === wz && wz.remove() }, h("div", { class: "modal small wiz" }));
+    document.body.append(wz); dd();
+  }
+  box.append(h("div", { class: "modal wide" }, h("h3", {}, "🔌 Integraciones del equipo"), body)); document.body.append(box); draw();
+});
+
 const openSettings = guard(async () => {
   document.getElementById("settings-modal")?.remove();
   S.me = await api("GET", "/api/me");
@@ -2473,6 +2577,7 @@ const openSettings = guard(async () => {
             const url = server.value.trim().replace(/\/$/, ""); if (!/^https?:\/\//.test(url)) throw new Error("la dirección debe empezar con http:// o https://");
             S.server = url; store.set("server", url); toast("Servidor guardado: volvé a iniciar sesión"); close(); logout();
           }) }, "Guardar servidor y reiniciar sesión"))),
+      can("admin") && S.team && sec("Integraciones", line(["Videollamada y otras herramientas del equipo", "integrations"], h("button", { onclick: go(integAdmin) }, "Administrar"))),
       sec("Ayuda", line(["Manual con buscador e índice por temas", "manual"], h("button", { onclick: go(() => openManual()) }, "Abrir el manual")),
         line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos")),
         line(["Guía de inicio paso a paso", "guide"], h("button", { onclick: go(openWizard) }, "🧭 Guía de inicio"))),
@@ -2483,6 +2588,7 @@ const openSettings = guard(async () => {
     ["conexiones", "🔔 Avisos y conexiones", ["email", "telegram", "digest", "github", "google", "reports"]],
     ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export"]],
     ["ias", "🤖 IAs", ["agents", "cmds"]],
+    ["integraciones", "🔌 Integraciones", ["integrations"]],
     ["licencia", "🏢 Licencia", ["license"]],
     ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "bars", "herdr", "server", "manual", "shortcuts", "guide"]],
   ];
