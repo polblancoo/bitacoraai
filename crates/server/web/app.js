@@ -1130,10 +1130,27 @@ const chatTrModal = guard(async () => {
   const box = h("div", { class: "overlay", id: "chattr-modal", onmousedown: (e) => e.target === box && box.remove() });
   const draw = () => { botRow.hidden = eng.value !== "ai"; urlRow.hidden = eng.value !== "libre"; };
   const botRow = h("label", {}, "IA que traduce", bot, h("small", { class: "hint" }, "Usa su proveedor y su tope diario de gasto (Configuración → IAs → 💬 Chat). Conviene una IA barata, tipo «haiku».")),
-    urlRow = h("label", {}, "Dirección del LibreTranslate", url, h("small", { class: "hint" }, "Instalación: docker run -ti --rm -p 5000:5000 libretranslate/libretranslate. Nada sale de tu red.")); eng.onchange = draw;
+    inst = h("div", { class: "hint" }), instBtn = h("button", { onclick: () => instalar() }, "⚙️ Instalar y activar automáticamente"),
+    urlRow = h("label", {}, "Dirección del LibreTranslate", url, h("small", { class: "hint" }, "Nada sale de tu red."), h("div", { class: "row" }, instBtn), inst); eng.onchange = draw;
+  let poll = null;
+  const estado = async () => {
+    try {
+      const r = await api("GET", `/api/teams/${S.team.id}/chat/translate-install`);
+      if (!r.docker) { inst.textContent = "Docker no está instalado en el servidor: instalalo (por ejemplo «sudo apt install docker.io») y volvé a tocar el botón. " + (r.docker_error || ""); instBtn.disabled = false; return; }
+      if (r.log) { inst.textContent = "No se pudo instalar: " + r.log; instBtn.disabled = false; return; }
+      if (r.ready) { url.value = r.url; on.checked = true; inst.textContent = "✅ LibreTranslate funcionando en este servidor. Tocá Guardar."; instBtn.disabled = false; return; }
+      inst.textContent = r.state ? "⏳ Arrancando y cargando idiomas (tarda unos minutos la primera vez)…" : "⏳ Descargando la imagen (unos minutos, solo la primera vez)…";
+      poll = setTimeout(estado, 4000);
+    } catch (e) { inst.textContent = e.message; instBtn.disabled = false; }
+  };
+  const instalar = async () => {
+    instBtn.disabled = true; inst.textContent = "Iniciando…";
+    try { await api("POST", `/api/teams/${S.team.id}/chat/translate-install`, {}); estado(); } catch (e) { inst.textContent = e.message; instBtn.disabled = false; }
+  };
+  new MutationObserver((_, o) => { if (!document.body.contains(box)) { clearTimeout(poll); o.disconnect(); } }).observe(document.body, { childList: true });
   const save = guard(async () => {
     const r = await api("PUT", `/api/teams/${S.team.id}/chat/translate-cfg`, { enabled: on.checked, engine: eng.value, bot_id: bot.value ? +bot.value : null, url: url.value });
-    CHAT.trCfg = r; CHAT.tr = {}; toast(r.enabled ? "Traducción del chat activada" : "Traducción del chat apagada"); box.remove(); chatDraw(); chatTrNeed();
+    clearTimeout(poll); CHAT.trCfg = r; CHAT.tr = {}; toast(r.enabled ? "Traducción del chat activada" : "Traducción del chat apagada"); box.remove(); chatDraw(); chatTrNeed();
   });
   box.append(h("div", { class: "modal small" }, h("h3", {}, "🌐 Traducir el chat"),
     h("p", { class: "hint" }, "Cada persona escribe en su idioma y lee en el suyo (español, inglés o portugués, el que eligió en Configuración). El mensaje original no se modifica y se puede ver con un toque."),

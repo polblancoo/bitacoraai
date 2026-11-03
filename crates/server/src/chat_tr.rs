@@ -14,7 +14,7 @@ const TEXT_MAX: usize = 2000;
 const LANGS: &[(&str, &str)] = &[("es", "español"), ("en", "English"), ("pt", "português")];
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/api/teams/{id}/chat/translate-cfg", get(get_cfg).put(put_cfg)).route("/api/teams/{id}/chat/translate", axum::routing::post(translate))
+    Router::new().route("/api/teams/{id}/chat/translate-cfg", get(get_cfg).put(put_cfg)).route("/api/teams/{id}/chat/translate", axum::routing::post(translate)).route("/api/teams/{id}/chat/translate-install", get(install_status).post(install_start))
 }
 
 struct Cfg {
@@ -158,4 +158,50 @@ async fn translate(State(st): State<AppState>, user: AuthUser, Path(team): Path<
         }
     }
     Ok(Json(json!({ "tr": out })))
+}
+
+// Instalación automática de un LibreTranslate en este mismo servidor (docker), solo escuchando en 127.0.0.1.
+const LT_NAME: &str = "crewhelm-libretranslate";
+const LT_URL: &str = "http://127.0.0.1:5000";
+static LT_LOG: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+async fn docker(args: &[&str]) -> std::result::Result<String, String> {
+    let o = tokio::process::Command::new("docker").args(args).output().await.map_err(|e| format!("no se pudo ejecutar docker: {e}"))?;
+    if o.status.success() {
+        Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
+    } else {
+        Err(String::from_utf8_lossy(&o.stderr).trim().chars().take(300).collect())
+    }
+}
+
+async fn install_status(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    routes::require(&st, team, user.id, Role::Admin).await?;
+    let has_docker = docker(&["version", "--format", "{{.Server.Version}}"]).await;
+    let state = docker(&["inspect", "-f", "{{.State.Status}}", LT_NAME]).await.unwrap_or_default();
+    let mut ready = false;
+    if !state.is_empty() {
+        if let Ok(c) = reqwest::Client::builder().timeout(Duration::from_secs(3)).build() {
+            ready = c.get(format!("{LT_URL}/languages")).send().await.map(|r| r.status().is_success()).unwrap_or(false);
+        }
+    }
+    let err = LT_LOG.lock().map(|l| l.clone()).unwrap_or_default();
+    Ok(Json(json!({ "docker": has_docker.is_ok(), "docker_error": has_docker.err(), "state": state, "ready": ready, "url": LT_URL, "log": err })))
+}
+
+async fn install_start(State(st): State<AppState>, user: AuthUser, Path(team): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    routes::require(&st, team, user.id, Role::Admin).await?;
+    docker(&["version", "--format", "{{.Server.Version}}"]).await.map_err(|e| AppError::bad(&format!("Docker no está disponible en este servidor ({e}). Instalalo y probá de nuevo.")))?;
+    if let Ok(mut l) = LT_LOG.lock() { l.clear(); }
+    tokio::spawn(async move {
+        let r = match docker(&["inspect", "-f", "{{.State.Status}}", LT_NAME]).await {
+            Ok(_) => docker(&["start", LT_NAME]).await,
+            Err(_) => docker(&["run", "-d", "--restart", "unless-stopped", "--name", LT_NAME, "-p", "127.0.0.1:5000:5000", "-e", "LT_LOAD_ONLY=es,en,pt", "libretranslate/libretranslate"]).await,
+        };
+        if let Err(e) = r {
+            if let Ok(mut l) = LT_LOG.lock() { *l = e; }
+        }
+    });
+    Ok(Json(json!({ "started": true })))
 }
