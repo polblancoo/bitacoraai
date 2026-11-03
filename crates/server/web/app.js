@@ -829,6 +829,26 @@ const editProject = guard(async () => {
         }) }, "Guardar"))));
   document.body.append(overlay); fn[0].focus();
 });
+// Pantalla de quien todavía no está en ningún equipo: acá mismo pega el código que le pasaron, o crea su equipo.
+function welcomeView() {
+  const code = h("input", { placeholder: "Pegá acá el código de invitación", maxLength: 64, autofocus: true, autocomplete: "off" });
+  const go = guard(async () => {
+    const c = code.value.trim(); if (!c) return toast("Pegá el código que te pasaron", true);
+    const team = await api("POST", `/api/invites/${encodeURIComponent(c)}/accept`, {});
+    S.teams = await api("GET", "/api/teams");
+    await selectTeam(S.teams.find((t) => t.id === team.id) || S.teams[0]);
+    toast(`Te uniste a ${team.name}`);
+  });
+  code.onkeydown = (e) => { if (e.key === "Enter") go(); };
+  return h("div", { class: "welcome" },
+    h("h2", {}, `👋 Bienvenido${S.user?.username ? ", " + S.user.username : ""}`),
+    h("p", {}, "Todavía no estás en ningún equipo. Si alguien te invitó, pegá el código que te pasó:"),
+    h("div", { class: "row" }, code, h("button", { class: "primary", onclick: go }, "Unirme")),
+    h("p", { class: "hint" }, "El código te lo da el administrador del equipo (por mensaje, mail o como te lo haya mandado). Una vez que lo usás, entrás al tablero del equipo."),
+    h("hr"),
+    h("p", {}, "¿Querés empezar por tu cuenta?"),
+    h("div", { class: "row" }, h("button", { onclick: createTeam }, "Crear mi propio equipo"), h("button", { class: "ghost", onclick: () => openWizard() }, "Guía de inicio")));
+}
 const joinWithCode = guard(async () => {
   const f = await form("Unirse a un equipo", [{ name: "code", label: "Código de invitación", max: 64 }], "Unirme"); if (!f) return;
   const team = await api("POST", `/api/invites/${encodeURIComponent(f.code)}/accept`, {});
@@ -1753,7 +1773,7 @@ function appView() {
           } }, "📂 Abrir"), " ", h("button", { class: "ghost", title: "Ver los archivos de la carpeta de trabajo (solo lectura), sin importar desde qué máquina entres", onclick: openFiles }, "🗂 Archivos")),
         S.project.repo && h("span", { title: "Repositorio" }, "🔗 " + S.project.repo)),
       S.terms ? termsView() : S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
-        : h("div", { class: "empty" }, S.team ? "Creá un proyecto con + en la barra lateral" : "Usá + junto a Equipos"),
+        : S.team ? h("div", { class: "empty" }, "Creá un proyecto con + en la barra lateral") : welcomeView(),
       barBottom.length > 0 && h("div", { class: "bars bottom" }, barBottom)),
     S.panel && S.team && teamPanel(), S.chatOpen && S.team && chatPanel(), dock);
 }

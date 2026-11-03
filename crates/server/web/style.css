@@ -621,3 +621,7 @@ ol.guide pre { margin: 4px 0; }
 .avatar-grid button.on { outline: 2px solid var(--accent, #7aa2f7); }
 .exts-group { margin: 10px 0; }
 .exts-list { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 4px; }
+.welcome { max-width: 520px; margin: 8vh auto; padding: 24px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; display: grid; gap: 10px; }
+.welcome h2 { margin: 0; }
+.welcome p { margin: 0; }
+.welcome .row input { flex: 1; min-width: 0; }
