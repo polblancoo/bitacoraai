@@ -307,6 +307,30 @@ Se a equipe lida com informação confidencial (por exemplo, um escritório de a
 
 Os tokens do GitHub e do Google ficam **criptografados** (AES-256-GCM) no banco; a chave fica em `~/.config/tm-server/credenciales.key` (ou `TM_KEY_FILE`). Guarde-a junto com seus backups: sem ela é preciso reconectar as contas.
 
+## 18. Comunicação: chat, videochamadas e tradução
+O botão **💬 Comunicação** abre um painel com duas abas.
+
+- **💬 Chat:** mensagens para a equipe, um projeto ou uma pessoa, com arquivos. Os links abrem com um clique. Tudo é guardado criptografado e só funciona por conexão segura (HTTPS).
+- **📹 Videochamada:** *Entrar na sala* (a sala permanente da equipe), *Iniciar chamada* (cria uma sala nova e avisa na conversa com um botão «Entrar», visível só para quem participa) e *Convidar alguém de fora*.
+- **Convidar alguém de fora:** gera um link único com validade (1 hora a 7 dias) para um fornecedor ou cliente. Não precisa de conta e não vê mais nada. Copie ou envie por e-mail (precisa do e-mail do servidor, seção 12). Pode ser cancelado quando quiser.
+- **Configurar a videochamada (administrador):** *Configurações → 🔌 Integrações → Administrar*. O assistente oferece três caminhos: Jitsi público, Jitsi próprio na rede interna ou Jitsi próprio aberto à internet, com o bloco de instalação pronto para colar. Com o `meet.jit.si` público a chamada incorporada é cortada aos 5 minutos, então abre em uma aba própria.
+- **Tradução do chat (administrador):** o botão **⚙🌐** a ativa. Cada pessoa escreve no seu idioma e lê no seu. Escolha o motor: *LibreTranslate próprio* (grátis, nada sai da sua rede; o botão «Instalar e ativar automaticamente» instala com Docker) ou *uma IA da equipe* (com seu limite diário de gasto). Cada pessoa liga ou desliga com o botão **🌐**. Ao traduzir, o texto vai para o motor escolhido.
+- **Minimizar a chamada:** vira uma barra pequena no canto inferior direito com «▲ Voltar à chamada».
+
+## 19. Pastas das tarefas
+Cada tarefa tem sua pasta de trabalho no formato `.crewhelm/<usuário>/<tarefa>/`: cada pessoa ou IA guarda ali o seu. O resultado final é publicado em `final/`, compartilhado por toda a tarefa.
+
+- Na tarefa, o bloco **Pasta** permite ver, baixar e enviar arquivos (até 25 MB; executáveis e scripts são recusados).
+- **Quem cria a tarefa decide a aprovação** e a publicação em `final/`, numa tarefa avulsa ou num fluxo.
+- Quem trabalha remotamente pode enviar seus arquivos dali.
+
+## 20. Papéis do servidor e Processos
+Além dos papéis de cada equipe, há três **papéis do servidor**: *Usuário*, *CTO* e *Administrador*. A primeira pessoa registrada é administradora. Um administrador os altera em *Configurações → 🛡 Papéis do servidor* (sempre deve restar ao menos um administrador).
+
+- **🖥 Processos** (CTO e administrador): RAM, disco, carga, processos do CrewHelm com CPU e RAM, contêineres e uso do app (banco, arquivos, pessoas, IAs, tarefas). Atualiza a cada 5 segundos.
+- **Proteção contra saturação:** limite de pedidos por IP por minuto, limite de pedidos simultâneos e tempo máximo por pedido. Um ataque de rede grande se barra fora (firewall, proxy ou CDN). Atrás de um proxy, defina `TM_TRUSTED_PROXY=1`.
+- **Atalhos da equipe:** o prefixo na web é **Alt+K** (o navegador fica com Ctrl+T).
+
 ---
 
 # Guia: fazer uma IA trabalhar sozinha com o `tm-agent`

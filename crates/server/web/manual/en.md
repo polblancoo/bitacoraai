@@ -307,6 +307,30 @@ If the team handles confidential information (for example a law firm), turn on t
 
 GitHub and Google tokens are stored **encrypted** (AES-256-GCM) in the database; the key lives in `~/.config/tm-server/credenciales.key` (or `TM_KEY_FILE`). Back it up with your other backups: without it you must reconnect the accounts.
 
+## 18. Communication: chat, video calls and translation
+The **💬 Communication** button opens a panel with two tabs.
+
+- **💬 Chat:** messages to the team, a project or a person, with files. Links open with one click. Everything is stored encrypted and only works over a secure connection (HTTPS).
+- **📹 Video call:** *Enter the room* (the team's permanent room), *Start a call* (creates a new room and posts a «Join» button in the conversation, visible only to its participants) and *Invite someone from outside*.
+- **Inviting someone from outside:** creates a unique link with an expiry (1 hour to 7 days) for a supplier or client. No account is needed and they see nothing else. Copy it or send it by email (needs the server's email, section 12). You can cancel it at any time.
+- **Setting up video calls (administrator):** *Settings → 🔌 Integrations → Manage*. The wizard offers three paths: public Jitsi, your own Jitsi on the internal network, or your own Jitsi open to the internet, with a ready-to-paste install block. With the public `meet.jit.si` an embedded call is cut after 5 minutes, so it opens in its own tab.
+- **Chat translation (administrator):** the **⚙🌐** button turns it on. Everyone writes in their own language and reads in theirs. Pick the engine: *your own LibreTranslate* (free, nothing leaves your network; the «Install and enable automatically» button installs it with Docker) or *a team AI* (with its daily spending cap). Each person turns it on or off with the **🌐** button. When translating, the text goes to the chosen engine.
+- **Minimizing the call:** it becomes a small bar at the bottom right with «▲ Back to the call».
+
+## 19. Task folders
+Each task has its own working folder shaped like `.crewhelm/<user>/<task>/`: every person or AI keeps their own work there. Final results are published to `final/`, shared by the whole task.
+
+- In the task, the **Folder** block lets you view, download and upload files (up to 25 MB; executables and scripts are rejected).
+- **Whoever creates the task decides approval** and publishing to `final/`, for a loose task or a flow.
+- Remote workers can upload their files from there.
+
+## 20. Server roles and Processes
+Besides each team's roles there are three **server roles**: *User*, *CTO* and *Administrator*. The first person to register is the administrator. An administrator changes them in *Settings → 🛡 Server roles* (at least one administrator must always remain).
+
+- **🖥 Processes** (CTO and administrator): RAM, disk, load, CrewHelm processes with their CPU and RAM, containers and app usage (database, files, people, AIs, tasks). It refreshes every 5 seconds.
+- **Overload protection:** a per-IP per-minute request cap, a cap on simultaneous requests and a per-request time limit. A large network attack is stopped outside (firewall, proxy or CDN). Behind a proxy, set `TM_TRUSTED_PROXY=1`.
+- **Team shortcuts:** the prefix on the web is **Alt+K** (the browser keeps Ctrl+T).
+
 ---
 
 # Guide: let an AI work on its own with `tm-agent`
