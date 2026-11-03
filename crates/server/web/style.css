@@ -537,10 +537,11 @@ ol.guide pre { margin: 4px 0; }
 .ai-bar::after { content: ""; position: absolute; inset: 0 auto 0 -35%; width: 35%; border-radius: 6px; background: var(--yellow); animation: ai-slide 1.4s ease-in-out infinite; }
 @keyframes ai-slide { to { left: 100%; } }
 .ai-since { font-size: 12px; font-weight: 600; display: flex; gap: 6px; align-items: center; }
-.ai-since::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); animation: ai-pulse 1.2s ease-in-out infinite; }
+.ai-since::before { content: ""; width: 9px; height: 9px; border-radius: 2px; background: var(--yellow); flex: none; animation: ai-sq 1.6s ease-in-out infinite; }
 @keyframes ai-pulse { 50% { opacity: .25; } }
+@keyframes ai-sq { 0% { transform: rotate(0); border-radius: 2px; } 50% { transform: rotate(180deg); border-radius: 50%; opacity: .45; } 100% { transform: rotate(360deg); border-radius: 2px; } }
 /* con "reducir movimiento" no se desliza, pero sigue latiendo suave para que se note que trabaja */
-@media (prefers-reduced-motion: reduce) { .ai-bar::after { animation: ai-pulse 2.4s ease-in-out infinite; inset: 0; width: 100%; } .ai-since::before { animation-duration: 2.4s; } }
+@media (prefers-reduced-motion: reduce) { .ai-bar::after { animation: ai-pulse 2.4s ease-in-out infinite; inset: 0; width: 100%; } .ai-since::before { animation: ai-pulse 2.4s ease-in-out infinite; } }
 .modal.task-modal .more { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
 .modal.task-modal .more > summary { cursor: pointer; opacity: .85; padding: 4px 0; }
 /* panel de tarea tipo terminal: la conversación al centro y los datos a un costado */
@@ -660,3 +661,50 @@ ol.guide pre { margin: 4px 0; }
 .top::-webkit-scrollbar-track, .bars::-webkit-scrollbar-track { background: transparent; margin: 0 10px; }
 .top::-webkit-scrollbar-thumb, .bars::-webkit-scrollbar-thumb { border-radius: 6px; background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 50%, transparent), color-mix(in srgb, var(--yellow) 50%, transparent)); transition: background .2s; }
 .top:hover::-webkit-scrollbar-thumb, .bars:hover::-webkit-scrollbar-thumb { background: linear-gradient(90deg, var(--blue), var(--yellow)); }
+
+/* barra lateral: tres sectores con identidad propia (equipos = violeta, proyectos = azul, IAs = verde) */
+aside { gap: 10px; }
+.side-sec { --sec: var(--purple); position: relative; padding: 8px 8px 8px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--sec) 22%, var(--line)); background: linear-gradient(160deg, color-mix(in srgb, var(--sec) 11%, transparent), transparent 70%); }
+.side-sec::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0; background: var(--sec); }
+.side-sec.sec-projects { --sec: var(--blue); }
+.side-sec.sec-bots { --sec: var(--green); }
+.side-sec h2 { color: var(--sec); margin-bottom: 4px; font-weight: 700; }
+.side-sec .nav button.active { background: color-mix(in srgb, var(--sec) 20%, var(--card2)); box-shadow: inset 2px 0 0 var(--sec); }
+.side-sec .nav button:hover { background: color-mix(in srgb, var(--sec) 12%, transparent); }
+.shell.side-off .side-sec { display: none; }
+
+/* tema claro: se activa solo si el sistema lo pide (modo automático) o a mano con 🌗/☀️/🌙 */
+:root[data-theme="light"] { color-scheme: light; --bg: #f4f6fb; --bg2: #e9edf6; --card: #ffffff; --card2: #e2e8f5; --line: #c9d1e3; --fg: #1f2a44; --dim: #5a6788; --blue: #2f5fd0; --purple: #7a4fd0; --green: #2f8a3a; --yellow: #b8791a; --red: #d03a55; --cyan: #137fa8; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { color-scheme: light; --bg: #f4f6fb; --bg2: #e9edf6; --card: #ffffff; --card2: #e2e8f5; --line: #c9d1e3; --fg: #1f2a44; --dim: #5a6788; --blue: #2f5fd0; --purple: #7a4fd0; --green: #2f8a3a; --yellow: #b8791a; --red: #d03a55; --cyan: #137fa8; } }
+:root[data-theme="light"] .login { background: radial-gradient(circle at 30% 20%, #ffffff, var(--bg)); }
+:root[data-theme="light"] .login-card { box-shadow: 0 20px 50px #1f2a4426; }
+:root[data-theme="light"] .nav button.active, :root[data-theme="light"] .cb-head b { color: var(--fg); }
+:root[data-theme="light"] button.primary { color: #fff; }
+:root[data-theme="light"] .col.over { background: #e3eafc; }
+:root[data-theme="light"] .p0 { background: #dfe4f0; }
+:root[data-theme="light"] .p1 { background: #d6e2ff; }
+:root[data-theme="light"] .p2 { background: #fbe9c8; }
+:root[data-theme="light"] .p3 { background: #fbd9e0; }
+:root[data-theme="light"] .pill.role-owner { background: #e7dcfa; }
+:root[data-theme="light"] .pill.role-admin { background: #d6e2ff; }
+:root[data-theme="light"] .pill.role-member, :root[data-theme="light"] .pill.role-viewer { background: #e2e8f5; }
+:root[data-theme="light"] .gantt .g-weekend { fill: #1f2a4410; }
+:root[data-theme="light"] .gantt .g-stripe { fill: #1f2a4408; }
+:root[data-theme="light"] .team-panel, :root[data-theme="light"] .modal, :root[data-theme="light"] .chat-panel { box-shadow: 0 10px 30px #1f2a4422; }
+@media (prefers-color-scheme: light) {
+:root:not([data-theme="dark"]) .login { background: radial-gradient(circle at 30% 20%, #ffffff, var(--bg)); }
+:root:not([data-theme="dark"]) .login-card { box-shadow: 0 20px 50px #1f2a4426; }
+:root:not([data-theme="dark"]) .nav button.active, :root:not([data-theme="dark"]) .cb-head b { color: var(--fg); }
+:root:not([data-theme="dark"]) button.primary { color: #fff; }
+:root:not([data-theme="dark"]) .col.over { background: #e3eafc; }
+:root:not([data-theme="dark"]) .p0 { background: #dfe4f0; }
+:root:not([data-theme="dark"]) .p1 { background: #d6e2ff; }
+:root:not([data-theme="dark"]) .p2 { background: #fbe9c8; }
+:root:not([data-theme="dark"]) .p3 { background: #fbd9e0; }
+:root:not([data-theme="dark"]) .pill.role-owner { background: #e7dcfa; }
+:root:not([data-theme="dark"]) .pill.role-admin { background: #d6e2ff; }
+:root:not([data-theme="dark"]) .pill.role-member, :root:not([data-theme="dark"]) .pill.role-viewer { background: #e2e8f5; }
+:root:not([data-theme="dark"]) .gantt .g-weekend { fill: #1f2a4410; }
+:root:not([data-theme="dark"]) .gantt .g-stripe { fill: #1f2a4408; }
+:root:not([data-theme="dark"]) .team-panel, :root:not([data-theme="dark"]) .modal, :root:not([data-theme="dark"]) .chat-panel { box-shadow: 0 10px 30px #1f2a4422; }
+}

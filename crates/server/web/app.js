@@ -95,6 +95,19 @@ const TIPS = {
  "‹": "Mes anterior",
  "›": "Mes siguiente"
 };
+// tema: auto (sigue al sistema) / claro / oscuro
+const THEMES = { auto: ["🌗", "automático (el del sistema)"], light: ["☀️", "claro"], dark: ["🌙", "oscuro"] };
+const themePref = () => (THEMES[store.get("theme")] ? store.get("theme") : "auto");
+function applyTheme() {
+  const t = themePref();
+  if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t);
+  const light = t === "light" || (t === "auto" && matchMedia("(prefers-color-scheme: light)").matches);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#f4f6fb" : "#1a1b26");
+}
+function cycleTheme() { store.set("theme", { auto: "light", light: "dark", dark: "auto" }[themePref()]); applyTheme(); render(true); }
+applyTheme();
+try { matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyTheme); } catch {}
+
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -1669,12 +1682,13 @@ function loginView() {
 }
 
 // una IA está ejecutando la tarea: En curso, asignada a una IA y sin estar en la zona de espera
-const aiRunning = (t) => t.status === "doing" && !t.waiting && !!S.members?.find((m) => m.id === t.assignee_id)?.bot;
+const aiRunning = (t) => t.status === "doing" && !t.waiting;
+const runLbl = (t) => (S.members?.find((m) => m.id === t.assignee_id)?.bot ? "🤖 Trabajando" : "En curso") + " · " + sinceTxt(t.updated_at);
 function sinceTxt(iso) {
   const m = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
   return m < 1 ? "recién empezó" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
 }
-setInterval(() => document.querySelectorAll(".ai-since").forEach((e) => (e.textContent = "🤖 Trabajando · " + sinceTxt(e.dataset.since))), 30000);
+setInterval(() => document.querySelectorAll(".ai-since").forEach((e) => (e.textContent = e.dataset.lbl + " · " + sinceTxt(e.dataset.since))), 30000);
 // explorador de solo lectura de la carpeta de trabajo del proyecto (para quien usa la web desde otra máquina)
 const openFiles = guard(async () => {
   const pid = S.project.id;
@@ -1727,8 +1741,8 @@ function taskCard(t) {
   const card = h("div", { class: "card", draggable: true, onclick: () => openTask(t) },
     h("div", { class: "title" }, h("span", { class: "tid" }, "#" + t.id), " ", t.title),
     t.labels?.length > 0 && h("div", { class: "chips" }, t.labels.map((l) => h("span", { class: "chip on", style: `--c:${l.color}` }, l.name))),
-    aiRunning(t) && h("div", { class: "ai-run", title: "Una IA está trabajando en esta tarea (el tiempo cuenta desde la última vez que se movió)" },
-      h("div", { class: "ai-bar" }), h("small", { class: "ai-since", "data-since": t.updated_at }, "🤖 Trabajando · " + sinceTxt(t.updated_at))),
+    aiRunning(t) && h("div", { class: "ai-run", title: "Tarea en curso (el tiempo cuenta desde la última vez que se movió)" },
+      h("div", { class: "ai-bar" }), h("small", { class: "ai-since", "data-since": t.updated_at, "data-lbl": runLbl(t).split(" · ")[0] }, runLbl(t))),
     flowStrip(t),
     t.subtasks_total > 0 && h("div", { class: "progress", title: `${t.subtasks_done}/${t.subtasks_total} subtareas` },
       h("div", { class: "bar", style: `width:${Math.round(100 * t.subtasks_done / t.subtasks_total)}%` })),
@@ -1872,13 +1886,13 @@ function appView() {
     h("aside", {},
       h("div", { class: "brand" }, h("img", { src: "icon-192.png", alt: "", width: 22, height: 22, style: "vertical-align:middle;margin-right:6px;border-radius:5px" }), h("span", { class: "brand-name" }, APP_NAME),
         h("button", { class: "ghost side-toggle", title: S.sideOff ? "Mostrar la barra lateral" : "Ocultar la barra lateral (queda una franja para volver a abrirla)", onclick: toggleSide }, S.sideOff ? "»" : "«")),
-      h("div", {}, h("h2", {}, "Equipos", h("span", {}, S.team && h("button", { class: "ghost", onclick: () => { S.panel = true; store.set("panel", "1"); loadOverview(); setTimeout(() => document.querySelector(".tp-sec:last-child")?.scrollIntoView(), 400); }, title: "Editar o eliminar el equipo actual (ajustes en el panel de la derecha)" }, "⚙"), h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
+      h("div", { class: "side-sec sec-teams" }, h("h2", {}, "👥 Equipos", h("span", {}, S.team && h("button", { class: "ghost", onclick: () => { S.panel = true; store.set("panel", "1"); loadOverview(); setTimeout(() => document.querySelector(".tp-sec:last-child")?.scrollIntoView(), 400); }, title: "Editar o eliminar el equipo actual (ajustes en el panel de la derecha)" }, "⚙"), h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
         h("div", { class: "nav" }, S.teams.map((t) => h("button", { class: t.id === S.team?.id ? "active" : "", onclick: () => selectTeam(t).catch((e) => toast(e.message, true)) }, t.name)))),
-      S.team && h("div", {}, h("h2", {}, "Proyectos", h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
+      S.team && h("div", { class: "side-sec sec-projects" }, h("h2", {}, "📁 Proyectos", h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
         h("div", { class: "nav" }, S.projects.length > 0 && can("owner") && showTech() && h("button", { class: S.terms ? "active" : "", onclick: openTerms, title: "Terminales SSH de los proyectos y estado de las IAs, en paneles" }, "🖥️ Terminales"), S.projects.length > 0 && h("button", { class: S.portfolio ? "active" : "", onclick: openPortfolio, title: "Avance de todos los proyectos del equipo" }, "📊 Portafolio"),
           S.projects.map((p) => h("button", { class: p.id === S.project?.id && !S.portfolio && !S.terms ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
           h("span", { class: "dot", style: `background:${p.color}` }), p.name)))),
-      S.team && h("div", {}, h("h2", {}, "🤖 IAs", can("admin") && h("button", { class: "ghost", onclick: createBot, title: "Sumar una IA al equipo (crea su token)" }, "+")),
+      S.team && h("div", { class: "side-sec sec-bots" }, h("h2", {}, "🤖 IAs", can("admin") && h("button", { class: "ghost", onclick: createBot, title: "Sumar una IA al equipo (crea su token)" }, "+")),
         h("div", { class: "nav" }, (S.bots || []).map((b) => h("button", { class: b.active ? "" : "revoked", onclick: () => botModal(b), title: !b.active ? "Token revocado" : b.online ? "Conectada: su agente consultó hace instantes" : b.run_on ? "Activada en el servidor pero sin conectar" : "Sin agente conectado (no trabaja sola)" }, (!b.active ? "⚪ " : b.online ? "🟢 " : b.run_on ? "🔴 " : "⚪ ") + "🤖 " + b.username, b.model && h("small", { class: "inl" }, " · " + b.model))),
           !(S.bots || []).length && h("small", { class: "hint" }, can("admin") ? "Sumá asistentes de código con «+»" : "Sin IAs en este equipo"))),
       h("button", { class: "cfg-btn", onclick: openSettings, title: "Configuración (,)" }, "⚙  Configuración"),
@@ -1887,6 +1901,7 @@ function appView() {
         h("span", { title: S.team ? `Tu rol en «${S.team.name}»` : "" }, S.user?.username, S.team && h("small", { class: "hint" }, " · " + (ROLES.find(([r]) => r === myRole())?.[1] || ""))), h("span", { class: "spacer" }),
         S.team && h("button", { class: "ghost" + (S.chatOpen ? " on" : ""), title: "Chat del equipo: ver quién está conectado, charlar y mandar archivos", onclick: toggleChat }, "💬" + (CHAT.total > 0 && !S.chatOpen ? ` ${CHAT.total}` : "")),
         h("button", { class: "ghost bell" + (S.unread ? " has" : ""), title: "Bandeja de novedades (Ctrl+T n)", onclick: () => loadInbox(false) }, S.unread ? `🔔 ${S.unread}` : "🔔"),
+        h("button", { class: "ghost", onclick: cycleTheme, title: "Tema: " + THEMES[themePref()][1] + " (clic para cambiar)" }, THEMES[themePref()][0]),
         h("button", { class: "ghost", onclick: helpModal, title: "Atajos y ayuda (?)" }, "?"),
         h("button", { class: "ghost", onclick: logout }, "Salir"),
         h("button", { class: "ghost", onclick: logoutAll, title: "Cierra la sesión en todos los dispositivos" }, "⏻"))),
