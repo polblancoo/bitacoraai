@@ -1160,6 +1160,51 @@ const chatTrModal = guard(async () => {
   document.body.append(box); draw();
 });
 
+// ---------- operación del servidor: procesos y roles (solo CTO / administrador) ----------
+const ROLE_LBL = { user: "Usuario", cto: "CTO", admin: "Administrador" };
+function procPanel() {
+  const box = h("div", { class: "cfg-item proc" }), bar = (pct) => h("div", { class: "proc-bar" }, h("i", { style: `width:${Math.min(100, pct)}%` }));
+  box.dataset.key = "procesos";
+  const gb = (mb) => (mb >= 1024 ? (mb / 1024).toFixed(1) + " GB" : mb + " MB");
+  const draw = async () => {
+    if (!document.body.contains(box) && box.dataset.drawn) return;
+    box.dataset.drawn = "1";
+    try {
+      const r = await api("GET", "/api/admin/procesos");
+      const memP = r.mem_mb.total ? (100 * r.mem_mb.used) / r.mem_mb.total : 0, dskP = r.disk_mb.total ? (100 * r.disk_mb.used) / r.disk_mb.total : 0;
+      box.replaceChildren(
+        h("div", { class: "proc-grid" },
+          h("div", {}, h("b", {}, "RAM"), bar(memP), h("small", {}, `${gb(r.mem_mb.used)} de ${gb(r.mem_mb.total)}`)),
+          h("div", {}, h("b", {}, "Disco"), bar(dskP), h("small", {}, `${gb(r.disk_mb.used)} de ${gb(r.disk_mb.total)} · ${r.disk_mb.dir}`)),
+          h("div", {}, h("b", {}, "Carga"), bar((100 * (r.load[0] || 0)) / r.cpus), h("small", {}, `${(r.load || []).join(" · ")} (${r.cpus} núcleos)`)),
+          h("div", {}, h("b", {}, "Encendido"), h("small", {}, `${Math.floor(r.uptime_s / 86400)} d ${Math.floor((r.uptime_s % 86400) / 3600)} h`))),
+        h("h5", {}, "Procesos de CrewHelm"),
+        h("table", { class: "proc-t" }, h("tr", {}, ["Proceso", "PID", "CPU %", "RAM"].map((x) => h("th", {}, x))),
+          r.procs.map((p) => h("tr", {}, h("td", {}, p.name + (p.me ? " (servidor)" : "")), h("td", {}, p.pid), h("td", {}, p.cpu), h("td", {}, p.rss_mb + " MB")))),
+        r.docker.length > 0 && [h("h5", {}, "Contenedores"), h("ul", { class: "wiz-list" }, r.docker.map((d) => h("li", {}, `${d.name} · ${d.status} · ${d.image}`)))],
+        h("h5", {}, "Uso de la app"),
+        h("p", { class: "hint" }, `Base de datos ${gb(r.app.db_mb)} · archivos del chat ${gb(r.app.chat_files_mb)} · ${r.app.users} personas · ${r.app.ais} IAs · ${r.app.teams} equipos · ${r.app.tasks} tareas (${r.app.tasks_doing} en curso)`),
+        h("small", { class: "hint" }, "Se actualiza cada 5 segundos mientras esta ventana está abierta."));
+    } catch (e) { box.replaceChildren(h("p", { class: "warn" }, e.message)); }
+    setTimeout(draw, 5000);
+  };
+  box.append(h("small", { class: "hint" }, "Cargando…")); setTimeout(draw, 0);
+  return box;
+}
+function rolesPanel() {
+  const box = h("div", { class: "cfg-item" });
+  box.dataset.key = "srvroles";
+  const load = async () => {
+    const us = await api("GET", "/api/admin/users");
+    box.replaceChildren(h("p", { class: "hint" }, "Usuario: usa la app. CTO: además ve «Procesos». Administrador: todo, incluido cambiar estos roles. No cambia los roles dentro de cada equipo."),
+      us.map((u) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, u.username),
+        h("select", { onchange: async (e) => { try { await api("PUT", `/api/admin/users/${u.id}/role`, { role: e.target.value }); toast("Rol actualizado"); } catch (x) { toast(x.message, true); } load(); } },
+          Object.entries(ROLE_LBL).map(([k, v]) => h("option", { value: k, selected: u.role === k }, v))))));
+  };
+  load().catch((e) => box.replaceChildren(h("p", { class: "warn" }, e.message)));
+  return box;
+}
+
 function chatDraw() {
   if (!CHAT.el) return;
   const me = S.user.id, kb = (n) => (n < 1024 ? n + " B" : (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB");
@@ -2689,6 +2734,8 @@ const openSettings = guard(async () => {
             S.server = url; store.set("server", url); toast("Servidor guardado: volvé a iniciar sesión"); close(); logout();
           }) }, "Guardar servidor y reiniciar sesión"))),
       can("admin") && S.team && sec("Integraciones", line(["Videollamada y otras herramientas del equipo", "integrations"], h("button", { onclick: go(integAdmin) }, "Administrar"))),
+      ["cto", "admin"].includes(S.me?.server_role) && sec("Procesos", procPanel()),
+      S.me?.server_role === "admin" && sec("Roles del servidor", rolesPanel()),
       sec("Ayuda", line(["Manual con buscador e índice por temas", "manual"], h("button", { onclick: go(() => openManual()) }, "Abrir el manual")),
         line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos")),
         line(["Guía de inicio paso a paso", "guide"], h("button", { onclick: go(openWizard) }, "🧭 Guía de inicio"))),
@@ -2700,6 +2747,8 @@ const openSettings = guard(async () => {
     ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export"]],
     ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["integraciones", "🔌 Integraciones", ["integrations"]],
+    ["procesos", "🖥 Procesos", ["procesos"]],
+    ["srvroles", "🛡 Roles del servidor", ["srvroles"]],
     ["licencia", "🏢 Licencia", ["license"]],
     ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "bars", "herdr", "server", "manual", "shortcuts", "guide"]],
   ];

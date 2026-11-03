@@ -327,6 +327,9 @@ pub struct Me {
     /// Usuario del bot (sin @), para mostrar a quién escribirle.
     #[serde(default)]
     pub telegram_bot: Option<String>,
+    /// Rol en el servidor: `user`, `cto` (ve la operación) o `admin` (todo).
+    #[serde(default)]
+    pub server_role: String,
 }
 
 /// Código de un solo uso para vincular Telegram: se envía al bot como `/start <código>`.

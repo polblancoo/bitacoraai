@@ -258,9 +258,11 @@ async fn register(
         return Err(AppError::bad("contraseña: 8-128 caracteres"));
     }
     let hash = hash_password(&c.password)?;
-    let res = sqlx::query("INSERT INTO users (username, password_hash) VALUES (?, ?)")
+    let first: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE server_role = 'admin'").fetch_one(&st.db).await?;
+    let res = sqlx::query("INSERT INTO users (username, password_hash, server_role) VALUES (?, ?, ?)")
         .bind(name)
         .bind(hash)
+        .bind(if first == 0 { "admin" } else { "user" })
         .execute(&st.db)
         .await
         .map_err(|e| match e {

@@ -36,7 +36,7 @@ pub fn router() -> Router<AppState> {
 }
 
 async fn me(State(st): State<AppState>, user: AuthUser) -> Result<Json<Me>> {
-    let r = sqlx::query("SELECT id, username, email, email_verified, telegram_chat_id FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
+    let r = sqlx::query("SELECT id, username, email, email_verified, telegram_chat_id, server_role FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
     Ok(Json(Me {
         id: r.get("id"),
         username: r.get("username"),
@@ -46,6 +46,7 @@ async fn me(State(st): State<AppState>, user: AuthUser) -> Result<Json<Me>> {
         telegram_linked: r.get::<Option<i64>, _>("telegram_chat_id").is_some(),
         telegram_available: st.telegram.is_some(),
         telegram_bot: st.telegram.as_ref().map(|t| t.bot.clone()),
+        server_role: r.get("server_role"),
     }))
 }
 

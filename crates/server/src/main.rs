@@ -13,6 +13,7 @@ mod files;
 mod taskfiles;
 mod integrations;
 mod chat_tr;
+mod sysops;
 mod chat;
 mod chat_ai;
 mod flow;
@@ -144,6 +145,7 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE projects ADD COLUMN repo TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE users ADD COLUMN model TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE users ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN server_role TEXT NOT NULL DEFAULT 'user'",
         "ALTER TABLE team_members ADD COLUMN executor INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN deny TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE users ADD COLUMN allow TEXT NOT NULL DEFAULT ''",
@@ -159,6 +161,8 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
     }
     // las tareas existentes conservan su orden de creación
     sqlx::query("UPDATE tasks SET position = id WHERE position = 0").execute(db).await?;
+    // si todavía no hay quien administre el servidor, la primera persona registrada lo pasa a ser
+    sqlx::query("UPDATE users SET server_role = 'admin' WHERE id = (SELECT MIN(id) FROM users WHERE is_bot = 0 AND id NOT IN (SELECT user_id FROM api_tokens)) AND NOT EXISTS (SELECT 1 FROM users WHERE server_role = 'admin')").execute(db).await?;
     // el dueño de cada equipo siempre tiene rol owner (idempotente)
     sqlx::query("UPDATE team_members SET role = 'owner' WHERE role != 'owner' AND user_id = (SELECT owner_id FROM teams WHERE id = team_id)")
         .execute(db)
@@ -186,6 +190,29 @@ fn cors() -> CorsLayer {
         .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::PUT, Method::DELETE])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
         .max_age(std::time::Duration::from_secs(600))
+}
+
+/// Defensa básica contra saturación: tope de pedidos por IP y por minuto, tope de pedidos en simultáneo (rechaza con 503 en vez de encolar)
+/// y límite de tiempo por pedido. Un ataque de red a gran escala se frena afuera (firewall, proxy o CDN); esto protege a la app de abusos simples.
+static FLOOD: std::sync::LazyLock<limits::RateLimiter<IpAddr>> = std::sync::LazyLock::new(Default::default);
+static INFLIGHT: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(400);
+const REQ_PER_MIN: u32 = 3000;
+
+async fn flood_guard(
+    axum::extract::State(st): axum::extract::State<AppState>,
+    axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<SocketAddr>,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let ip = limits::client_ip(req.headers(), peer, st.trust_proxy);
+    if FLOOD.hit(&ip, REQ_PER_MIN, std::time::Duration::from_secs(60)).is_err() {
+        return (axum::http::StatusCode::TOO_MANY_REQUESTS, [(header::RETRY_AFTER, "30")], "demasiados pedidos, esperá un momento").into_response();
+    }
+    let Ok(_permit) = INFLIGHT.try_acquire() else {
+        return (axum::http::StatusCode::SERVICE_UNAVAILABLE, [(header::RETRY_AFTER, "5")], "servidor ocupado, probá de nuevo en unos segundos").into_response();
+    };
+    next.run(req).await
 }
 
 fn hardening<T: Clone + Send + Sync + 'static>(router: Router<T>) -> Router<T> {
@@ -249,10 +276,12 @@ async fn main() -> anyhow::Result<()> {
     report::spawn_reports(state.clone());
     digest::spawn(state.clone());
 
-    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(gh_sync::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(taskfiles::router()).merge(integrations::router()).merge(chat_tr::router()).merge(chat::router()).merge(chat_ai::router()).merge(flow::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
+    let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(gh_sync::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(taskfiles::router()).merge(integrations::router()).merge(chat_tr::router()).merge(sysops::router()).merge(chat::router()).merge(chat_ai::router()).merge(flow::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))
+        .layer(tower_http::timeout::TimeoutLayer::with_status_code(axum::http::StatusCode::REQUEST_TIMEOUT, std::time::Duration::from_secs(120)))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), flood_guard))
         .layer(cors())
         .layer(TraceLayer::new_for_http())
         .with_state(state);

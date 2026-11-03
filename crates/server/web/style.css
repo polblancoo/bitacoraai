@@ -754,3 +754,11 @@ aside { gap: 10px; }
 .modal.wiz { width: min(640px, 94vw); }
 .chat-tr { color: var(--blue); cursor: pointer; opacity: .85; margin-left: 4px; white-space: nowrap; }
 .chat-tr:hover { text-decoration: underline; opacity: 1; }
+
+.proc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:10px}
+.proc-grid small{display:block;color:var(--dim)}
+.proc-bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:4px 0}
+.proc-bar i{display:block;height:100%;background:var(--blue)}
+.proc-t{width:100%;border-collapse:collapse;font-size:.9em}
+.proc-t th,.proc-t td{text-align:left;padding:3px 8px;border-bottom:1px solid var(--line)}
+.proc h5{margin:12px 0 4px}
