@@ -273,6 +273,7 @@ async fn main() -> anyhow::Result<()> {
     google::spawn_sync(state.clone());
     gh_sync::spawn(state.clone());
     license::spawn_ping(state.clone());
+    license::spawn_wallet_check(state.clone());
     schedule::spawn_schedules(state.clone());
     runner::spawn_runners(state.clone());
     report::spawn_reports(state.clone());

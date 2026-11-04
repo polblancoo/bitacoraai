@@ -47,6 +47,76 @@ pub fn spawn_ping(st: AppState) {
     });
 }
 
+/// Una vez por día pide al servicio de licencias las direcciones donde se reciben los pagos (Tron y Ethereum) y se las manda
+/// al administrador de la instancia (email y Telegram) para que compruebe que nadie las cambió. Si difieren de las del
+/// aviso anterior, lo dice bien claro. Se puede forzar con `TM_PAYMENT_WALLETS="tron=T...,ethereum=0x..."` para pruebas.
+pub fn spawn_wallet_check(st: AppState) {
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(90)).await;
+        loop {
+            let due = meta_get(&st.db, "wallet_check_last").await.and_then(|v| v.parse::<DateTime<Utc>>().ok())
+                .is_none_or(|t| Utc::now() - t >= chrono::Duration::hours(23));
+            if due {
+                wallet_check(&st).await;
+            }
+            tokio::time::sleep(Duration::from_secs(3600)).await;
+        }
+    });
+}
+
+/// Direcciones de cobro como lista ordenada «red=dirección».
+async fn payment_wallets() -> Option<Vec<String>> {
+    if let Ok(v) = std::env::var("TM_PAYMENT_WALLETS") {
+        let mut l: Vec<String> = v.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect();
+        l.sort();
+        return Some(l);
+    }
+    let v = call("licencia-crewhelm", json!({ "accion": "direcciones_cobro", "app": APP })).await.ok()?;
+    let mut l: Vec<String> = v["direcciones"].as_object()?.iter().filter_map(|(red, d)| Some(format!("{red}={}", d.as_str()?))).collect();
+    l.sort();
+    (!l.is_empty()).then_some(l)
+}
+
+fn wallet_message(wallets: &[String], changed: bool) -> String {
+    let mut out = String::from(if changed {
+        "⚠️ ATENCIÓN: las direcciones de cobro CAMBIARON desde el último control. Verificá que fueron cambios tuyos.\n\n"
+    } else {
+        "Control diario de las direcciones donde se reciben los pagos de licencias:\n\n"
+    });
+    for w in wallets {
+        out.push_str(&format!("• {}\n", w.replacen('=', ": ", 1)));
+    }
+    out.push_str("\nSi alguna no es tuya, alguien la modificó: cambiá las credenciales del servicio de licencias.");
+    out
+}
+
+async fn wallet_check(st: &AppState) {
+    let _ = meta_set(&st.db, "wallet_check_last", &Utc::now().to_rfc3339()).await;
+    let Some(wallets) = payment_wallets().await else {
+        tracing::warn!("control de direcciones de cobro: no pude obtenerlas del servicio");
+        return;
+    };
+    let joined = wallets.join(",");
+    let changed = meta_get(&st.db, "wallet_check_hash").await.is_some_and(|prev| prev != joined);
+    let _ = meta_set(&st.db, "wallet_check_hash", &joined).await;
+    let msg = wallet_message(&wallets, changed);
+    let Ok(Some(admin)) = sqlx::query_scalar::<_, Option<i64>>("SELECT MIN(id) FROM users WHERE id NOT IN (SELECT user_id FROM api_tokens)").fetch_one(&st.db).await else { return };
+    if let (Some(tg), Ok(Some(Some(chat)))) = (st.telegram.clone(), sqlx::query_scalar::<_, Option<i64>>("SELECT telegram_chat_id FROM users WHERE id = ?").bind(admin).fetch_optional(&st.db).await) {
+        if let Err(e) = tg.send(chat, &msg).await {
+            tracing::warn!("direcciones de cobro: Telegram falló: {e}");
+        }
+    }
+    if let Some(mailer) = st.mailer.clone() {
+        let to: Option<String> = sqlx::query_scalar("SELECT email FROM users WHERE id = ? AND email_verified = 1 AND email IS NOT NULL").bind(admin).fetch_optional(&st.db).await.ok().flatten();
+        if let Some(to) = to {
+            let subject = format!("[{}] {}", crate::notify::APP_NAME, if changed { "⚠️ Cambiaron las direcciones de cobro" } else { "Direcciones de cobro (control diario)" });
+            if let Err(e) = mailer.send(&to, &subject, msg).await {
+                tracing::warn!("direcciones de cobro: email falló: {e}");
+            }
+        }
+    }
+}
+
 pub(crate) async fn meta_get(db: &SqlitePool, key: &str) -> Option<String> {
     sqlx::query_scalar::<_, String>("SELECT value FROM meta WHERE key = ?").bind(key).fetch_optional(db).await.ok().flatten()
 }
@@ -324,6 +394,14 @@ mod tests {
     fn qr_solana_es_solana_pay() {
         assert_eq!(qr_payload("solana", "G5PV", "Es9v", "120.003417"), "solana:G5PV?amount=120.003417&spl-token=Es9v");
         assert!(qr_svg("solana:G5PV?amount=1&spl-token=Es9v").is_some_and(|s| s.contains("<svg")));
+    }
+
+    #[test]
+    fn mensaje_de_direcciones_avisa_si_cambiaron() {
+        let w = vec!["ethereum=0xA".to_string(), "tron=TX".to_string()];
+        assert!(wallet_message(&w, true).starts_with("⚠️"));
+        let m = wallet_message(&w, false);
+        assert!(m.contains("tron: TX") && m.contains("ethereum: 0xA") && !m.starts_with("⚠️"));
     }
 
     #[test]
