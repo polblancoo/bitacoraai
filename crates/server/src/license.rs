@@ -121,7 +121,7 @@ async fn ping(st: &AppState) {
     if let Some(t) = meta_get(&st.db, "lic_tipo").await {
         body["tipo"] = json!(t);
     }
-    if let Ok(v) = call("registro", body).await {
+    if let Ok(v) = call("registro-crewhelm", body).await {
         let info = v.get("licencia_info").cloned().unwrap_or(Value::Null);
         // Si el servicio no devuelve licencia no se pisa la que quedó guardada al activar (puede no estar registrada todavía).
         if !info.is_null() {
@@ -204,7 +204,7 @@ struct LangQ {
 async fn plans(State(st): State<AppState>, user: AuthUser, Query(q): Query<LangQ>) -> Result<Json<Value>> {
     human(&user)?;
     let id = install_id(&st.db).await?;
-    Ok(Json(call("licencia", json!({ "accion": "planes", "app": APP, "id_pc": id, "idioma": q.lang.unwrap_or_default() })).await?))
+    Ok(Json(call("licencia-crewhelm", json!({ "accion": "planes", "app": APP, "id_pc": id, "idioma": q.lang.unwrap_or_default() })).await?))
 }
 
 /// ¿El uso actual supera el plan? A qué plan pasar y cuánto falta pagar.
@@ -212,7 +212,7 @@ async fn upgrade(State(st): State<AppState>, user: AuthUser) -> Result<Json<Valu
     human(&user)?;
     let id = install_id(&st.db).await?;
     let (humans, ais, _, _) = counts(&st.db).await;
-    Ok(Json(call("licencia", json!({ "accion": "mejora_info", "app": APP, "id_pc": id, "usuarios": humans, "ias": ais })).await?))
+    Ok(Json(call("licencia-crewhelm", json!({ "accion": "mejora_info", "app": APP, "id_pc": id, "usuarios": humans, "ias": ais })).await?))
 }
 
 #[derive(Deserialize)]
@@ -254,7 +254,7 @@ async fn order(State(st): State<AppState>, user: AuthUser, Json(b): Json<OrderBo
     }
     let id = install_id(&st.db).await?;
     let (humans, ais, _, _) = counts(&st.db).await;
-    let mut v = call("licencia", json!({
+    let mut v = call("licencia-crewhelm", json!({
         "accion": "crear_pedido", "app": APP, "id_pc": id, "plan": b.plan, "email": b.email.trim(), "cripto": b.cripto, "red": b.red,
         "acepto": b.accept, "idioma": b.lang.unwrap_or_default(), "mejora": b.upgrade, "usuarios": humans, "ias": ais,
     })).await?;
@@ -270,7 +270,7 @@ struct TokenQ {
 
 async fn order_state(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>, Query(q): Query<TokenQ>) -> Result<Json<Value>> {
     human(&user)?;
-    let mut v = call("licencia", json!({ "accion": "estado", "app": APP, "id": id, "token": q.token })).await?;
+    let mut v = call("licencia-crewhelm", json!({ "accion": "estado", "app": APP, "id": id, "token": q.token })).await?;
     if let Some(code) = v["codigo"].as_str().map(str::to_string) {
         // Pagado: la licencia se activa sola.
         match activate_code(&st, &code).await {
@@ -283,7 +283,7 @@ async fn order_state(State(st): State<AppState>, user: AuthUser, Path(id): Path<
 
 async fn activate_code(st: &AppState, code: &str) -> Result<Value> {
     let id = install_id(&st.db).await?;
-    let info = call("licencia", json!({ "accion": "activar", "app": APP, "id_pc": id, "codigo": code })).await?;
+    let info = call("licencia-crewhelm", json!({ "accion": "activar", "app": APP, "id_pc": id, "codigo": code })).await?;
     meta_set(&st.db, "lic_info", &info.to_string()).await?;
     meta_set(&st.db, "lic_code", code).await?;
     if let Some(t) = info["token"].as_str() {
