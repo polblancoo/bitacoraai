@@ -938,3 +938,22 @@ aside { background: var(--bg2); gap: var(--sp4); }
 .top button.primary .ic, .bars button.primary .ic { color: #fff; }
 .brand { color: var(--fg); letter-spacing: -.01em; }
 .side-sec h2 button, aside h2 button { color: var(--dim); }
+
+/* tema claro menos brillante y texto con más contraste */
+:root[data-theme="light"] {
+  --bg: #e6e9ef; --bg2: #dce0e8; --card: #f4f6f9; --card2: #d2d7e1; --line: #bcc3d0;
+  --fg: #0e121a; --dim: #414b5c; --blue: #234fb8; --green: #1f6b40; --yellow: #85590c; --red: #b0293f;
+  --shadow-2: 0 12px 32px #0e121a2e;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #e6e9ef; --bg2: #dce0e8; --card: #f4f6f9; --card2: #d2d7e1; --line: #bcc3d0;
+  --fg: #0e121a; --dim: #414b5c; --blue: #234fb8; --green: #1f6b40; --yellow: #85590c; --red: #b0293f;
+  --shadow-2: 0 12px 32px #0e121a2e;
+} }
+:root[data-theme="light"] input, :root[data-theme="light"] textarea, :root[data-theme="light"] select { background: #fbfcfd; }
+:root[data-theme="light"] .col.over { background: #cfd8ee; }
+:root[data-theme="light"] .pill { filter: saturate(1.15) contrast(1.1); }
+/* tema oscuro: texto secundario un poco más claro */
+:root:not([data-theme="light"]) { --fg: #eceff4; --dim: #9aa3b2; }
+:root { --muted: var(--dim); }
+.hint, .proj-meta, .small, small { color: var(--dim); }
