@@ -862,3 +862,79 @@ aside h2 > span button { min-height: 24px; min-width: 24px; padding: 0 5px; }
 .proj-meta { padding: 8px 22px; font-size: 12px; }
 .col .count { font-variant-numeric: tabular-nums; }
 button.dashed, .col .add { border-style: dashed; box-shadow: none; }
+
+/* ===== Estilo sobrio: grises neutros, un solo acento, radios chicos, líneas finas, sin cajas de colores ===== */
+:root {
+  --bg: #0f1216; --bg2: #13171c; --card: #171b21; --card2: #1f242c; --line: #262c35;
+  --fg: #e4e7ec; --dim: #8a93a1; --blue: #5b8def; --purple: #a493e8; --green: #5fb381;
+  --yellow: #d4a255; --red: #e5707f; --cyan: #5cb7d6;
+  --radius: 8px; --r-sm: 6px; --r-md: 8px; --r-lg: 10px;
+  --ctl: 30px;
+  --shadow-1: none; --shadow-2: 0 12px 32px #0007;
+}
+:root[data-theme="light"] {
+  --bg: #f6f7f9; --bg2: #eef0f4; --card: #ffffff; --card2: #e6e9ef; --line: #dcdfe6;
+  --fg: #1c212b; --dim: #667085; --blue: #2f5fd0; --purple: #6a4fc0; --green: #2a7d4f;
+  --yellow: #9a6a14; --red: #c43d52; --cyan: #17789c;
+  --shadow-1: none; --shadow-2: 0 12px 32px #1c212b24;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #f6f7f9; --bg2: #eef0f4; --card: #ffffff; --card2: #e6e9ef; --line: #dcdfe6;
+  --fg: #1c212b; --dim: #667085; --blue: #2f5fd0; --purple: #6a4fc0; --green: #2a7d4f;
+  --yellow: #9a6a14; --red: #c43d52; --cyan: #17789c;
+  --shadow-1: none; --shadow-2: 0 12px 32px #1c212b24;
+} }
+body { font-size: 13.5px; }
+input, textarea, select { border-radius: var(--r-sm); }
+button { box-shadow: none; font-weight: 500; }
+button:hover { border-color: color-mix(in srgb, var(--dim) 55%, var(--line)); }
+button.primary { color: #fff; }
+.login { background: var(--bg); }
+.login-card { border-radius: var(--r-lg); box-shadow: var(--shadow-2); }
+
+/* barra lateral plana, sin cajas ni barras de color */
+aside { background: var(--bg2); gap: var(--sp4); }
+.side-sec { padding: 0; border: 0; background: none; box-shadow: none; border-radius: 0; }
+.side-sec::before { display: none; }
+.side-sec h2, aside h2 { color: var(--dim); font-weight: 600; font-size: 10.5px; letter-spacing: .1em; margin-bottom: 2px; }
+.side-sec .nav button.active, .nav button.active { background: color-mix(in srgb, var(--fg) 8%, transparent); box-shadow: none; color: var(--fg); }
+.side-sec .nav button:hover, .nav button:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.nav button.active .ic { color: var(--fg); }
+.nav button { border-radius: var(--r-sm); min-height: 30px; }
+.cfg-btn { border-radius: var(--r-sm); background: transparent; border-color: transparent; justify-content: flex-start; min-height: 30px; }
+.cfg-btn:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); border-color: transparent; }
+
+/* barra superior: botones planos, el activo se marca con un trazo, no con un bloque saturado */
+.top button, .bars button { background: transparent; border-color: var(--line); font-weight: 500; }
+.top button:hover, .bars button:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.top button.on, .bars button.on { background: color-mix(in srgb, var(--blue) 14%, transparent); border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); color: var(--blue); }
+:root[data-theme="light"] .top button.on, :root[data-theme="light"] .bars button.on { color: var(--blue); }
+.top button.on .ic, .bars button.on .ic { color: var(--blue); }
+.seg { background: var(--bg2); border-color: var(--line); border-radius: var(--r-sm); }
+.seg button { border-radius: 4px; }
+.top .seg button.on, .seg button.on { background: var(--card); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+.proj-meta { border-bottom: 1px solid var(--line); }
+
+/* tablero: columnas y tarjetas de borde fino */
+.col { background: var(--bg2); border-radius: var(--r-lg); }
+.col header { border-bottom: 1px solid var(--line); font-size: 12.5px; text-transform: none; }
+.col header .bar { width: 8px; height: 8px; border-radius: 50%; }
+.card { background: var(--card); border-radius: var(--r-md); }
+.card:hover { box-shadow: none; border-color: color-mix(in srgb, var(--dim) 55%, var(--line)); }
+.pill { border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+.col .add, button.dashed { border-radius: var(--r-sm); color: var(--dim); }
+
+/* ventanas */
+.modal { border-radius: var(--r-lg); padding: var(--sp5); }
+.modal h3 .ic { color: var(--dim); }
+.chip { border-radius: 4px; }
+.pf-chip { border-radius: 4px; }
+.avatar { border-width: 2px; }
+.help { border-radius: var(--r-sm); }
+#toast { border-radius: var(--r-sm); }
+.reqpanel { border-radius: var(--r-md); }
+.top button.primary, .bars button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.top button.primary:hover, .bars button.primary:hover { background: var(--blue); filter: brightness(1.1); }
+.top button.primary .ic, .bars button.primary .ic { color: #fff; }
+.brand { color: var(--fg); letter-spacing: -.01em; }
+.side-sec h2 button, aside h2 button { color: var(--dim); }
