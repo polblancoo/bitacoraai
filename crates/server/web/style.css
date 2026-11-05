@@ -957,3 +957,10 @@ aside { background: var(--bg2); gap: var(--sp4); }
 :root:not([data-theme="light"]) { --fg: #eceff4; --dim: #9aa3b2; }
 :root { --muted: var(--dim); }
 .hint, .proj-meta, .small, small { color: var(--dim); }
+
+/* líneas finas pero visibles (tarjetas, columnas, controles) */
+:root:not([data-theme="light"]) { --line: #3a4250; }
+:root[data-theme="light"] { --line: #9fa8ba; }
+.card, .col, .pf-card, .pf-tile { border-color: var(--line); }
+.col header { border-bottom-color: var(--line); }
+.card:hover { border-color: color-mix(in srgb, var(--blue) 60%, var(--line)); }
