@@ -964,3 +964,31 @@ aside { background: var(--bg2); gap: var(--sp4); }
 .card, .col, .pf-card, .pf-tile { border-color: var(--line); }
 .col header { border-bottom-color: var(--line); }
 .card:hover { border-color: color-mix(in srgb, var(--blue) 60%, var(--line)); }
+
+/* ventanas internas: menú de Configuración, login y paneles laterales */
+.cfg-tab { display: flex; align-items: center; justify-content: flex-start; text-align: left; min-height: 34px; padding: 0 12px; border-radius: var(--r-sm); font-size: 13.5px; font-weight: 450; box-shadow: none; }
+.cfg-tab:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); border: 0; }
+.cfg-tab.active { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--fg); font-weight: 600; box-shadow: inset 2px 0 0 var(--blue); }
+.cfg-tab .ic { color: var(--dim); }
+.cfg-tab.active .ic { color: var(--blue); }
+.login-card h1 { color: var(--fg); letter-spacing: -.01em; }
+.login-card { gap: var(--sp3); }
+.chat-panel h3, .team-panel h3, .chat-panel h2, .team-panel h2 { display: flex; align-items: center; gap: var(--sp2); }
+.chat-panel h3 .ic, .team-panel h3 .ic, .chat-panel h2 .ic, .team-panel h2 .ic { margin-right: 0; color: var(--dim); }
+.cfg-item, .tp-member, .tp-invite { border-color: var(--line); }
+input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; min-height: 0; padding: 0; flex: none; accent-color: var(--blue); vertical-align: middle; }
+label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { display: flex; align-items: center; gap: var(--sp2); }
+.man-toc a { font-weight: 500; color: var(--dim); line-height: 1.35; padding: 5px 8px; border-radius: var(--r-sm); }
+.man-toc a:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
+.man-toc a.on, .man-toc a.active { color: var(--fg); font-weight: 600; background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.chat-panel .row > strong, .team-panel .row > strong { display: inline-flex; align-items: center; gap: var(--sp2); font-size: 14px; }
+.chat-panel .row > strong .ic, .team-panel .row > strong .ic { margin-right: 0; color: var(--dim); }
+label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { justify-content: flex-start; text-align: left; }
+.login, :root[data-theme="light"] .login, :root[data-theme="dark"] .login { background: var(--bg); }
+.modal label.row { display: flex; align-items: center; justify-content: flex-start; text-align: left; gap: var(--sp2); color: var(--fg); font-size: 13.5px; }
+.modal.small label.row, .modal label.row { justify-content: flex-start; }
+.modal label.row { justify-self: stretch; width: 100%; }
+.modal .row input[type="checkbox"], .modal .row input[type="radio"] { flex: none; width: 16px; }
+.man-body a, .modal a:not(.btnlike) { color: var(--blue); }
+.man-toc a.t2 { font-weight: 500; }
+.man-toc a.t1 { font-weight: 700; }
