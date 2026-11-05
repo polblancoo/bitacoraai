@@ -1474,6 +1474,21 @@ function upsert(t) {
 }
 
 // ---------- modal de tarea ----------
+// tareas hechas archivadas: se ven acá y se pueden devolver al tablero
+function openArchived() {
+  closeModal(); S.open = "archived";
+  const list = S.tasks.filter((t) => t.archived && !t.parent_id).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+  document.body.append(h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && closeModal() },
+    h("div", { class: "modal" },
+      h("h3", {}, "🗄 Tareas archivadas", h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: closeModal }, "✕")),
+      h("p", { class: "hint" }, "Tareas hechas que sacaste del tablero. Seguís viéndolas acá, en el Gantt y en los informes; «Volver al tablero» las deja otra vez en Hecho."),
+      list.length ? h("div", { class: "arch-list" }, list.map((t) => h("div", { class: "arch-row" },
+        h("span", { class: "tid" }, "#" + t.id),
+        h("a", { class: "grow arch-title", href: "#", onclick: (e) => { e.preventDefault(); closeModal(); openTask(t); } }, t.title),
+        h("small", { class: "hint" }, new Date(t.updated_at).toLocaleDateString()),
+        can("member") && h("button", { onclick: () => setArchived(t, false) }, "Volver al tablero"))))
+        : h("p", { class: "hint" }, "No hay tareas archivadas. Usá la ✕ de una tarea en Hecho para archivarla."))));
+}
 function closeModal() { S.open = null; S.redrawSubs = null; document.getElementById("modal")?.remove(); }
 
 // resalta @usuario cuando coincide con un miembro del equipo (todo como texto, nunca como HTML)
@@ -2040,7 +2055,8 @@ function taskCard(t) {
       h("span", { class: `pill p${t.priority}` }, PRIO[t.priority]),
       t.due && h("span", { class: "due" + (late ? " late" : "") }, "⏰ " + new Date(t.due).toLocaleDateString()),
       h("span", { class: "spacer" }),
-      t.assignee && avatar(t.assignee)));
+      t.assignee && avatar(t.assignee)),
+    t.status === "done" && can("member") && h("button", { class: "ghost card-x", title: "Archivar: la saca del tablero y la podés recuperar desde «Archivadas»", onclick: (e) => { e.stopPropagation(); setArchived(t, true); } }, "✕"));
   card.draggable = can("member");
   card.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", String(t.id)); card.classList.add("dragging"); });
   card.addEventListener("dragend", () => card.classList.remove("dragging"));
@@ -2066,12 +2082,13 @@ function moveTask(id, status, beforeId, waiting) {
   if (status === "doing" || t.waiting) patch.waiting = w;
   Object.assign(t, patch); render(); patchTask(id, patch);
 }
+const setArchived = (t, v) => { t.archived = v; render(); patchTask(t.id, { archived: v }); if (S.open === "archived") openArchived(); };
 const byOrder = (a, b) => a.position - b.position || a.id - b.id;
 
 function column(s) {
   const q = S.query.toLowerCase();
   const tasks = S.tasks
-    .filter((t) => !t.parent_id && t.status === s.id && (!q || t.title.toLowerCase().includes(q) || (t.assignee || "").toLowerCase().includes(q)
+    .filter((t) => !t.parent_id && t.status === s.id && !(s.id === "done" && t.archived) && (!q || t.title.toLowerCase().includes(q) || (t.assignee || "").toLowerCase().includes(q)
       || t.labels.some((l) => l.name.toLowerCase().includes(q))))
     // en «Hecho» lo último que se terminó va arriba; en las demás, el orden manual
     .sort(s.id === "done" ? (a, b) => String(b.updated_at).localeCompare(String(a.updated_at)) : byOrder);
@@ -2082,7 +2099,9 @@ function column(s) {
     h("div", { class: "cards" }, waitTasks.length ? waitTasks.map(taskCard) : h("small", { class: "hint" }, "Acá queda lo que la IA entrega por tramos. Comentá para que siga, o pasalo a Hecho.")));
   waitZone && waitZone.addEventListener("drop", (e) => { e.preventDefault(); e.stopPropagation(); col.classList.remove("over"); moveTask(+e.dataTransfer.getData("text/plain"), "doing", null, true); });
   const col = h("section", { class: "col" },
-    h("header", {}, h("span", { class: "bar", style: `background:${s.color}` }), s.label, h("span", { class: "count" }, tasks.length)),
+    h("header", {}, h("span", { class: "bar", style: `background:${s.color}` }), s.label, h("span", { class: "count" }, tasks.length),
+      s.id === "done" && h("span", { class: "spacer" }),
+      s.id === "done" && h("button", { class: "ghost arch-btn", title: "Tareas hechas que sacaste del tablero: acá las ves y las recuperás", onclick: openArchived }, "🗄 Archivadas", h("span", { class: "count" }, S.tasks.filter((t) => t.archived && !t.parent_id).length))),
     h("div", { class: "cards" }, (split ? tasks.filter((t) => !t.waiting) : tasks).map(taskCard)),
     waitZone,
     can("member") && h("button", { class: "add", onclick: () => createTask(s.id) }, "+ Nueva tarea"));

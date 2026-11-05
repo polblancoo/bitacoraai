@@ -189,6 +189,9 @@ pub struct Task {
     /// En «En curso» pero esperando el próximo paso de una persona (la IA entregó un tramo y falta continuar).
     #[serde(default)]
     pub waiting: bool,
+    /// Hecha y guardada fuera del tablero (se ve y se restaura desde «Archivadas»).
+    #[serde(default)]
+    pub archived: bool,
     /// Repetición: "daily", "weekly" o "monthly". Al completarla se crea la siguiente.
     #[serde(default)]
     pub recurrence: Option<String>,
@@ -285,6 +288,7 @@ pub struct TaskPatch {
     pub priority: Option<i64>,
     pub position: Option<f64>,
     pub waiting: Option<bool>,
+    pub archived: Option<bool>,
     #[serde(default, deserialize_with = "double_option")]
     pub assignee_id: Option<Option<Id>>,
     #[serde(default, deserialize_with = "double_option")]

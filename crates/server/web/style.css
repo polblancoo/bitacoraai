@@ -1001,3 +1001,16 @@ aside h2 > button.sec-toggle::after { content: ""; width: 6px; height: 6px; marg
 .side-sec.collapsed > :not(h2) { display: none; }
 .side-sec.collapsed h2 { margin-bottom: 0; }
 aside h2 > button.sec-toggle .ic { margin-right: 7px; }
+
+/* archivar tareas hechas */
+.card { position: relative; }
+.card-x { position: absolute; top: 6px; right: 6px; min-height: 22px; min-width: 22px; padding: 0 !important; font-size: 12px; color: var(--dim); opacity: 0; }
+.card:hover .card-x, .card-x:focus-visible { opacity: 1; }
+.card-x:hover { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+@media (hover: none) { .card-x { opacity: .7; } }
+.col header .arch-btn { min-height: 24px; font-size: 12px; color: var(--dim); gap: 6px; padding: 0 var(--sp2); }
+.col header .arch-btn .count { margin-left: 4px; }
+.arch-list { display: grid; gap: 2px; max-height: 55vh; overflow: auto; }
+.arch-row { display: flex; align-items: center; gap: var(--sp3); padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.arch-row .arch-title { color: var(--fg); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arch-row .arch-title:hover { color: var(--blue); }

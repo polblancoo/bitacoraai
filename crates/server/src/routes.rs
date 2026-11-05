@@ -99,7 +99,7 @@ pub(crate) async fn team_of_task(st: &AppState, task: Id) -> Result<Id> {
 }
 
 pub(crate) const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.title, t.description, t.status, t.priority, t.position, \
-    t.assignee_id, u.username AS assignee, t.due, t.start, t.recurrence, t.parent_id, t.created_by, t.waiting, t.created_at, t.updated_at, \
+    t.assignee_id, u.username AS assignee, t.due, t.start, t.recurrence, t.parent_id, t.created_by, t.waiting, t.archived, t.created_at, t.updated_at, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id) AS sub_total, \
     (SELECT COUNT(*) FROM tasks s WHERE s.parent_id = t.id AND s.status = 'done') AS sub_done \
     FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id";
@@ -125,6 +125,7 @@ pub(crate) fn task_from_row(r: &SqliteRow) -> Task {
         subtasks_done: r.get("sub_done"),
         recurrence: r.get("recurrence"),
         waiting: r.get::<i64, _>("waiting") != 0,
+        archived: r.get::<i64, _>("archived") != 0,
         created_at: r.get("created_at"),
         updated_at: r.get("updated_at"),
     }
@@ -896,6 +897,8 @@ async fn update_task(
     } else {
         p.waiting.unwrap_or(if p.status.is_some() && cur.status != Status::Doing { false } else { cur.waiting })
     };
+    // archivar solo vale para tareas hechas; si se reabre, vuelve al tablero
+    let archived = new_status == Status::Done && p.archived.unwrap_or(cur.archived);
     let mut ai_leg = false;
     if !held && user.bot && new_status == Status::Done && cur.status != Status::Done && crate::review::hold_ai_done(&st, cur.project_id).await {
         new_status = Status::Doing;
@@ -903,7 +906,7 @@ async fn update_task(
         ai_leg = true;
     }
     sqlx::query(
-        "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, position = ?, assignee_id = ?, due = ?, start = ?, recurrence = ?, waiting = ?, \
+        "UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, position = ?, assignee_id = ?, due = ?, start = ?, recurrence = ?, waiting = ?, archived = ?, \
          remind_state = CASE WHEN ? THEN 0 ELSE remind_state END, updated_at = ? WHERE id = ?",
     )
     .bind(p.title.as_deref().map(str::trim).filter(|s| !s.is_empty()).unwrap_or(&cur.title))
@@ -916,6 +919,7 @@ async fn update_task(
     .bind(start)
     .bind(recurrence)
     .bind(waiting)
+    .bind(archived && new_status == Status::Done)
     .bind(reminders_reset)
     .bind(Utc::now())
     .bind(id)
