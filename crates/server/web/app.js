@@ -95,18 +95,16 @@ const TIPS = {
  "‹": "Mes anterior",
  "›": "Mes siguiente"
 };
-// tema: auto (sigue al sistema) / claro / oscuro
-const THEMES = { auto: ["🌗", "automático (el del sistema)"], light: ["☀️", "claro"], dark: ["🌙", "oscuro"] };
-const themePref = () => (THEMES[store.get("theme")] ? store.get("theme") : "auto");
+// tema: claro / oscuro
+const THEMES = { light: ["☀️", "claro"], dark: ["🌙", "oscuro"] };
+const themePref = () => (THEMES[store.get("theme")] ? store.get("theme") : "dark");
 function applyTheme() {
   const t = themePref();
-  if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t);
-  const light = t === "light" || (t === "auto" && matchMedia("(prefers-color-scheme: light)").matches);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#f4f6fb" : "#1a1b26");
+  document.documentElement.setAttribute("data-theme", t);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t === "light" ? "#e6e9ef" : "#0f1216");
 }
-function cycleTheme() { store.set("theme", { auto: "light", light: "dark", dark: "auto" }[themePref()]); applyTheme(); render(true); }
+function cycleTheme() { store.set("theme", themePref() === "light" ? "dark" : "light"); applyTheme(); render(true); }
 applyTheme();
-try { matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyTheme); } catch {}
 
 // Iconos de línea (estilo Lucide, 24×24, trazo currentColor). Los textos de la interfaz siguen empezando con su emoji
 // (así no cambian las claves de i18n): h() lo reemplaza al dibujarlo por el ícono vectorial de esta tabla.
