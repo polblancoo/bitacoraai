@@ -95,6 +95,11 @@ const TIPS = {
  "‹": "Mes anterior",
  "›": "Mes siguiente"
 };
+// secciones de la barra lateral que se pueden contraer (se recuerda en el navegador)
+const secOpen = (k) => store.get("sec_" + k) !== "0";
+const secCls = (k) => (secOpen(k) ? "" : " collapsed");
+const toggleSec = (k) => { store.set("sec_" + k, secOpen(k) ? "0" : "1"); render(true); };
+const secTitle = (k, label) => h("button", { class: "ghost sec-toggle", "aria-expanded": String(secOpen(k)), title: secOpen(k) ? "Contraer" : "Expandir", onclick: () => toggleSec(k) }, label);
 // tema: claro / oscuro
 const THEMES = { light: ["☀️", "claro"], dark: ["🌙", "oscuro"] };
 const themePref = () => (THEMES[store.get("theme")] ? store.get("theme") : "dark");
@@ -2170,13 +2175,13 @@ function appView() {
     h("aside", {},
       h("div", { class: "brand" }, h("img", { src: "icon-192.png", alt: "", width: 22, height: 22, style: "vertical-align:middle;margin-right:6px;border-radius:5px" }), h("span", { class: "brand-name" }, APP_NAME),
         h("button", { class: "ghost side-toggle", title: S.sideOff ? "Mostrar la barra lateral" : "Ocultar la barra lateral (queda una franja para volver a abrirla)", onclick: toggleSide }, S.sideOff ? "»" : "«")),
-      h("div", { class: "side-sec sec-teams" }, h("h2", {}, "👥 Equipos", h("span", {}, S.team && h("button", { class: "ghost", onclick: () => { S.panel = true; store.set("panel", "1"); loadOverview(); setTimeout(() => document.querySelector(".tp-sec:last-child")?.scrollIntoView(), 400); }, title: "Editar o eliminar el equipo actual (ajustes en el panel de la derecha)" }, "⚙"), h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
+      h("div", { class: "side-sec sec-teams" + secCls("teams") }, h("h2", {}, secTitle("teams", "👥 Equipos"), h("span", {}, S.team && h("button", { class: "ghost", onclick: () => { S.panel = true; store.set("panel", "1"); loadOverview(); setTimeout(() => document.querySelector(".tp-sec:last-child")?.scrollIntoView(), 400); }, title: "Editar o eliminar el equipo actual (ajustes en el panel de la derecha)" }, "⚙"), h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
         h("div", { class: "nav" }, S.teams.map((t) => h("button", { class: t.id === S.team?.id ? "active" : "", onclick: () => selectTeam(t).catch((e) => toast(e.message, true)) }, t.name)))),
-      S.team && h("div", { class: "side-sec sec-projects" }, h("h2", {}, "📁 Proyectos", h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
+      S.team && h("div", { class: "side-sec sec-projects" + secCls("projects") }, h("h2", {}, secTitle("projects", "📁 Proyectos"), h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
         h("div", { class: "nav" }, S.projects.length > 0 && can("owner") && showTech() && h("button", { class: S.terms ? "active" : "", onclick: openTerms, title: "Terminales SSH de los proyectos y estado de las IAs, en paneles" }, "🖥️ Terminales"), S.projects.length > 0 && h("button", { class: S.portfolio ? "active" : "", onclick: openPortfolio, title: "Avance de todos los proyectos del equipo" }, "📊 Portafolio"),
           S.projects.map((p) => h("button", { class: p.id === S.project?.id && !S.portfolio && !S.terms ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
           h("span", { class: "dot", style: `background:${p.color}` }), p.name)))),
-      S.team && h("div", { class: "side-sec sec-bots" }, h("h2", {}, "🤖 IAs", can("admin") && h("button", { class: "ghost", onclick: createBot, title: "Sumar una IA al equipo (crea su token)" }, "+")),
+      S.team && h("div", { class: "side-sec sec-bots" + secCls("bots") }, h("h2", {}, secTitle("bots", "🤖 IAs"), can("admin") && h("button", { class: "ghost", onclick: createBot, title: "Sumar una IA al equipo (crea su token)" }, "+")),
         h("div", { class: "nav" }, (S.bots || []).map((b) => h("button", { class: b.active ? "" : "revoked", onclick: () => botModal(b), title: !b.active ? "Token revocado" : b.online ? "Conectada: su agente consultó hace instantes" : b.run_on ? "Activada en el servidor pero sin conectar" : "Sin agente conectado (no trabaja sola)" }, (!b.active ? "⚪ " : b.online ? "🟢 " : b.run_on ? "🔴 " : "⚪ ") + "🤖 " + b.username, b.model && h("small", { class: "inl" }, " · " + b.model))),
           !(S.bots || []).length && h("small", { class: "hint" }, can("admin") ? "Sumá asistentes de código con «+»" : "Sin IAs en este equipo"))),
       h("button", { class: "cfg-btn", onclick: openSettings, title: "Configuración (,)" }, "⚙  Configuración"),

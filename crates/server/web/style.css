@@ -992,3 +992,12 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { justify-
 .man-body a, .modal a:not(.btnlike) { color: var(--blue); }
 .man-toc a.t2 { font-weight: 500; }
 .man-toc a.t1 { font-weight: 700; }
+
+/* secciones contraíbles de la barra lateral */
+aside h2 > button.sec-toggle { flex: 1; justify-content: flex-start; margin-left: 0; min-height: 24px; padding: 0 var(--sp1); color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+aside h2 > button.sec-toggle:hover { color: var(--fg); background: transparent; border-color: transparent; }
+aside h2 > button.sec-toggle::after { content: ""; width: 6px; height: 6px; margin-left: 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform .15s var(--ease); opacity: .7; }
+.side-sec.collapsed > h2 > button.sec-toggle::after { transform: rotate(-45deg); }
+.side-sec.collapsed > :not(h2) { display: none; }
+.side-sec.collapsed h2 { margin-bottom: 0; }
+aside h2 > button.sec-toggle .ic { margin-right: 7px; }
