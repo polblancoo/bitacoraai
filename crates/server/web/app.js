@@ -152,7 +152,7 @@ function h(tag, attrs = {}, ...kids) {
     if (kid == null || kid === false) continue;
     if (typeof kid !== "string") { el.append(kid); continue; }
     const txt = tr(kid), m = tag !== "option" && tag !== "title" && EMOJI_LEAD.exec(txt);
-    if (m) { el.append(icon(EMOJI_ICON[m[1]])); if (txt.length > m[0].length) el.append(txt.slice(m[0].length)); }
+    if (m) { const ic = icon(EMOJI_ICON[m[1]]); if (txt.length > m[0].length) el.append(ic, txt.slice(m[0].length)); else { ic.classList.add("solo"); el.append(ic); } }
     else el.append(txt);
   }
   // tooltip automático para los botones que no traen uno propio
