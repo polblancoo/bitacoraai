@@ -151,6 +151,7 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE team_members ADD COLUMN executor INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN deny TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE users ADD COLUMN allow TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN isolation TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE ssh_targets ADD COLUMN agent_id INTEGER",
         "ALTER TABLE projects ADD COLUMN token_quota INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE teams ADD COLUMN token_quota INTEGER NOT NULL DEFAULT 0",

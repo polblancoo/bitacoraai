@@ -862,6 +862,12 @@ const botModal = (b) => {
           const f = await form("IA / modelo", [{ name: "model", label: "Qué IA es (ej. claude:Opus)", value: b.model, max: 40 }], "Guardar"); if (!f) return;
           await api("PATCH", `/api/bots/${b.id}`, { model: f.model }); overlay.remove(); await loadBots();
         }) }, "Cambiar modelo"),
+        admin && h("button", { title: "Cómo corre esta IA: sin aislar, con una copia de trabajo propia por tarea, o dentro de un sandbox sin acceso al resto de la máquina", onclick: guard(async () => {
+          const ISO = [["off", "Ninguno (como hasta ahora)"], ["copy", "Copia de trabajo por tarea, con su rama (sin sandbox)"], ["sandbox", "Sandbox: copia + sin acceso al resto de la máquina ni a la red salvo lo permitido"]];
+          const f = await form("🛡 Aislamiento de " + b.username, [{ name: "iso", label: "Cada ejecución de esta IA corre…", type: "select", options: ISO, value: b.isolation || "off" }], "Guardar"); if (!f) return;
+          await api("PATCH", `/api/bots/${b.id}`, { isolation: f.iso === "off" ? "" : f.iso }); overlay.remove(); await loadBots();
+          toast(f.iso === "sandbox" ? "Sandbox activado: vale desde la próxima tarea (necesita bwrap en la máquina del agente)" : f.iso === "copy" ? "Copia de trabajo por tarea activada" : "Aislamiento apagado");
+        }) }, b.isolation === "sandbox" ? "🛡 Aislamiento: sandbox" : b.isolation === "copy" ? "🛡 Aislamiento: copia por tarea" : "🛡 Aislamiento"),
         admin && h("button", { onclick: guard(async () => { overlay.remove(); await editDeny(b); }) }, "🚫 Comandos prohibidos"),
         admin && h("button", { title: "Comandos que esta IA puede usar sin pedir permiso", onclick: guard(async () => { await editAllow(b); overlay.remove(); }) }, "✅ Comandos permitidos"),
         admin && h("button", { class: "primary", title: "Autorización total con una lista corta de cosas peligrosas prohibidas: la IA no vuelve a pedir permisos", onclick: guard(async () => { if (await trustProfile(b)) { overlay.remove(); } }) }, "⚡ Perfil confiable"),
@@ -2919,8 +2925,9 @@ const openSettings = guard(async () => {
           if (!g.can_edit) { toast("Solo la primera persona registrada edita las listas generales. Cada IA tiene la suya en su ficha."); return; }
           const f = await form("Comandos de todas las IAs", [
             { name: "allow", label: "✅ Permitidos para todas (uno por línea, ej. git clone · cargo build · Bash(npm test:*))", type: "textarea", value: g.allow, max: 4000 },
-            { name: "deny", label: "🚫 Prohibidos para todas (uno por línea, ej. Bash(rm:*)). Lo prohibido siempre gana.", type: "textarea", value: g.deny, max: 4000 }], "Guardar"); if (!f) return;
-          await api("PUT", "/api/commands", { allow: f.allow, deny: f.deny }); toast("Listas guardadas");
+            { name: "deny", label: "🚫 Prohibidos para todas (uno por línea, ej. Bash(rm:*)). Lo prohibido siempre gana.", type: "textarea", value: g.deny, max: 4000 },
+            { name: "net_allow", label: "🌐 Destinos de red para las IAs con sandbox, además de los de fábrica (Anthropic, OpenAI, GitHub, crates.io, npm, PyPI…). Uno por línea, solo dominios (ej. api.miempresa.com)", type: "textarea", value: g.net_allow, max: 4000 }], "Guardar"); if (!f) return;
+          await api("PUT", "/api/commands", { allow: f.allow, deny: f.deny, net_allow: f.net_allow }); toast("Listas guardadas");
         }) }, "Editar")),
         line(["Uso gratis (AGPL-3.0) o licencia comercial para empresas", "license"], h("button", { onclick: go(openLicense) }, "🏢 Licencia")),),
       sec("Preferencias",

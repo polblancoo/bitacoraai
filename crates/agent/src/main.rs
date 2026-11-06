@@ -5,13 +5,14 @@ use reqwest::Method;
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Stdio,
     sync::{Arc, Mutex},
     time::Duration,
 };
 use tokio::{process::Command, sync::Semaphore};
 
+mod iso;
 mod term;
 
 const HELP: &str = "tm-agent: pone a trabajar a una IA cuando le asignan una tarea en CrewHelm.
@@ -157,9 +158,10 @@ struct Job {
     repo: String,
     work_dir: String,
     updated_at: String,
+    parent: Option<i64>,
 }
 
-async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path, mine: &std::path::Path, pr_branch: Option<&str>) -> String {
+async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path, mine: &std::path::Path, branch: Option<&str>) -> String {
     let comments = api.get(&format!("/api/tasks/{}/comments", job.id)).await.unwrap_or(Value::Null);
     let notes: Vec<String> = comments
         .as_array()
@@ -174,8 +176,8 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path, mine: &std::pat
             format!("Una persona trabajó en la terminal de esta tarea; esto es lo último que quedó anotado en .tm/terminal-tarea-{}.md (seguí desde ahí):\n{tail}\n\n", job.id)
         })
         .unwrap_or_default();
-    let pr_note = pr_branch
-        .map(|b| format!("Este proyecto abre Pull Requests: si cambiás archivos del repositorio, trabajá en la rama `{b}` (creala con `git checkout -b {b}` si no existe), hacé `git add` y `git commit` de tus cambios y subila con `git push -u origin {b}`. No hagas push a `main` ni a otra rama; la persona abre el Pull Request desde la tarea. Si no cambiaste nada del repositorio, no crees la rama.\n\n"))
+    let pr_note = branch
+        .map(|b| format!("Trabajás en una copia aislada de esta tarea, en la rama `{b}`. No hagas `git commit` ni `git push`: cuando termines, el sistema guarda tus cambios en esa rama y la sube; la persona abre el Pull Request desde la tarea. Si no cambiaste archivos del repositorio, no se crea nada.\n\n"))
         .unwrap_or_default();
     format!(
         "{term_note}{pr_note}Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout. Si lo que pedís es que una persona ejecute o permita un comando, escribilo dentro de la pregunta en un bloque de código (tres comillas invertidas, un comando por línea): la app lo muestra en un recuadro para copiar y permitir con un clic.\n\nTrabajá dentro de la carpeta de trabajo. Los archivos que generes y que no sean parte del código del repositorio (informes, presentaciones, datos, borradores) guardalos en tu carpeta de esta tarea: {}. Lo que quede ahí es lo que se entrega a la etapa siguiente, y al aprobarse la última etapa se copia a la carpeta final de la tarea. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
@@ -226,25 +228,44 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
             return None;
         }
     };
-    log(&format!("▶ #{} «{}» en {}", job.id, job.title, dir.display()));
-    api.say(job.id, &format!("▶ Empiezo con esta tarea. Trabajo en `{}`.", dir.display())).await;
-    // carpeta propia de esta tarea: .crewhelm/<usuario>/<id>/ (y final/, que llena el servidor al aprobarse el flujo)
+    // aislamiento de esta IA (ficha en la app), destinos de red permitidos y si el proyecto abre Pull Requests
+    let me_allow = api.get("/api/me/allow").await.ok();
+    let ai_pr = !job.repo.is_empty() && api.get(&format!("/api/projects/{}/github/settings", job.project_id)).await.ok().and_then(|v| v["ai_pr"].as_bool()).unwrap_or(false);
+    let iso = iso::Settings::resolve(
+        me_allow.as_ref().and_then(|v| v["isolation"].as_str()).unwrap_or(""),
+        ai_pr,
+        me_allow.as_ref().and_then(|v| v["net_allow"].as_str()).unwrap_or(""),
+    );
     let me_name = api.get("/api/me").await.ok().and_then(|v| v["username"].as_str().map(String::from)).unwrap_or_else(|| "ia".into());
-    let safe: String = me_name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
-    let mine = dir.join(".crewhelm").join(safe).join(job.id.to_string());
+    // si el aislamiento está pedido y no se puede cumplir, la tarea no corre sin él (falla cerrado)
+    let claimed_at = claimed["updated_at"].as_str().map(String::from);
+    let fail = |why: String| refuse(api, job.id, claimed_at.clone(), why);
+    if iso.sandbox && !iso::bwrap_ok().await {
+        return fail("el aislamiento de esta IA está activado pero `bwrap` no está instalado o no funciona en esta máquina (instalá bubblewrap, o quitá el aislamiento en la ficha de la IA).".into()).await;
+    }
+    // copia de trabajo propia de la tarea, en su rama (si la carpeta del proyecto es un repositorio)
+    let work = if iso.copy {
+        match iso::prepare(&dir, iso.workspace.as_deref(), &job.project, job.id, job.parent).await {
+            Ok(w) => w,
+            Err(e) => return fail(e).await,
+        }
+    } else {
+        iso::Work { dir: dir.clone(), origin: dir.clone(), branch: None, base: None }
+    };
+    log(&format!("▶ #{} «{}» en {}", job.id, job.title, work.dir.display()));
+    let aislada = work.branch.as_ref().map(|b| format!(" (copia aislada, rama `{b}`)")).unwrap_or_default();
+    api.say(job.id, &format!("▶ Empiezo con esta tarea. Trabajo en `{}`{aislada}{}.", work.dir.display(), if iso.sandbox { " dentro de un sandbox" } else { "" })).await;
+    // espacio propio de esta tarea para lo intermedio (y final/, que llena el servidor al aprobarse el flujo)
+    let mine = iso::mine_path(iso.workspace.as_deref(), &dir, &job.project, &me_name, job.id);
     let _ = std::fs::create_dir_all(&mine);
     let _ = std::fs::create_dir_all(dir.join(".crewhelm/_tareas").join(job.id.to_string()).join("final"));
     let _ = std::fs::write(dir.join(".crewhelm/.gitignore"), "*\n");
-    // proyectos con «Pull Request» activado: la IA trabaja y sube la rama tm/tarea-ID
-    let ai_pr = !job.repo.is_empty() && api.get(&format!("/api/projects/{}/github/settings", job.project_id)).await.ok().and_then(|v| v["ai_pr"].as_bool()).unwrap_or(false);
-    let pr_branch = ai_pr.then(|| format!("tm/tarea-{}", job.id));
-    let prompt = prompt_for(api, job, &dir, &mine, pr_branch.as_deref()).await;
+    let prompt = prompt_for(api, job, &work.dir, &mine, work.branch.as_deref()).await;
 
     // Lista de comandos prohibidos que un admin edita desde la app (ficha de la IA).
     let deny = api.get("/api/me/deny").await.ok().and_then(|v| v["deny"].as_str().map(String::from)).unwrap_or_default();
     // Comandos permitidos: los permanentes de la IA («/permitir siempre») y los de «una vez» de esta tarea, que se consumen al empezar.
     publish_lists(api).await;
-    let me_allow = api.get("/api/me/allow").await.ok();
     let mut allow = me_allow.as_ref().and_then(|v| v["allow"].as_str().map(String::from)).unwrap_or_default();
     // «Autorización total»: la IA puede todo salvo lo prohibido (TM_DENY siempre gana)
     let from_app = me_allow.as_ref().and_then(|v| v["from_app"].as_bool()).unwrap_or(false);
@@ -255,21 +276,67 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
             allow.push_str(c);
         }
     }
-    let mut cmd = if cfg!(windows) { let mut c = Command::new("cmd"); c.arg("/C"); c } else { let mut c = Command::new("sh"); c.arg("-c"); c };
-    cmd.arg(&api.cfg.cmd)
-        .current_dir(&dir)
-        .env("TM_TASK_PROMPT", &prompt)
-        .env("TM_DENY", deny)
-        .env("TM_ALLOW", allow)
-        .env("TM_ALLOW_ALL", if allow_all { "1" } else { "0" })
-        .env("TM_LISTS_FROM_APP", if from_app { "1" } else { "0" })
-        .env("TM_PR_BRANCH", pr_branch.as_deref().unwrap_or(""))
-        .env("TM_TASK_ID", job.id.to_string())
-        .env("TM_TASK_DIR", &mine)
-        .env("TM_TASK_TITLE", &job.title)
-        .env("TM_PROJECT_ID", job.project_id.to_string())
-        .env("TM_URL", &api.cfg.url)
-        .env("TM_TOKEN", &api.cfg.token)
+    let envs: Vec<(&str, String)> = vec![
+        ("TM_TASK_PROMPT", prompt),
+        ("TM_DENY", deny),
+        ("TM_ALLOW", allow),
+        ("TM_ALLOW_ALL", if allow_all { "1" } else { "0" }.into()),
+        ("TM_LISTS_FROM_APP", if from_app { "1" } else { "0" }.into()),
+        ("TM_TASK_ID", job.id.to_string()),
+        ("TM_TASK_DIR", mine.to_string_lossy().into()),
+        ("TM_TASK_TITLE", job.title.clone()),
+        ("TM_PROJECT_ID", job.project_id.to_string()),
+        ("TM_URL", api.cfg.url.clone()),
+        ("TM_TOKEN", api.cfg.token.clone()),
+    ];
+    // fase 3: proxy filtrado y puente al servidor, fuera de la cápsula
+    let net = if iso.sandbox && iso.net != iso::Net::Open {
+        match iso::start_net(job.id, iso.net, iso.allow_hosts.clone(), server_addr(&api.cfg.url)) {
+            Ok(n) => Some(n),
+            Err(e) => return fail(format!("no pude preparar la red del sandbox: {e}")).await,
+        }
+    } else {
+        None
+    };
+    let mut cmd = if iso.sandbox {
+        let real_home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/root"));
+        let ia_home = iso.workspace.as_ref().map(|w| w.join("homeCrewHelm").join(iso::slug(&me_name)));
+        if let Some(h) = &ia_home {
+            let _ = std::fs::create_dir_all(h);
+        }
+        let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("tm-agent"));
+        // el script que lanza a la IA (y sus listas) tiene que verse adentro
+        let mut ro = iso.extra_ro.clone();
+        ro.extend(lists_dir(&api.cfg.cmd));
+        let mut args = iso::bwrap_args(&real_home, &iso::Plan { work: &work.dir, mine: &mine, ia_home: ia_home.as_deref(), exe: &exe, net: iso.net, sock_dir: net.as_ref().map(|n| n.dir.as_path()), extra_rw: &iso.extra_rw, extra_ro: &ro, new_session: true });
+        args.push("--".into());
+        if let Some(n) = &net {
+            args.extend([exe.to_string_lossy().to_string(), "__netbridge".into(), n.dir.to_string_lossy().to_string(), if iso.net == iso::Net::Proxy { "proxy" } else { "none" }.into(), "--".into()]);
+        }
+        args.extend(["sh".into(), "-c".into(), api.cfg.cmd.clone()]);
+        let mut c = Command::new("bwrap");
+        c.args(args).env_clear();
+        // adentro solo entra lo necesario: nada de variables del servidor
+        for (k, v) in std::env::vars() {
+            if ["PATH", "LANG", "TERM", "USER", "LOGNAME"].contains(&k.as_str()) || ["LC_", "TM_", "ANTHROPIC_", "CLAUDE_", "OPENAI_", "GEMINI_", "GOOGLE_API", "OPENROUTER_"].iter().any(|p| k.starts_with(p)) {
+                c.env(k, v);
+            }
+        }
+        c
+    } else if cfg!(windows) {
+        let mut c = Command::new("cmd");
+        c.arg("/C").arg(&api.cfg.cmd);
+        c
+    } else {
+        let mut c = Command::new("sh");
+        c.arg("-c").arg(&api.cfg.cmd);
+        c
+    };
+    for (k, v) in &envs {
+        cmd.env(k, v);
+    }
+    // sin sandbox, la carpeta de trabajo es la de la copia (o la del proyecto); con sandbox la fija bwrap
+    cmd.current_dir(if iso.sandbox { Path::new("/") } else { work.dir.as_path() })
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -293,6 +360,15 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
         "cost_usd": u.map_or(0.0, |u| u.cost), "model": u.map_or("", |u| u.model.as_str()),
     });
     api.call(Method::POST, &format!("/api/tasks/{}/run", job.id), Some(report)).await.ok();
+    // fase 1: lo que dejó la IA se guarda en la rama de la tarea y se sube desde acá, fuera del sandbox
+    if run_ok {
+        if let Some(o) = iso::finish(&work, &me_name, job.id, &job.title).await {
+            api.say(job.id, &iso::outcome_text(&o)).await;
+        }
+    }
+    if let Some(t) = net.as_ref().and_then(|n| iso::blocked_text(&n.blocked)) {
+        api.say(job.id, &t).await;
+    }
     let ok_text = |o: &std::process::Output| {
         if let Some(t) = usage.as_ref().and_then(|u| u.text.clone()) {
             return t;
@@ -326,6 +402,19 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
             api.set_status(job.id, "todo").await.ok().and_then(|t| t["updated_at"].as_str().map(String::from)).or(claimed["updated_at"].as_str().map(String::from))
         }
     }
+}
+
+/// No se pudo empezar (aislamiento que no se puede cumplir, copia que no se arma…): se avisa y la tarea vuelve a «Por hacer».
+async fn refuse(api: &Api, task: i64, claimed_at: Option<String>, why: String) -> Option<String> {
+    api.say(task, &format!("⚠️ No empiezo: {why}")).await;
+    api.set_status(task, "todo").await.ok().and_then(|t| t["updated_at"].as_str().map(String::from)).or(claimed_at)
+}
+
+/// `host:puerto` de la dirección del servidor (para el puente del sandbox).
+fn server_addr(url: &str) -> String {
+    let https = url.starts_with("https://");
+    let rest = url.split("://").nth(1).unwrap_or(url).split('/').next().unwrap_or("");
+    if rest.contains(':') { rest.to_string() } else { format!("{rest}:{}", if https { 443 } else { 80 }) }
 }
 
 /// Gasto de una ejecución, leído del JSON de `claude -p --output-format json`.
@@ -411,6 +500,7 @@ async fn pending(api: &Api, me: i64, skip: &HashMap<i64, String>, running: &Hash
                     repo: p["repo"].as_str().unwrap_or("").into(),
                     work_dir: p["work_dir"].as_str().unwrap_or("").into(),
                     updated_at: t["updated_at"].as_str().unwrap_or("").into(),
+                    parent: t["parent_id"].as_i64(),
                 });
             }
         }
@@ -483,6 +573,74 @@ async fn verdict(args: Vec<String>) -> Result<()> {
     Ok(())
 }
 
+/// `tm-agent sandbox-shell [carpeta]`: una shell dentro del sandbox, con el espacio propio de esta IA como HOME y la red abierta.
+/// Sirve para iniciar sesión del CLI de la IA (por ejemplo `claude`) una sola vez en su espacio.
+async fn sandbox_shell(dir: Option<String>) -> Result<()> {
+    let ws = std::env::var("TM_WORKSPACE").ok().filter(|w| !w.trim().is_empty()).map(|w| iso::expand_home(w.trim())).context("falta TM_WORKSPACE (la raíz del modo servidor)")?;
+    let name = std::env::var("TM_IA").ok().filter(|n| !n.is_empty()).context("falta TM_IA (el nombre de la IA cuyo espacio querés abrir)")?;
+    if !iso::bwrap_ok().await {
+        bail!("`bwrap` no está instalado o no funciona en esta máquina");
+    }
+    let home = ws.join("homeCrewHelm").join(iso::slug(&name));
+    std::fs::create_dir_all(&home)?;
+    let work = dir.map(PathBuf::from).unwrap_or_else(|| home.clone());
+    let real_home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/root"));
+    let exe = std::env::current_exe()?;
+    let ro = iso::paths_for_shell();
+    let mut args = iso::bwrap_args(&real_home, &iso::Plan { work: &work, mine: &home, ia_home: Some(&home), exe: &exe, net: iso::Net::Open, sock_dir: None, extra_rw: &[], extra_ro: &ro, new_session: false });
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "bash".into());
+    args.extend(["--".into(), shell]);
+    println!("[tm-agent] sandbox de {name}: HOME = {} (sesión del CLI, memoria y notas de esta IA). Salí con `exit`.", home.display());
+    let st = Command::new("bwrap").args(args).env("PATH", std::env::var("PATH").unwrap_or_default()).status().await?;
+    std::process::exit(st.code().unwrap_or(1));
+}
+
+/// Limpieza: copias de trabajo y espacios de tareas terminadas hace 30 días o más. A los 23 días se avisa en la tarea; si pasan 7 días
+/// desde el aviso se borra. Un archivo `.keep` dentro de la carpeta (o reabrir la tarea) la conserva. Lo ya subido a la rama no se pierde.
+async fn sweep(api: &Api, me: &str) {
+    let ws = std::env::var("TM_WORKSPACE").ok().filter(|w| !w.trim().is_empty()).map(|w| iso::expand_home(w.trim()));
+    for team in api.get("/api/teams").await.ok().and_then(|t| t.as_array().cloned()).unwrap_or_default() {
+        for p in api.get(&format!("/api/teams/{}/projects", team["id"])).await.ok().and_then(|t| t.as_array().cloned()).unwrap_or_default() {
+            let tasks = api.get(&format!("/api/projects/{}/tasks", p["id"])).await.ok().and_then(|t| t.as_array().cloned()).unwrap_or_default();
+            let (pname, wd) = (p["name"].as_str().unwrap_or(""), iso::expand_home(p["work_dir"].as_str().unwrap_or("")));
+            let mut roots = vec![iso::work_path(ws.as_deref(), &wd, pname, 0).parent().map(PathBuf::from).unwrap_or_default(), iso::mine_path(ws.as_deref(), &wd, pname, me, 0).parent().map(PathBuf::from).unwrap_or_default()];
+            roots.dedup();
+            for root in roots {
+                let Ok(rd) = std::fs::read_dir(&root) else { continue };
+                for e in rd.flatten() {
+                    let path = e.path();
+                    let name = e.file_name().to_string_lossy().to_string();
+                    let Some(id) = name.trim_start_matches("tarea-").parse::<i64>().ok().filter(|_| path.is_dir()) else { continue };
+                    let Some(t) = tasks.iter().find(|t| t["id"].as_i64() == Some(id)) else { continue };
+                    let aviso = root.join(format!("{name}.aviso"));
+                    if t["status"].as_str() != Some("done") && t["archived"].as_bool() != Some(true) {
+                        let _ = std::fs::remove_file(&aviso);
+                        continue;
+                    }
+                    if path.join(".keep").exists() {
+                        continue;
+                    }
+                    let age = iso::days_since(t["updated_at"].as_str().unwrap_or("")).unwrap_or(0);
+                    let notice_age = std::fs::metadata(&aviso).and_then(|m| m.modified()).ok().and_then(|m| m.elapsed().ok()).map(|d| (d.as_secs() / 86400) as i64);
+                    match notice_age {
+                        None if age >= 23 => {
+                            let _ = std::fs::write(&aviso, "aviso de borrado");
+                            api.say(id, &format!("🧹 Los archivos intermedios de esta tarea (`{}`) se borrarán en 7 días porque la tarea está terminada. Lo que quedó en la rama `tm/tarea-{id}` no se pierde. Para conservarlos, reabrí la tarea o creá un archivo `.keep` en esa carpeta.", path.display())).await;
+                        }
+                        Some(n) if n >= 7 && age >= 30 => {
+                            if std::fs::remove_dir_all(&path).is_ok() {
+                                let _ = std::fs::remove_file(&aviso);
+                                api.say(id, &format!("🧹 Borré los archivos intermedios de esta tarea (`{}`), como se avisó.", path.display())).await;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     if std::env::args().any(|a| a == "--help" || a == "-h") {
@@ -492,6 +650,12 @@ async fn main() -> Result<()> {
     if std::env::args().any(|a| a == "--version" || a == "-V") {
         println!("tm-agent {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
+    }
+    if std::env::args().nth(1).as_deref() == Some("__netbridge") {
+        std::process::exit(iso::netbridge(std::env::args().skip(2).collect()).await);
+    }
+    if std::env::args().nth(1).as_deref() == Some("sandbox-shell") {
+        return sandbox_shell(std::env::args().nth(2)).await;
     }
     if std::env::args().nth(1).as_deref() == Some("verdict") {
         return verdict(std::env::args().skip(2).collect()).await;
@@ -514,7 +678,13 @@ async fn main() -> Result<()> {
     let running: Arc<Mutex<HashSet<i64>>> = Default::default();
     let skip: Arc<Mutex<HashMap<i64, String>>> = Default::default();
     let mut first = true;
+    let me_name = me["username"].as_str().unwrap_or("ia").to_string();
+    let mut last_sweep = std::time::Instant::now() - Duration::from_secs(7 * 3600);
     loop {
+        if !once && last_sweep.elapsed() > Duration::from_secs(6 * 3600) {
+            last_sweep = std::time::Instant::now();
+            sweep(&api, &me_name).await;
+        }
         let (skip_now, running_now) = (skip.lock().unwrap().clone(), running.lock().unwrap().clone());
         let mut started = 0;
         let result = pending(&api, my_id, &skip_now, &running_now, first).await;

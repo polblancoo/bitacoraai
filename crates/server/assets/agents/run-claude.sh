@@ -24,12 +24,6 @@ DENY=$(lista blacklist.txt)$(printf '%s' "$TM_DENY" | grep -v '^[[:space:]]*$' |
 # Sin autorización total, la IA no commitea ni sube; con autorización total (o si lo sacás de Prohibidos en la app) puede hacerlo
 GITRULE="no hagas git commit ni git push. "
 [ "$TM_ALLOW_ALL" = "1" ] && GITRULE=""
-# Proyecto con «Pull Request»: la IA puede commitear y subir SOLO su rama tm/tarea-ID (main y otras ramas siguen prohibidas)
-if [ -n "$TM_PR_BRANCH" ]; then
-  GITRULE="trabajá en la rama $TM_PR_BRANCH, hacé commit de tus cambios y subila con git push -u origin $TM_PR_BRANCH; nunca hagas push a main ni a otra rama. "
-  DENY=$(printf '%s' "$DENY" | tr '\t' '\n' | grep -vxF -e 'Bash(git push:*)' -e 'Bash(git commit:*)' -e 'Bash(git commit -m:*)' -e 'Bash(git checkout:*)' | tr '\n' '\t')
-  ALLOW="$ALLOW$(printf 'Bash(git checkout -b %s:*)\tBash(git add:*)\tBash(git commit:*)\tBash(git push -u origin %s:*)\t' "$TM_PR_BRANCH" "$TM_PR_BRANCH")"
-fi
 exec claude -p "$TM_TASK_PROMPT
 
 REGLAS: ${GITRULE}No reinicies ni detengas servicios. Si te falta una decisión o un dato, preguntá con: tm-agent ask \"tu pregunta\". Si un comando te es bloqueado o no tenés permiso, NO lo rodees: avisá con tm-agent ask explicando qué comando necesitás y para qué. Verificá tus cambios antes de terminar." \
