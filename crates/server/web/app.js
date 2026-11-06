@@ -1410,6 +1410,7 @@ const FIELD_TIPS = {
   start: "Cuándo debería empezar. Se ve en el Gantt y el calendario.",
   due: "Fecha límite: se avisa cuando se acerca y se marca atrasada si pasa.",
   rec: "Si se repite, al completarla se crea la siguiente automáticamente.",
+  review: "Quién mira el trabajo antes de darla por terminada: una persona o una IA. Puede ser quien la pidió (vos). Esa persona aprueba o la devuelve con el motivo.",
 };
 // diálogo de "Nueva tarea": ancho de un tercio, prompt grande, atributos en dos filas, atajos y avisos al pie
 function taskForm(status, assignable) {
@@ -1422,20 +1423,27 @@ function taskForm(status, assignable) {
     const st = sel(STATUS.map((x) => [x.id, x.label]), status), pr = sel(PRIO.map((x, i) => [i, x]), 1);
     const asOpts = [["", "Sin asignar"], ...assignable.map((m) => [m.id, m.id === S.user?.id && !can("admin") ? `Yo (${m.username})` : label(m.username)])];
     const as = sel(asOpts, ""), start = h("input", { type: "date" }), due = h("input", { type: "date" }), rec = sel(RECUR, "");
+    // responsable final: revisa el trabajo antes de dar la tarea por hecha (arma un flujo hacer → revisar)
+    const meId = S.user?.id;
+    const rvOpts = [["", "Nadie: al terminar pasa a Hecha"], ...(assignable.some((m) => m.id === meId) ? [] : [[meId, "Yo (quien la pide)"]]), ...assignable.map((m) => [m.id, m.id === meId ? "Yo (quien la pide)" : label(m.username)])];
+    const rv = sel(rvOpts, ""), more = h("input", { type: "checkbox" });
     const note = h("div", { class: "tf-note" });
     const notes = () => {
       const m = S.members.find((x) => String(x.id) === as.value), out = [];
       if (m?.bot) out.push([S.project.work_dir ? "🤖 " + m.username + " trabaja en 📁 " + S.project.work_dir : "🤖 El proyecto no tiene carpeta de trabajo: la IA usa una por defecto y la crea si no existe", !S.project.work_dir]);
       if (!as.value) out.push(["Sin responsable: queda en el tablero sin dueño", false]);
+      if (rv.value && !as.value) out.push(["Para el flujo elegí quién la hace: esa persona o IA trabaja y el revisor aprueba", true]);
+      if (rv.value && as.value && rv.value === as.value) out.push(["Quien la hace y quien la revisa es la misma persona", true]);
       if (start.value && due.value && due.value < start.value) out.push(["⚠️ Vence antes de empezar", true]);
       if (rec.value) out.push(["🔁 Se repite al completarse", false]);
       note.replaceChildren(...out.map(([t, w]) => h("span", { class: w ? "warn" : "" }, t)));
     };
-    [as, start, due, rec].forEach((e) => e.addEventListener("change", notes)); notes();
+    [as, start, due, rec, rv].forEach((e) => e.addEventListener("change", notes)); notes();
     const done = (v) => { overlay.remove(); resolve(v); };
     const submit = () => {
       if (!title.value.trim()) { title.focus(); return; }
-      done({ title: title.value.trim(), description: desc.value.trim(), status: st.value, priority: pr.value, assignee: as.value, start: start.value, due: due.value, recurrence: rec.value });
+      if (rv.value && !as.value) { as.focus(); return; }
+      done({ reviewer: rv.value, more: more.checked, title: title.value.trim(), description: desc.value.trim(), status: st.value, priority: pr.value, assignee: as.value, start: start.value, due: due.value, recurrence: rec.value });
     };
     const fld = (lbl, key, el, tip) => h("label", { title: tip }, h("span", {}, lbl, key && h("kbd", {}, key)), el);
     const jump = { e: st, p: pr, r: as, f: start, v: due, t: title, d: desc };
@@ -1451,6 +1459,8 @@ function taskForm(status, assignable) {
         fld("Instrucción / prompt para quien la haga", "Alt+D", desc, FIELD_TIPS.desc),
         h("div", { class: "tf-row" }, fld("Estado", "Alt+E", st, FIELD_TIPS.status), fld("Prioridad", "Alt+P", pr, FIELD_TIPS.prio), fld("Responsable", "Alt+R", as, FIELD_TIPS.who)),
         h("div", { class: "tf-row" }, fld("Empieza", "Alt+F", start, FIELD_TIPS.start), fld("Vence", "Alt+V", due, FIELD_TIPS.due), fld("Repetición", "", rec, FIELD_TIPS.rec)),
+        h("div", { class: "tf-row tf-flow" }, fld("Revisa al terminar (responsable final)", "", rv, FIELD_TIPS.review),
+          h("label", { class: "inl tf-more", title: "Después de crear, se abre la tarea para sumar etapas: varios que trabajan, más revisores, instrucciones por etapa" }, more, " Armar más etapas después")),
         h("div", { class: "tf-help" }, h("kbd", {}, "Ctrl+Enter"), " crear · ", h("kbd", {}, "Esc"), " cancelar · ", h("kbd", {}, "Enter"), " en el título pasa al prompt · ", h("kbd", {}, "Alt+letra"), " salta al campo"),
         note,
         h("div", { class: "row" }, h("button", { onclick: () => done(null) }, "Cancelar"), h("button", { class: "primary", onclick: submit }, "Crear tarea"))));
@@ -1463,8 +1473,12 @@ const createTask = guard(async (status) => {
   const f = await taskForm(status, assignable); if (!f) return;
   const day = (d) => (d ? new Date(d + "T12:00:00Z").toISOString() : undefined);
   let t = await api("POST", `/api/projects/${S.project.id}/tasks`, { title: f.title, description: f.description, priority: +f.priority, assignee_id: f.assignee ? +f.assignee : undefined, start: day(f.start), due: day(f.due), recurrence: f.recurrence || undefined });
-  if (f.status !== "todo") t = await api("PATCH", `/api/tasks/${t.id}`, { status: f.status });
+  if (f.reviewer) {
+    // flujo hacer → revisar: la tarea pasa a quien la hace y, al terminar, a quien la revisa
+    t = await api("PUT", `/api/tasks/${t.id}/flow`, { steps: [{ assignee_id: +f.assignee, kind: "work", instruction: "" }, { assignee_id: +f.reviewer, kind: "review", instruction: "" }] });
+  } else if (f.status !== "todo") t = await api("PATCH", `/api/tasks/${t.id}`, { status: f.status });
   upsert(t); render();
+  if (f.more && f.reviewer) { loadFlows?.(); openTask(t); }
 });
 const patchTask = guard(async (id, patch) => { upsert(await api("PATCH", `/api/tasks/${id}`, patch)); render(); });
 

@@ -1062,3 +1062,7 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 .composer button { flex: none; height: 40px; }
 .task-main .reqpanel .cmdbox.big { padding: 6px 10px; }
 .task-main .reqpanel .cmdbox.big code { font-size: .95em; }
+.tf-row.tf-flow { grid-template-columns: 1.4fr 1fr; align-items: end; }
+.task-form .tf-more { display: flex; flex-direction: row; align-items: center; gap: 6px; padding-bottom: 8px; color: var(--fg); }
+.task-form .tf-more input { width: 16px; height: 16px; flex: none; }
+@media (max-width: 760px) { .tf-row.tf-flow { grid-template-columns: 1fr; } }
