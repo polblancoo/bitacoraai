@@ -1489,6 +1489,14 @@ function openArchived() {
         can("member") && h("button", { onclick: () => setArchived(t, false) }, "Volver al tablero"))))
         : h("p", { class: "hint" }, "No hay tareas archivadas. Usá la ✕ de una tarea en Hecho para archivarla."))));
 }
+// dirección web de un repositorio: «dueño/repo», URL de GitHub o git@github.com:dueño/repo.git
+function repoUrl(repo) {
+  const r = String(repo || "").trim().replace(/\.git$/, "").replace(/\/$/, "");
+  if (/^https:\/\//.test(r)) return r;
+  const ssh = r.match(/^git@([\w.-]+):(.+)$/);
+  if (ssh) return `https://${ssh[1]}/${ssh[2]}`;
+  return /^[\w.-]+\/[\w.-]+$/.test(r) ? "https://github.com/" + r : null;
+}
 function closeModal() { S.open = null; S.redrawSubs = null; document.getElementById("modal")?.remove(); }
 
 // resalta @usuario cuando coincide con un miembro del equipo (todo como texto, nunca como HTML)
@@ -1505,13 +1513,28 @@ function commandsOf(body) {
   return [...new Set(out)].slice(0, 4);
 }
 
+// cuerpo de un comentario: los bloques ``` ``` se muestran enmarcados con botón para copiar; el resto como texto
+function richBody(body) {
+  const out = []; const re = /```[^\n`]*\n?([\s\S]*?)```/g; let last = 0, m;
+  const copy = (txt) => navigator.clipboard?.writeText(txt).then(() => toast("Copiado"));
+  while ((m = re.exec(body))) {
+    if (m.index > last) out.push(...withMentions(body.slice(last, m.index).replace(/^\n+|\n+$/g, "")));
+    const code = m[1].replace(/\n+$/, "");
+    out.push(h("div", { class: "codeblock" }, h("pre", {}, h("code", {}, code)), h("button", { class: "ghost", title: "Copiar", onclick: () => copy(code) }, "📋 Copiar")));
+    last = m.index + m[0].length;
+  }
+  if (last < body.length) out.push(...withMentions(body.slice(last).replace(/^\n+/, "")));
+  return out;
+}
+
 function renderComments() {
   const box = document.getElementById("comments"); if (!box) return;
   box.replaceChildren(...S.comments.map((c) => h("div", { class: "comment" },
-    h("b", {}, c.username), h("small", {}, new Date(c.created_at).toLocaleString()), h("div", {}, withMentions(c.body)),
-    commandsOf(c.body).map((cmd) => h("div", { class: "cmdbox" }, h("code", {}, cmd),
+    h("b", {}, c.username), h("small", {}, new Date(c.created_at).toLocaleString()), h("div", {}, richBody(c.body)),
+    (c.body.includes("```") ? [] : commandsOf(c.body)).map((cmd) => h("div", { class: "cmdbox" }, h("code", {}, cmd),
       h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar"))))));
-  box.scrollTop = box.scrollHeight;
+  // la charla se lee como un solo texto largo: lo último queda a la vista dentro de la ventana
+  box.lastElementChild?.scrollIntoView({ block: "nearest" });
 }
 
 const openTask = guard(async (task) => {
@@ -1519,7 +1542,7 @@ const openTask = guard(async (task) => {
   S.comments = await api("GET", `/api/tasks/${task.id}/comments`);
   const cur = () => S.tasks.find((t) => t.id === task.id) || task;
   const title = h("input", { value: cur().title, maxLength: 200 });
-  const desc = h("textarea", { rows: 5, maxLength: 10000, value: cur().description });
+  const desc = h("textarea", { rows: 3, maxLength: 10000, value: cur().description });
   const prio = h("select", {}, PRIO.map((p, i) => h("option", { value: i, selected: cur().priority === i }, p)));
   const status = h("select", {}, STATUS.map((s) => h("option", { value: s.id, selected: cur().status === s.id }, s.label)));
   // líder (admin+) asigna a cualquiera; miembro solo toma una tarea libre o suelta la suya; lector no asigna
@@ -1794,9 +1817,7 @@ const openTask = guard(async (task) => {
       h("div", { class: "task-split" },
         h("div", { class: "task-main" },
           h("label", { title: FIELD_TIPS.title }, "Título", title),
-          h("details", { class: "desc-box", open: !cur().description || !S.comments.length }, h("summary", { title: FIELD_TIPS.desc }, "📝 Descripción de la tarea"), desc),
-          flowBox(cur()),
-          folderBox(cur()),
+          h("label", { title: FIELD_TIPS.desc }, "Descripción", desc),
           h("h3", {}, "Conversación"),
           h("div", { class: "comments", id: "comments" }),
           comment,
@@ -1808,6 +1829,8 @@ const openTask = guard(async (task) => {
             h("label", { title: FIELD_TIPS.due }, "Vence", due), h("label", { title: FIELD_TIPS.rec }, "Repetición", rec), h("small", { class: "hint" }, whoHint)),
           can("member") && budgetBox(cur(), title, desc),
           ghBox,
+          flowBox(cur()),
+          folderBox(cur()),
           h("h3", {}, "Etiquetas"), labelBox, newLabel,
           h("h3", {}, "Subtareas"), subBox, newSub,
           h("h3", {}, "Depende de"), depBox, depAdd,
@@ -2222,7 +2245,9 @@ function appView() {
             try { await api("POST", `/api/projects/${S.project.id}/open-folder`); toast("Carpeta abierta"); }
             catch (e) { copy(S.project.work_dir, "La carpeta está en la máquina del servidor: no se abre desde acá. Ruta copiada"); }
           } }, "📂 Abrir"), " ", h("button", { class: "ghost", title: "Ver los archivos de la carpeta de trabajo (solo lectura), sin importar desde qué máquina entres", onclick: openFiles }, "🗂 Archivos")),
-        S.project.repo && h("span", { title: "Repositorio" }, "🔗 " + S.project.repo)),
+        S.project.repo && (repoUrl(S.project.repo)
+          ? h("a", { class: "repo-link", href: repoUrl(S.project.repo), target: "_blank", rel: "noopener", title: "Abrir el repositorio en una pestaña nueva" }, "🐙 " + S.project.repo.replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/\.git$/, "") + " ↗")
+          : h("span", { title: "Repositorio" }, "🔗 " + S.project.repo))),
       S.terms ? termsView() : S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
         : S.team ? h("div", { class: "empty" }, "Creá un proyecto con + en la barra lateral") : welcomeView(),
       barBottom.length > 0 && h("div", { class: "bars bottom" }, barBottom)),

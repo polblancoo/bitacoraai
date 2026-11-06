@@ -1028,3 +1028,17 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
   .board { grid-template-columns: repeat(3, minmax(250px, 1fr)); padding: 14px 14px 54px; gap: 12px; }
   .proj-meta { padding: 8px 14px; }
 }
+
+/* tarea: la charla fluye como un texto largo; los bloques de código van enmarcados; flujo y carpeta al costado */
+.task-main .comments, .modal.task-modal.max .task-main .comments { max-height: none; min-height: 0; overflow: visible; }
+.task-main .comment { border: 0; border-left: 2px solid var(--line); border-radius: 0; background: transparent; padding: 4px 0 4px 12px; }
+.task-main .comments { gap: 14px; }
+.modal.task-modal:not(.max) .task-main .desc-box textarea, .task-main label > textarea { min-height: 70px; }
+.codeblock { position: relative; margin: 8px 0; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); }
+.codeblock pre { margin: 0; padding: 10px 12px; padding-right: 96px; overflow-x: auto; white-space: pre; font-size: .88em; line-height: 1.5; user-select: all; }
+.codeblock code { background: none; padding: 0; }
+.codeblock button { position: absolute; top: 6px; right: 6px; padding: 2px 8px; font-size: 12px; }
+.task-side .flow-box, .task-side .desc-box { margin: 0; }
+.task-side .tfolder { max-height: 220px; overflow: auto; }
+.proj-meta .repo-link { color: var(--blue); text-decoration: none; font-weight: 500; }
+.proj-meta .repo-link:hover { text-decoration: underline; }
