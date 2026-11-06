@@ -144,9 +144,13 @@ pub async fn flush(st: &AppState, user: Id) {
     let pick = |bit: i64| -> Vec<String> { rows.iter().filter(|r| r.get::<i64, _>("ext_pending") & bit != 0).map(|r| r.get::<String, _>("text")).collect() };
     let _ = sqlx::query("UPDATE notifications SET ext_pending = 0 WHERE user_id = ? AND ext_pending > 0").bind(user).execute(&st.db).await;
     let body = |items: &[String]| -> String {
-        let mut out = format!("Resumen de novedades ({}):\n", items.len());
+        let mut out = format!("{} novedades:\n", items.len());
         for t in items.iter().take(MAX_ITEMS) {
-            out.push_str(&format!("\n• {}", t.lines().next().unwrap_or("").chars().take(200).collect::<String>()));
+            let t = crate::notify::short(t);
+            let mut ls = t.lines();
+            let first = ls.next().unwrap_or("");
+            let more = ls.next().map(|l| format!(" — {}", l.chars().take(120).collect::<String>())).unwrap_or_default();
+            out.push_str(&format!("\n• {first}{more}"));
         }
         if items.len() > MAX_ITEMS {
             out.push_str(&format!("\n… y {} más en la bandeja de la app.", items.len() - MAX_ITEMS));
@@ -169,8 +173,8 @@ pub async fn flush(st: &AppState, user: Id) {
         if let Some(mailer) = st.mailer.clone() {
             let to: Option<String> = sqlx::query_scalar("SELECT email FROM users WHERE id = ? AND email_verified = 1 AND email IS NOT NULL").bind(user).fetch_optional(&st.db).await.ok().flatten();
             if let Some(to) = to {
-                let subject = format!("[{}] Resumen de novedades ({})", crate::notify::APP_NAME, mail_items.len());
-                if let Err(e) = mailer.send(&to, &subject, format!("{}\n\n— {}", body(&mail_items), crate::notify::APP_NAME)).await {
+                let subject = format!("{} novedades", mail_items.len());
+                if let Err(e) = mailer.send(&to, &subject, body(&mail_items)).await {
                     tracing::warn!("resumen: no se pudo enviar el email: {e}");
                 }
             }
