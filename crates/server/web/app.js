@@ -1529,11 +1529,11 @@ function richBody(body) {
 
 function renderComments() {
   const box = document.getElementById("comments"); if (!box) return;
-  box.replaceChildren(...S.comments.map((c) => h("div", { class: "comment" },
+  box.replaceChildren(...S.comments.map((c) => h("div", { class: "comment" + (c.user_id === S.user?.id ? " mine" : "") },
     h("b", {}, c.username), h("small", {}, new Date(c.created_at).toLocaleString()), h("div", {}, richBody(c.body)),
     (c.body.includes("```") ? [] : commandsOf(c.body)).map((cmd) => h("div", { class: "cmdbox" }, h("code", {}, cmd),
       h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar"))))));
-  // la charla se lee como un solo texto largo: lo último queda a la vista dentro de la ventana
+  // lo último queda a la vista
   box.lastElementChild?.scrollIntoView({ block: "nearest" });
 }
 
@@ -1556,7 +1556,7 @@ const openTask = guard(async (task) => {
   const start = h("input", { type: "date", value: cur().start ? cur().start.slice(0, 10) : "" });
   const rec = h("select", { disabled: !can("member") }, RECUR.map(([v, l]) => h("option", { value: v, selected: (cur().recurrence || "") === v }, l)));
   const due = h("input", { type: "date", value: cur().due ? cur().due.slice(0, 10) : "" });
-  const comment = h("textarea", { class: "comment-in", rows: 9, placeholder: "Escribí un comentario o el siguiente prompt… (Enter = línea nueva · Ctrl+Enter = enviar)", maxLength: 4000 });
+  const comment = h("textarea", { class: "comment-in", rows: 2, placeholder: "Escribí un mensaje… (Enter = línea nueva · Ctrl+Enter = enviar)", maxLength: 4000, oninput: (e) => { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 320) + "px"; } });
 
   // etiquetas: chips que se alternan + alta de etiqueta nueva
   const labelBox = h("div", { class: "chips" });
@@ -1663,10 +1663,21 @@ const openTask = guard(async (task) => {
     await apiRaw("POST", `/api/tasks/${task.id}/attachments?name=${encodeURIComponent(f.name)}`, f);
     e.target.value = ""; drawAtts(); toast("Archivo adjuntado");
   }) });
+  // la descripción se lee como el primer mensaje; se edita solo si la tocás
+  const descView = h("div", { class: "desc-msg" });
+  const drawDesc = () => {
+    const empty = !desc.value.trim();
+    desc.hidden = !empty; descView.hidden = !empty ? false : !can("member");
+    descView.replaceChildren(
+      h("div", { class: "desc-text" }, empty ? h("span", { class: "hint" }, "Sin descripción") : richBody(desc.value)),
+      can("member") && !empty && h("button", { class: "ghost", title: "Editar la descripción", onclick: () => { desc.hidden = false; descView.hidden = true; desc.focus(); } }, "✏ Editar"));
+  };
+  desc.addEventListener("blur", () => { if (desc.value.trim()) drawDesc(); });
+  title.classList.add("task-title"); title.title = FIELD_TIPS.title; desc.title = FIELD_TIPS.desc;
   const send = guard(async () => {
     if (!comment.value.trim()) return;
     const c = await api("POST", `/api/tasks/${task.id}/comments`, { body: comment.value });
-    comment.value = "";
+    comment.value = ""; comment.style.height = "";
     if (!S.comments.some((x) => x.id === c.id)) S.comments.push(c);
     renderComments();
   });
@@ -1740,8 +1751,7 @@ const openTask = guard(async (task) => {
       cmds.length > 0 && h("div", {}, h("b", {}, "1. Copiá y ejecutá en tu terminal:"),
         cmds.map((cmd) => h("div", { class: "cmdbox" }, h("code", {}, cmd),
           h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar")))),
-      h("div", {}, h("small", { class: "hint" }, cmds.length ? "2. Pegá la salida en la caja de abajo y apretá «Enviar salida a la IA»." : "Escribí tu respuesta en la caja de abajo."),
-        h("small", { class: "hint" }, "Lo que escribas le llega a la IA (también queda en su tarea original).")),
+      h("div", {}, h("small", { class: "hint" }, cmds.length ? "Pegá la salida abajo y apretá «Enviar salida a la IA»." : "Escribí tu respuesta abajo.")),
       h("div", { class: "row" },
         h("button", { class: "primary", title: "Publica lo que escribiste abajo como respuesta a la IA y marca el pedido como Hecho", onclick: () => out.value.trim() ? reply("📤 Salida:\n" + out.value.trim(), true).then(() => (out.value = "")) : toast("Escribí o pegá primero abajo", true) }, "📤 Enviar salida a la IA"),
         can("admin") ? h("button", { class: "primary big", title: "Permite siempre lo que pide la IA (comandos y herramientas de la lista), le avisa y marca el pedido como Hecho: la IA retoma sola", onclick: authorizeAll },
@@ -1807,20 +1817,19 @@ const openTask = guard(async (task) => {
         h("button", { class: "primary", title: "Guardar los cambios y cerrar", onclick: save }, "💾 Guardar"),
         can("member") && h("button", { class: "danger", title: "Borrar la tarea", onclick: del }, "🗑 Borrar"),
         can("owner") && showTech() && h("button", { class: "ghost", title: "Abre una terminal SSH a la máquina del proyecto, sin salir de la tarea (solo owners)", onclick: guard(() => openTaskTerminal(cur())) }, "💻 Terminal"),
+        h("button", { class: "ghost", title: "Cerrar sin guardar", onclick: closeModal }, "✕"),
         h("button", { class: "ghost max-btn", title: "Maximizar o restaurar la ventana para leer los comentarios más cómodo", onclick: (e) => {
           const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("taskMax", on ? "1" : "0");
           e.currentTarget.textContent = on ? "⤡ Restaurar" : "⤢ Maximizar";
         } }, store.get("taskMax") === "1" ? "⤡ Restaurar" : "⤢ Maximizar")),
       h("div", { class: "task-split" },
         h("div", { class: "task-main" },
-          h("label", { title: FIELD_TIPS.title }, "Título", title),
-          h("label", { title: FIELD_TIPS.desc }, "Descripción", desc),
-          h("h3", {}, "Conversación"),
+          title, descView,
+          desc,
           h("div", { class: "comments", id: "comments" }),
           requestPanel(),
           reviewPanel(),
-          comment,
-          h("div", { class: "row" }, h("small", { class: "hint" }, "Ctrl+Enter envía"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: send }, "Enviar"))),
+          h("div", { class: "composer" }, comment, h("button", { class: "primary", onclick: send }, "Enviar"))),
         h("aside", { class: "task-side" },
           h("div", { class: "grid2" },
             h("label", { title: FIELD_TIPS.status }, "Estado", status), h("label", { title: FIELD_TIPS.prio }, "Prioridad", prio),
@@ -1833,15 +1842,13 @@ const openTask = guard(async (task) => {
           h("h3", {}, "Etiquetas"), labelBox, newLabel,
           h("h3", {}, "Subtareas"), subBox, newSub,
           h("h3", {}, "Depende de"), depBox, depAdd,
-          h("h3", {}, "Adjuntos"), attBox, attAdd)),
-      h("div", { class: "row" },
-        can("member") && h("button", { class: "danger", onclick: del }, "Borrar"),
-        h("button", { onclick: () => { closeModal(); openMindmap(cur()); } }, "Mapa mental"), h("span", { class: "spacer" }),
-        h("button", { onclick: closeModal }, "Cancelar"), h("button", { class: "primary", onclick: save }, "Guardar"))));
+          h("h3", {}, "Adjuntos"), attBox, attAdd,
+          h("button", { class: "ghost", onclick: () => { closeModal(); openMindmap(cur()); } }, "Mapa mental"))),
+      null));
   document.body.append(modal);
-  drawLabels(); drawSubs(); drawDeps(); drawAtts();
+  drawLabels(); drawSubs(); drawDeps(); drawAtts(); drawDesc();
   renderComments();
-  title.focus();
+  comment.focus();
 });
 
 // ---------- chat con IAs: qué IA contesta en el chat y con qué topes ----------

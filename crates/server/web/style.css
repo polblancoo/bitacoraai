@@ -1046,3 +1046,19 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 /* pedido y revision: barra compacta dentro de la charla, justo arriba de la caja de escribir */
 .task-main .reqpanel, .task-main .reviewpanel { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: 10px 0 0; display: grid; gap: 8px; }
 .task-main .reqpanel .req-title { font-size: 13px; }
+
+/* tarea como conversación: título de encabezado, descripción como primer mensaje, burbujas y caja de escribir chica */
+.task-title { font-size: 18px; font-weight: 600; background: transparent; border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 4px 0; }
+.task-title:hover, .task-title:focus { border-bottom-color: var(--line); outline: none; box-shadow: none; }
+.desc-msg { display: flex; gap: 8px; align-items: flex-start; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; }
+.desc-msg .desc-text { flex: 1; min-width: 0; color: var(--fg); }
+.desc-msg button { flex: none; padding: 2px 8px; font-size: 12px; }
+.task-main .comments { gap: 10px; padding: 6px 0; }
+.task-main .comment { border: 0; background: var(--card2); border-radius: 12px 12px 12px 3px; padding: 8px 12px; max-width: 88%; justify-self: start; }
+.task-main .comment.mine { background: color-mix(in srgb, var(--blue) 18%, var(--card)); border-radius: 12px 12px 3px 12px; justify-self: end; }
+.task-main .comment b { font-size: 12px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; }
+.composer textarea { flex: 1; min-height: 44px !important; max-height: 320px; resize: none; }
+.composer button { flex: none; height: 40px; }
+.task-main .reqpanel .cmdbox.big { padding: 6px 10px; }
+.task-main .reqpanel .cmdbox.big code { font-size: .95em; }
