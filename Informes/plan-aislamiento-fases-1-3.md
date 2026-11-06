@@ -76,3 +76,11 @@ Configuración → «Comandos permitidos y prohibidos para todas las IAs».
 - «Integrar» una subtarea en la rama de su tarea madre: la subtarea ya sale de la rama de la madre, falta el botón de integración y la vista de diff.
 - La limpieza (aviso a los 23 días, borrado a los 30) cubre las copias y los espacios de las IAs; los espacios de personas no tienen proceso de limpieza todavía.
 - Mac y Windows: sin sandbox (haría falta el driver Docker).
+
+## Fase 4 — espacios personales para personas (2026-11-06)
+- Con `TM_WORKSPACE`, la terminal web usa `homeCrewHelm/<persona>/` como `HOME`: ahí persisten su `.bashrc`, herdr y lo que guarde. Es solo suyo.
+- Owners: shell completa con su espacio como HOME (las herramientas del servicio siguen en el PATH).
+- Miembros: pueden abrir la terminal solo si el agente del proyecto tiene `TM_WORKSPACE`; corre en cápsula `bwrap` (su espacio escribible, el proyecto en solo lectura, sin el home real). Sin `bwrap` no abre.
+- Por SSH directo a la máquina del proyecto siguen entrando solo los owners.
+- Preferencias de terminal (`autoHerdr`) guardadas por cuenta en el servidor (`/api/me/term-prefs`).
+- Pendiente: vista de solo lectura del admin sobre los espacios de otros, limpieza de espacios de personas, SSH con clave por persona hacia un único usuario de servicio.

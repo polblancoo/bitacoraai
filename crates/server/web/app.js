@@ -295,6 +295,8 @@ async function boot(first) {
   await selectTeam(S.teams.find((t) => t.id === S.team?.id) || S.teams[0] || null);
   loadAvatars();
   connectWs();
+  // las preferencias de la terminal viajan con la cuenta: lo guardado en el servidor manda sobre el navegador
+  api("GET", "/api/me/term-prefs").then((v) => { if (typeof v?.autoHerdr === "boolean") store.set("autoHerdr", v.autoHerdr ? "1" : "0"); }).catch(() => {});
   if (first) { loadInbox(true); loadLicense(); if (!S.teams.length && store.get("wizDone") !== "1") openWizard(); }
 }
 
@@ -1854,7 +1856,7 @@ const openTask = guard(async (task) => {
       h("h3", { class: "task-head" }, "Tarea ", h("span", { class: "tid" }, "#" + task.id), h("span", { class: "spacer" }),
         h("button", { class: "primary", title: "Guardar los cambios y cerrar", onclick: save }, "💾 Guardar"),
         can("member") && h("button", { class: "danger", title: "Borrar la tarea", onclick: del }, "🗑 Borrar"),
-        can("owner") && showTech() && h("button", { class: "ghost", title: "Abre una terminal SSH a la máquina del proyecto, sin salir de la tarea (solo owners)", onclick: guard(() => openTaskTerminal(cur())) }, "💻 Terminal"),
+        can("member") && showTech() && h("button", { class: "ghost", title: "Abre una terminal en la máquina del proyecto, sin salir de la tarea (owners; miembros si el servidor tiene espacios personales)", onclick: guard(() => openTaskTerminal(cur())) }, "💻 Terminal"),
         h("button", { class: "ghost", title: "Cerrar sin guardar", onclick: closeModal }, "✕"),
         h("button", { class: "ghost max-btn", title: "Maximizar o restaurar la ventana para leer los comentarios más cómodo", onclick: (e) => {
           const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("taskMax", on ? "1" : "0");
@@ -1868,7 +1870,7 @@ const openTask = guard(async (task) => {
           requestPanel(),
           reviewPanel(),
           h("div", { class: "composer" }, comment,
-            can("owner") && showTech() && h("button", { class: "ghost", title: "Abre una terminal acá abajo, en la carpeta del proyecto, ligada a esta tarea (solo owners)", onclick: toggleDock }, "💻 Terminal"),
+            can("member") && showTech() && h("button", { class: "ghost", title: "Abre una terminal acá abajo, en la carpeta del proyecto, ligada a esta tarea (owners; miembros si el servidor tiene espacios personales)", onclick: toggleDock }, "💻 Terminal"),
             h("button", { class: "primary", onclick: send }, "Enviar")),
           dockSlot),
         h("aside", { class: "task-side" },
@@ -2946,7 +2948,7 @@ const openSettings = guard(async () => {
         })()),
         line(["Abrir herdr al entrar a la terminal de una tarea", "herdr"], (() => {
           const cb = h("input", { type: "checkbox", checked: store.get("autoHerdr") !== "0" });
-          cb.onchange = () => { store.set("autoHerdr", cb.checked ? "1" : "0"); toast(cb.checked ? "herdr automático: sí" : "herdr automático: no"); };
+          cb.onchange = () => { store.set("autoHerdr", cb.checked ? "1" : "0"); api("PUT", "/api/me/term-prefs", { autoHerdr: cb.checked }).catch(() => {}); toast(cb.checked ? "herdr automático: sí" : "herdr automático: no"); };
           return cb;
         })()),
         line(["Cuánto queda visible el aviso emergente", "toastSecs"], (() => {

@@ -41,11 +41,14 @@ struct Pending {
     dir: String,
     cols: u32,
     rows: u32,
+    /// quién abre la terminal y si es owner (el agente decide el HOME y si va dentro del sandbox)
+    who: String,
+    owner: bool,
     handoff: Option<AgentEnd>,
 }
 static PENDING: LazyLock<Mutex<HashMap<String, Pending>>> = LazyLock::new(Default::default);
 /// Última vez que cada agente con terminal habilitada consultó al servidor.
-static AGENTS: LazyLock<Mutex<HashMap<Id, (Instant, bool)>>> = LazyLock::new(Default::default);
+static AGENTS: LazyLock<Mutex<HashMap<Id, (Instant, bool, bool)>>> = LazyLock::new(Default::default);
 const AGENT_ONLINE: Duration = Duration::from_secs(15);
 
 fn agent_online(id: Id) -> bool {
@@ -62,6 +65,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/projects/{id}/ssh/install-key", post(install_key))
         .route("/api/projects/{id}/term", get(handler))
         .route("/api/projects/{id}/term/agents", get(list_agents))
+        .route("/api/me/term-prefs", get(get_term_prefs).put(put_term_prefs))
         .route("/api/agent/term/pending", get(agent_pending))
         .route("/api/agent/term/{sid}", get(agent_ws))
 }
@@ -328,8 +332,13 @@ async fn session(mut sock: WebSocket, st: AppState, project: Id, task: Option<Id
         Ok(t) => t,
         Err(_) => return say(&mut sock, json!({ "error": "sin acceso" })).await,
     };
+    let agent: Option<i64> = sqlx::query_scalar("SELECT agent_id FROM ssh_targets WHERE project_id = ?").bind(project).fetch_optional(&st.db).await.ok().flatten().flatten();
+    // owners: terminal completa; miembros: solo por un agente con espacios personales y sandbox (TM_WORKSPACE), nunca por SSH
     if routes::require(&st, team, user.id, Role::Owner).await.is_err() {
-        return say(&mut sock, json!({ "error": "la terminal es solo para owners" })).await;
+        let sandboxed = agent.is_some_and(|a| AGENTS.lock().unwrap().get(&a).is_some_and(|t| t.2));
+        if !(sandboxed && routes::require(&st, team, user.id, Role::Member).await.is_ok()) {
+            return say(&mut sock, json!({ "error": "la terminal es solo para owners (los miembros la usan cuando el agente del proyecto tiene espacios personales: TM_WORKSPACE)" })).await;
+        }
     }
     let fresh = {
         let mut g = OPEN.lock().unwrap();
@@ -340,7 +349,6 @@ async fn session(mut sock: WebSocket, st: AppState, project: Id, task: Option<Id
         return say(&mut sock, json!({ "error": format!("máximo {MAX_PER_USER} terminales abiertas a la vez") })).await;
     }
     let started = Instant::now();
-    let agent: Option<i64> = sqlx::query_scalar("SELECT agent_id FROM ssh_targets WHERE project_id = ?").bind(project).fetch_optional(&st.db).await.ok().flatten().flatten();
     let res = match agent {
         Some(a) => run_agent(&mut sock, &st, project, task, user.id, cols, rows, a).await,
         None => run(&mut sock, &st, project, task, user.id, cols, rows).await,
@@ -508,12 +516,34 @@ async fn save_note(ssh: &mut client::Handle<Client>, st: &AppState, project: Id,
 async fn list_agents(State(st): State<AppState>, user: crate::auth::AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
     user.human_only()?;
     let team = team_of_project(&st, project).await?;
-    routes::require(&st, team, user.id, Role::Owner).await?;
+    routes::require(&st, team, user.id, Role::Member).await?;
+    let owner = routes::require(&st, team, user.id, Role::Owner).await.is_ok();
     let rows: Vec<(Id, String, String)> = sqlx::query_as("SELECT u.id, u.username, u.model FROM team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = ? AND u.is_bot = 1 ORDER BY u.username")
         .bind(team)
         .fetch_all(&st.db)
         .await?;
-    Ok(Json(Value::Array(rows.into_iter().map(|(id, name, model)| json!({ "id": id, "name": name, "model": model, "online": agent_online(id), "herdr": AGENTS.lock().unwrap().get(&id).is_some_and(|t| t.1) })).collect())))
+    Ok(Json(Value::Array(rows.into_iter().map(|(id, name, model)| json!({ "id": id, "name": name, "model": model, "online": agent_online(id), "herdr": AGENTS.lock().unwrap().get(&id).is_some_and(|t| t.1), "workspace": AGENTS.lock().unwrap().get(&id).is_some_and(|t| t.2) })).filter(|j| owner || j["workspace"] == true).collect())))
+}
+
+/// Preferencias de la terminal de cada persona (viajan con la cuenta, no con el navegador).
+async fn get_term_prefs(State(st): State<AppState>, user: crate::auth::AuthUser) -> Result<Json<Value>> {
+    user.human_only()?;
+    let raw: String = sqlx::query_scalar("SELECT term_prefs FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
+    Ok(Json(serde_json::from_str(&raw).unwrap_or_else(|_| json!({}))))
+}
+
+async fn put_term_prefs(State(st): State<AppState>, user: crate::auth::AuthUser, Json(b): Json<Value>) -> Result<Json<Value>> {
+    user.human_only()?;
+    // solo claves conocidas, valores simples
+    let mut out = serde_json::Map::new();
+    if let Some(v) = b.get("autoHerdr").and_then(Value::as_bool) {
+        out.insert("autoHerdr".into(), json!(v));
+    }
+    let raw: String = sqlx::query_scalar("SELECT term_prefs FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
+    let mut cur: serde_json::Map<String, Value> = serde_json::from_str(&raw).unwrap_or_default();
+    cur.extend(out);
+    sqlx::query("UPDATE users SET term_prefs = ? WHERE id = ?").bind(Value::Object(cur.clone()).to_string()).bind(user.id).execute(&st.db).await?;
+    Ok(Json(Value::Object(cur)))
 }
 
 /// El agente pregunta cada segundo si hay una terminal para abrir (así también se sabe que está conectado).
@@ -522,13 +552,13 @@ async fn agent_pending(user: crate::auth::AuthUser, Query(q): Query<HashMap<Stri
         return Err(AppError::forbidden());
     }
     // el agente avisa si la máquina tiene herdr instalado (la web propone instalarlo al abrir la terminal)
-    AGENTS.lock().unwrap().insert(user.id, (Instant::now(), q.get("herdr").is_some_and(|v| v == "1")));
+    AGENTS.lock().unwrap().insert(user.id, (Instant::now(), q.get("herdr").is_some_and(|v| v == "1"), q.get("ws").is_some_and(|v| v == "1")));
     let list: Vec<Value> = PENDING
         .lock()
         .unwrap()
         .iter()
         .filter(|(_, p)| p.agent == user.id && p.handoff.is_some())
-        .map(|(sid, p)| json!({ "sid": sid, "dir": p.dir, "cols": p.cols, "rows": p.rows }))
+        .map(|(sid, p)| json!({ "sid": sid, "dir": p.dir, "cols": p.cols, "rows": p.rows, "who": p.who, "owner": p.owner }))
         .collect();
     Ok(Json(Value::Array(list)))
 }
@@ -612,7 +642,9 @@ async fn run_agent(sock: &mut WebSocket, st: &AppState, project: Id, task: Optio
     let sid = uuid::Uuid::new_v4().simple().to_string();
     let (to_agent, from_browser) = mpsc::channel::<Message>(512);
     let (to_browser, mut from_agent) = mpsc::channel::<Message>(512);
-    PENDING.lock().unwrap().insert(sid.clone(), Pending { agent, dir, cols, rows, handoff: Some(AgentEnd { from_browser, to_browser }) });
+    let who_name: String = sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(who).fetch_one(&st.db).await.unwrap_or_default();
+    let owner = match team_of_project(st, project).await { Ok(t) => routes::require(st, t, who, Role::Owner).await.is_ok(), Err(_) => false };
+    PENDING.lock().unwrap().insert(sid.clone(), Pending { agent, dir, cols, rows, who: who_name, owner, handoff: Some(AgentEnd { from_browser, to_browser }) });
     // el contexto de la tarea queda escrito en la carpeta del proyecto, para que una IA abierta en esta terminal sepa de qué se trata
     if let Some(t) = task {
         if let Some(body) = task_context(st, t).await {
