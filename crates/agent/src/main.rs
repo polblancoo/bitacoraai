@@ -159,7 +159,7 @@ struct Job {
     updated_at: String,
 }
 
-async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path, mine: &std::path::Path) -> String {
+async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path, mine: &std::path::Path, pr_branch: Option<&str>) -> String {
     let comments = api.get(&format!("/api/tasks/{}/comments", job.id)).await.unwrap_or(Value::Null);
     let notes: Vec<String> = comments
         .as_array()
@@ -174,8 +174,11 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path, mine: &std::pat
             format!("Una persona trabajó en la terminal de esta tarea; esto es lo último que quedó anotado en .tm/terminal-tarea-{}.md (seguí desde ahí):\n{tail}\n\n", job.id)
         })
         .unwrap_or_default();
+    let pr_note = pr_branch
+        .map(|b| format!("Este proyecto abre Pull Requests: si cambiás archivos del repositorio, trabajá en la rama `{b}` (creala con `git checkout -b {b}` si no existe), hacé `git add` y `git commit` de tus cambios y subila con `git push -u origin {b}`. No hagas push a `main` ni a otra rama; la persona abre el Pull Request desde la tarea. Si no cambiaste nada del repositorio, no crees la rama.\n\n"))
+        .unwrap_or_default();
     format!(
-        "{term_note}Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout. Si lo que pedís es que una persona ejecute o permita un comando, escribilo dentro de la pregunta en un bloque de código (tres comillas invertidas, un comando por línea): la app lo muestra en un recuadro para copiar y permitir con un clic.\n\nTrabajá dentro de la carpeta de trabajo. Los archivos que generes y que no sean parte del código del repositorio (informes, presentaciones, datos, borradores) guardalos en tu carpeta de esta tarea: {}. Lo que quede ahí es lo que se entrega a la etapa siguiente, y al aprobarse la última etapa se copia a la carpeta final de la tarea. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
+        "{term_note}{pr_note}Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout. Si lo que pedís es que una persona ejecute o permita un comando, escribilo dentro de la pregunta en un bloque de código (tres comillas invertidas, un comando por línea): la app lo muestra en un recuadro para copiar y permitir con un clic.\n\nTrabajá dentro de la carpeta de trabajo. Los archivos que generes y que no sean parte del código del repositorio (informes, presentaciones, datos, borradores) guardalos en tu carpeta de esta tarea: {}. Lo que quede ahí es lo que se entrega a la etapa siguiente, y al aprobarse la última etapa se copia a la carpeta final de la tarea. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
         job.project,
         if job.repo.is_empty() { "(sin definir)" } else { &job.repo },
         dir.display(),
@@ -232,7 +235,10 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     let _ = std::fs::create_dir_all(&mine);
     let _ = std::fs::create_dir_all(dir.join(".crewhelm/_tareas").join(job.id.to_string()).join("final"));
     let _ = std::fs::write(dir.join(".crewhelm/.gitignore"), "*\n");
-    let prompt = prompt_for(api, job, &dir, &mine).await;
+    // proyectos con «Pull Request» activado: la IA trabaja y sube la rama tm/tarea-ID
+    let ai_pr = !job.repo.is_empty() && api.get(&format!("/api/projects/{}/github/settings", job.project_id)).await.ok().and_then(|v| v["ai_pr"].as_bool()).unwrap_or(false);
+    let pr_branch = ai_pr.then(|| format!("tm/tarea-{}", job.id));
+    let prompt = prompt_for(api, job, &dir, &mine, pr_branch.as_deref()).await;
 
     // Lista de comandos prohibidos que un admin edita desde la app (ficha de la IA).
     let deny = api.get("/api/me/deny").await.ok().and_then(|v| v["deny"].as_str().map(String::from)).unwrap_or_default();
@@ -257,6 +263,7 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
         .env("TM_ALLOW", allow)
         .env("TM_ALLOW_ALL", if allow_all { "1" } else { "0" })
         .env("TM_LISTS_FROM_APP", if from_app { "1" } else { "0" })
+        .env("TM_PR_BRANCH", pr_branch.as_deref().unwrap_or(""))
         .env("TM_TASK_ID", job.id.to_string())
         .env("TM_TASK_DIR", &mine)
         .env("TM_TASK_TITLE", &job.title)
