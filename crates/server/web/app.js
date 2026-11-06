@@ -1676,7 +1676,7 @@ const openTask = guard(async (task) => {
   const requestPanel = () => {
     if (!/^🙋 Pedido de #\d+:/.test(cur().title) || !can("member")) return null;
     const cmds = (cur().description.match(/COMANDOS PARA EJECUTAR[^\n]*\n[^\n]*\n\n([\s\S]*?)\n\n/) || [])[1]?.split("\n").filter(Boolean) || [];
-    const out = h("textarea", { rows: 5, maxLength: 3500, placeholder: "Pegá acá lo que mostró la terminal (la salida del comando)…" });
+    const out = comment; // se escribe y se pega en la misma caja de la charla, abajo
     const reply = guard(async (body, done) => {
       const c = await api("POST", `/api/tasks/${task.id}/comments`, { body });
       if (!S.comments.some((x) => x.id === c.id)) S.comments.push(c);
@@ -1735,15 +1735,15 @@ const openTask = guard(async (task) => {
     };
     drawCmds();
     return h("div", { class: "reqpanel" },
-      h("h3", {}, "🙋 Pedido de una IA"),
-      askText && h("div", { class: "askbox" }, h("b", {}, "Lo que pide la IA"), h("p", { style: "white-space:pre-wrap;margin:4px 0" }, askText.replace(/```[\s\S]*?```/g, "").replace(/\n{3,}/g, "\n\n").trim() || "(comandos abajo)"),
-        cmdList),
+      h("b", { class: "req-title" }, "🙋 La IA espera tu respuesta"),
+      askCmds.length > 0 && h("div", { class: "askbox" }, cmdList),
       cmds.length > 0 && h("div", {}, h("b", {}, "1. Copiá y ejecutá en tu terminal:"),
         cmds.map((cmd) => h("div", { class: "cmdbox" }, h("code", {}, cmd),
           h("button", { class: "ghost", title: "Copiar el comando", onclick: () => navigator.clipboard?.writeText(cmd).then(() => toast("Comando copiado")) }, "📋 Copiar")))),
-      h("div", {}, h("b", {}, cmds.length ? "2. Pegá la salida acá y enviala:" : "Respondé acá:"), out,
-        h("small", { class: "hint" }, "Se publica como comentario de esta tarea y le llega sola a la IA (también queda en su tarea original).")),
+      h("div", {}, h("small", { class: "hint" }, cmds.length ? "2. Pegá la salida en la caja de abajo y apretá «Enviar salida a la IA»." : "Escribí tu respuesta en la caja de abajo."),
+        h("small", { class: "hint" }, "Lo que escribas le llega a la IA (también queda en su tarea original).")),
       h("div", { class: "row" },
+        h("button", { class: "primary", title: "Publica lo que escribiste abajo como respuesta a la IA y marca el pedido como Hecho", onclick: () => out.value.trim() ? reply("📤 Salida:\n" + out.value.trim(), true).then(() => (out.value = "")) : toast("Escribí o pegá primero abajo", true) }, "📤 Enviar salida a la IA"),
         can("admin") ? h("button", { class: "primary big", title: "Permite siempre lo que pide la IA (comandos y herramientas de la lista), le avisa y marca el pedido como Hecho: la IA retoma sola", onclick: authorizeAll },
           keep.length ? `✅ Autorizar y que la IA siga (${keep.length})` : "✅ Autorizar y que la IA siga")
           : h("button", { class: "primary", onclick: () => reply("✅ Autorizado: seguí.", true) }, "✅ Autorizar"),
@@ -1752,7 +1752,6 @@ const openTask = guard(async (task) => {
       can("admin") && askBot() && h("div", { class: "row" }, h("button", { class: "ghost", title: "Autorización total con una lista corta de cosas peligrosas prohibidas: la IA deja de pedir permisos", onclick: trustBot }, "🔓 Que esta IA no vuelva a pedir permisos (perfil confiable)")),
       h("details", {}, h("summary", {}, "Más opciones"),
         h("div", { class: "row" },
-          h("button", { class: "primary", title: "Publica la salida como comentario y marca el pedido como Hecho", onclick: () => out.value.trim() ? reply("📤 Salida:\n" + out.value.trim(), true).then(() => (out.value = "")) : toast("Pegá primero la salida", true) }, "📤 Enviar salida a la IA"),
           can("admin") && h("button", { title: "Abre la lista de comandos permitidos de la IA, para sumar uno a mano", onclick: guard(async () => {
             const bot = askBot(); if (!bot) return toast("No encuentro a esa IA en este equipo", true); await editAllow(bot);
           }) }, "⚙ Lista de la IA"),
@@ -1812,14 +1811,14 @@ const openTask = guard(async (task) => {
           const m = e.currentTarget.closest(".modal"); const on = m.classList.toggle("max"); store.set("taskMax", on ? "1" : "0");
           e.currentTarget.textContent = on ? "⤡ Restaurar" : "⤢ Maximizar";
         } }, store.get("taskMax") === "1" ? "⤡ Restaurar" : "⤢ Maximizar")),
-      requestPanel(),
-      reviewPanel(),
       h("div", { class: "task-split" },
         h("div", { class: "task-main" },
           h("label", { title: FIELD_TIPS.title }, "Título", title),
           h("label", { title: FIELD_TIPS.desc }, "Descripción", desc),
           h("h3", {}, "Conversación"),
           h("div", { class: "comments", id: "comments" }),
+          requestPanel(),
+          reviewPanel(),
           comment,
           h("div", { class: "row" }, h("small", { class: "hint" }, "Ctrl+Enter envía"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: send }, "Enviar"))),
         h("aside", { class: "task-side" },

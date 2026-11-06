@@ -1042,3 +1042,7 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 .task-side .tfolder { max-height: 220px; overflow: auto; }
 .proj-meta .repo-link { color: var(--blue); text-decoration: none; font-weight: 500; }
 .proj-meta .repo-link:hover { text-decoration: underline; }
+
+/* pedido y revision: barra compacta dentro de la charla, justo arriba de la caja de escribir */
+.task-main .reqpanel, .task-main .reviewpanel { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: 10px 0 0; display: grid; gap: 8px; }
+.task-main .reqpanel .req-title { font-size: 13px; }
