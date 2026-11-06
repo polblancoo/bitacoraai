@@ -200,8 +200,19 @@ pub(crate) async fn repo_of(st: &AppState, project: Id) -> Result<Option<String>
 
 async fn gh_err(r: reqwest::Response) -> AppError {
     let status = r.status();
-    let msg = r.json::<Value>().await.ok().and_then(|v| v["message"].as_str().map(|m| m.chars().take(160).collect::<String>())).unwrap_or_default();
+    let body = r.json::<Value>().await.ok();
+    let mut msg = body.as_ref().and_then(|v| v["message"].as_str().map(|m| m.chars().take(160).collect::<String>())).unwrap_or_default();
+    // el detalle de un 422 viene en `errors` (por ejemplo «No commits between main and tm/tarea-3»)
+    let detail: Vec<String> = body
+        .as_ref()
+        .and_then(|v| v["errors"].as_array())
+        .map(|a| a.iter().filter_map(|e| e.as_str().map(String::from).or_else(|| e["message"].as_str().map(String::from)).or_else(|| e["code"].as_str().map(|c| format!("{} {c}", e["field"].as_str().unwrap_or(""))))).collect())
+        .unwrap_or_default();
+    if !detail.is_empty() {
+        msg = format!("{msg} — {}", detail.join("; ").chars().take(200).collect::<String>());
+    }
     let why = match status.as_u16() {
+        422 => "GitHub rechazó el pedido (revisá que la rama exista, tenga cambios respecto de la principal y no haya ya un Pull Request abierto)",
         401 => "tu conexión con GitHub venció: desconectá y volvé a conectar tu cuenta",
         403 => "GitHub no te deja hacer eso (permisos o límite de uso)",
         404 => "no encuentro ese repositorio o issue (revisá que esté bien escrito y que tu cuenta tenga acceso)",

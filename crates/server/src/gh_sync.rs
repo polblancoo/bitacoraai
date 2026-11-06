@@ -421,6 +421,13 @@ async fn open_pr(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id
     if branch.len() > 120 || !branch.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '/' | '.')) {
         return Err(AppError::bad("Nombre de rama no válido"));
     }
+    // la rama tiene que estar subida a GitHub (la IA o vos con `git push`)
+    if let Err(e) = api_get(&g, &token, &format!("/repos/{repo}/branches/{}", branch.replace('/', "%2F"))).await {
+        if !e.1.contains("(404)") {
+            return Err(e);
+        }
+        return Err(AppError::bad(&format!("La rama «{branch}» no está en GitHub: hay que subirla con `git push origin {branch}` antes de abrir el Pull Request")));
+    }
     let info = api_get(&g, &token, &format!("/repos/{repo}")).await?;
     let base = info["default_branch"].as_str().unwrap_or("main").to_string();
     let linked: Option<i64> = sqlx::query_scalar("SELECT number FROM task_github WHERE task_id = ?").bind(task).fetch_optional(&st.db).await?;
