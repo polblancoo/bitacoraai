@@ -386,7 +386,9 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
         }
         Ok(_) if run_ok && wrote_while_working(api, job.id, claimed["updated_at"].as_str().unwrap_or("")).await => {
             api.say(job.id, "🔁 Mientras trabajaba escribieron comentarios nuevos: la retomo leyéndolos.").await;
-            api.set_status(job.id, "todo").await.ok().and_then(|t| t["updated_at"].as_str().map(String::from))
+            api.set_status(job.id, "todo").await.ok();
+            // None: no se saltea, se vuelve a tomar en la próxima vuelta (con los comentarios nuevos)
+            None
         }
         Ok(o) if run_ok => {
             api.say(job.id, &format!("✅ Terminé.\n\n{}", tail(&ok_text(&o), 1800))).await;
