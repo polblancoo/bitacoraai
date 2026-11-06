@@ -202,3 +202,122 @@ fn save_note(dir: &Path, rel: &str, body: &str, replace: bool) -> std::io::Resul
     }
     Ok(())
 }
+
+// ---------- entrada por SSH al usuario de servicio (TM_SSH_KEYS=1): cada persona con su clave y su espacio ----------
+
+const KEYS_BEGIN: &str = "# BEGIN crewhelm (lo escribe tm-agent: no edites este bloque)";
+const KEYS_END: &str = "# END crewhelm";
+
+/// Cada minuto copia las claves públicas de las personas (las cargan en su perfil) a `~/.ssh/authorized_keys`, en un bloque propio.
+/// Cada clave solo puede abrir `tm-agent ssh-session <persona> <nivel>`: sin comandos sueltos, túneles, agente ni X11.
+pub async fn sync_keys(api: Arc<Api>) {
+    let Ok(exe) = std::env::current_exe() else { return };
+    let exe = exe.to_string_lossy().to_string();
+    if exe.contains(['"', '\n', '\\']) {
+        log("TM_SSH_KEYS: la ruta de tm-agent tiene caracteres que no puedo usar en authorized_keys");
+        return;
+    }
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return };
+    log("entrada por SSH habilitada (TM_SSH_KEYS=1): las claves cargadas en los perfiles abren una sesión con su espacio personal");
+    let mut last = String::new();
+    loop {
+        if let Ok(list) = api.get("/api/agent/ssh-keys").await {
+            let mut block = String::new();
+            for k in list.as_array().into_iter().flatten() {
+                let (Some(who), Some(key), Some(level)) = (k["who"].as_str(), k["key"].as_str(), k["level"].as_str()) else { continue };
+                let safe = !who.is_empty() && who.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
+                if !safe || !matches!(level, "owner" | "member") || key.contains(['\n', '\r', '"']) {
+                    continue;
+                }
+                block.push_str(&format!("restrict,pty,command=\"{exe} ssh-session {who} {level}\" {key} crewhelm:{who}\n"));
+            }
+            if block != last {
+                match write_keys(&home, &block) {
+                    Ok(()) => { log(&format!("authorized_keys actualizado ({} claves)", block.lines().count())); last = block; }
+                    Err(e) => log(&format!("no pude escribir authorized_keys: {e}")),
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(60)).await;
+    }
+}
+
+fn write_keys(home: &Path, block: &str) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = home.join(".ssh");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+    let path = dir.join("authorized_keys");
+    let cur = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut keep = String::new();
+    let mut skipping = false;
+    for l in cur.lines() {
+        if l == KEYS_BEGIN { skipping = true; continue; }
+        if l == KEYS_END { skipping = false; continue; }
+        if !skipping { keep.push_str(l); keep.push('\n'); }
+    }
+    if !block.is_empty() {
+        keep.push_str(&format!("{KEYS_BEGIN}\n{block}{KEYS_END}\n"));
+    }
+    let tmp = dir.join("authorized_keys.tm");
+    std::fs::write(&tmp, keep)?;
+    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+    std::fs::rename(tmp, path)
+}
+
+/// Comando forzado de una clave: abre el shell de la persona. Owner: shell completa con su espacio como HOME; miembro: dentro de `bwrap`.
+pub async fn ssh_session(who: &str, level: &str) -> anyhow::Result<()> {
+    use std::os::unix::process::CommandExt;
+    if std::env::var_os("SSH_ORIGINAL_COMMAND").is_some_and(|c| !c.is_empty()) {
+        anyhow::bail!("solo se permiten sesiones interactivas (ssh usuario@servidor, sin comando)");
+    }
+    let root = workspace().ok_or_else(|| anyhow::anyhow!("falta TM_WORKSPACE en el servidor"))?;
+    let home = personal_home(&root, who)?;
+    let real_home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/root"));
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "bash".into());
+    let term = std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".into());
+    println!("CrewHelm · {who} · tu espacio: {} (se conserva entre sesiones)", home.display());
+    let err = if level == "owner" {
+        let path = std::env::var("PATH").unwrap_or_default();
+        std::process::Command::new(&shell)
+            .current_dir(&home)
+            .env("HOME", &home)
+            .env("TERM", term)
+            .env("PATH", format!("{}:{}:{path}", real_home.join(".local/bin").display(), real_home.join(".cargo/bin").display()))
+            .env("CARGO_HOME", real_home.join(".cargo"))
+            .env("RUSTUP_HOME", real_home.join(".rustup"))
+            .exec()
+    } else {
+        if !crate::iso::bwrap_ok().await {
+            anyhow::bail!("esta entrada necesita `bwrap` en el servidor y no está disponible");
+        }
+        let exe = std::env::current_exe()?;
+        let ro = crate::iso::paths_for_shell();
+        let mut a = crate::iso::bwrap_args(&real_home, &crate::iso::Plan { work: &home, mine: &home, ia_home: Some(&home), exe: &exe, net: crate::iso::Net::Open, sock_dir: None, extra_rw: &[], extra_ro: &ro, new_session: false });
+        a.extend(["--".into(), shell]);
+        std::process::Command::new("bwrap").args(a).env_clear().env("PATH", std::env::var("PATH").unwrap_or_default()).env("TERM", term).exec()
+    };
+    Err(err.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn authorized_keys_conserva_lo_ajeno_y_reemplaza_el_bloque() {
+        let d = std::env::temp_dir().join(format!("tm-keys-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join(".ssh")).unwrap();
+        std::fs::write(d.join(".ssh/authorized_keys"), "ssh-ed25519 AAAAmia yo@pc\n").unwrap();
+        write_keys(&d, "restrict,pty,command=\"x ssh-session ana member\" ssh-ed25519 AAAAana crewhelm:ana\n").unwrap();
+        write_keys(&d, "restrict,pty,command=\"x ssh-session bob owner\" ssh-ed25519 AAAAbob crewhelm:bob\n").unwrap();
+        let t = std::fs::read_to_string(d.join(".ssh/authorized_keys")).unwrap();
+        assert!(t.contains("AAAAmia") && t.contains("AAAAbob") && !t.contains("AAAAana"));
+        assert_eq!(t.matches(KEYS_BEGIN).count(), 1);
+        write_keys(&d, "").unwrap();
+        let t = std::fs::read_to_string(d.join(".ssh/authorized_keys")).unwrap();
+        assert_eq!(t, "ssh-ed25519 AAAAmia yo@pc\n");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+}

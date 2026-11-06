@@ -27,6 +27,7 @@ Variables de entorno:
   TM_AGENT_MAX      tareas en paralelo (1)
   TM_AGENT_DIR      carpeta a usar si el proyecto no tiene una definida o no existe en esta máquina
   TM_AGENT_TERMINAL=1  habilita la terminal desde la web: un owner abre un shell en esta máquina (carpeta del proyecto)
+  TM_SSH_KEYS=1        con TM_WORKSPACE: las claves SSH que cada persona carga en su perfil entran a esta cuenta, cada una a su espacio (miembros en sandbox)
   TM_AGENT_ONCE=1   procesa lo pendiente y sale
 
 El comando corre en la carpeta de trabajo del proyecto con TM_TASK_PROMPT, TM_TASK_ID, TM_TASK_TITLE,
@@ -665,6 +666,15 @@ async fn main() -> Result<()> {
     if std::env::args().nth(1).as_deref() == Some("__netbridge") {
         std::process::exit(iso::netbridge(std::env::args().skip(2).collect()).await);
     }
+    if std::env::args().nth(1).as_deref() == Some("ssh-session") {
+        let mut it = std::env::args().skip(2);
+        let (who, level) = (it.next().unwrap_or_default(), it.next().unwrap_or_default());
+        if let Err(e) = term::ssh_session(&who, &level).await {
+            eprintln!("CrewHelm: {e}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     if std::env::args().nth(1).as_deref() == Some("sandbox-shell") {
         return sandbox_shell(std::env::args().nth(2)).await;
     }
@@ -684,6 +694,9 @@ async fn main() -> Result<()> {
 
     if std::env::var("TM_AGENT_TERMINAL").is_ok_and(|v| v == "1") && !once {
         tokio::spawn(term::serve(api.clone()));
+    }
+    if std::env::var("TM_SSH_KEYS").is_ok_and(|v| v == "1") && !once {
+        tokio::spawn(term::sync_keys(api.clone()));
     }
     let sem = Arc::new(Semaphore::new(max));
     let running: Arc<Mutex<HashSet<i64>>> = Default::default();

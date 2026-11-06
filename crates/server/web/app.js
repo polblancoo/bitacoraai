@@ -387,8 +387,27 @@ const openProfile = guard(async () => {
       me.email && !me.email_verified && h("div", { class: "row" }, code, h("button", { class: "primary", onclick: guard(async () => {
         await api("POST", "/api/me/email/verify", { code: code.value }); toast("Email verificado"); close(); openProfile();
       }) }, "Verificar")),
+      sshKeysBox(),
       h("div", { class: "row" }, h("button", { onclick: close }, "Cerrar")))));
 });
+
+// claves SSH de la persona: con ellas entra por ssh al servidor, cada una a su espacio personal (los miembros dentro de un sandbox)
+function sshKeysBox() {
+  const box = h("div", { class: "sshkeys" });
+  const key = h("textarea", { rows: 2, placeholder: "Pegá tu clave pública (ssh-ed25519 AAAA… o ssh-rsa AAAA…)", maxLength: 900 });
+  const label = h("input", { placeholder: "Nombre (ej. mi notebook)", maxLength: 60 });
+  const load = async () => {
+    const list = await api("GET", "/api/me/ssh-keys").catch(() => []);
+    box.replaceChildren(h("h4", {}, "🔑 Entrar por SSH"),
+      h("small", {}, "Con tu clave pública entrás por ssh al servidor y caés en tu espacio personal, que se conserva entre sesiones. Si el administrador lo habilitó en el servidor (TM_SSH_KEYS=1), la clave se activa en un minuto."),
+      ...list.map((k) => h("div", { class: "row" }, h("span", {}, `${k.label || "sin nombre"} · ${k.fingerprint}`), h("span", { class: "spacer" }),
+        h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", `/api/me/ssh-keys/${k.id}`); load(); }) }, "Quitar"))),
+      key, label,
+      h("div", { class: "row" }, h("span", { class: "spacer" }), h("button", { onclick: guard(async () => { await api("POST", "/api/me/ssh-keys", { key: key.value, label: label.value }); key.value = ""; label.value = ""; toast("Clave agregada"); load(); }) }, "Agregar clave")));
+  };
+  load();
+  return box;
+}
 
 async function selectTeam(team) {
   S.portfolio = false; S.terms = false; S.team = team; S.projects = []; S.project = null; S.tasks = []; S.members = []; S.labels = []; S.bots = []; S.canvas = null;

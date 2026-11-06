@@ -458,3 +458,11 @@ CREATE TABLE IF NOT EXISTS chat_tr (
     text TEXT NOT NULL,
     PRIMARY KEY (msg_id, lang)
 );
+CREATE TABLE IF NOT EXISTS user_ssh_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    UNIQUE (user_id, key)
+);

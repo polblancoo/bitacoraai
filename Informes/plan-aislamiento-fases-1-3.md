@@ -85,4 +85,6 @@ Configuración → «Comandos permitidos y prohibidos para todas las IAs».
 - Preferencias de terminal (`autoHerdr`) guardadas por cuenta en el servidor (`/api/me/term-prefs`).
 - Admin (owner): selector «👁 Ver espacio de…» en Terminales; abre una cápsula con el espacio de esa persona o IA en **solo lectura** (queda registrado en el log del servidor).
 - Limpieza: el barrido del agente también recorre `homeCrewHelm/*/<proyecto>/<tarea>` (personas y demás IAs), con el mismo aviso a los 23 días y borrado a los 30.
-- Pendiente: SSH con clave por persona hacia un único usuario de servicio.
+- **SSH por persona:** cada persona carga su clave pública en su perfil («🔑 Entrar por SSH», hasta 5). Con `TM_SSH_KEYS=1` (y `TM_WORKSPACE`), `tm-agent` escribe cada minuto un bloque propio en `~/.ssh/authorized_keys` del usuario de servicio. Cada clave lleva `restrict,pty,command="tm-agent ssh-session <persona> <nivel>"`: no abre túneles, agente ni X11, y rechaza comandos sueltos (`ssh host comando`).
+  Owner → shell con su espacio como HOME; miembro → cápsula `bwrap` (no ve `~/.ssh`, home real ni a otras personas). El nivel sale del rol en los equipos del agente.
+  Conectarse: `ssh <usuario-de-servicio>@<servidor>` con la clave privada correspondiente. Las líneas ajenas de `authorized_keys` no se tocan.

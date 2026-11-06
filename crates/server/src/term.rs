@@ -68,6 +68,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/projects/{id}/term", get(handler))
         .route("/api/projects/{id}/term/agents", get(list_agents))
         .route("/api/me/term-prefs", get(get_term_prefs).put(put_term_prefs))
+        .route("/api/me/ssh-keys", get(list_ssh_keys).post(add_ssh_key))
+        .route("/api/me/ssh-keys/{id}", axum::routing::delete(del_ssh_key))
+        .route("/api/agent/ssh-keys", get(agent_ssh_keys))
         .route("/api/agent/term/pending", get(agent_pending))
         .route("/api/agent/term/{sid}", get(agent_ws))
 }
@@ -552,6 +555,66 @@ async fn put_term_prefs(State(st): State<AppState>, user: crate::auth::AuthUser,
     Ok(Json(Value::Object(cur)))
 }
 
+// ---------- claves SSH de las personas (entrada por SSH al usuario de servicio, con su espacio personal) ----------
+
+/// Deja solo `tipo base64` de una línea pública (sin opciones ni comentario, que podrían cambiar lo que permite la clave).
+fn clean_pubkey(line: &str) -> Option<String> {
+    let mut it = line.split_whitespace();
+    let (kind, body) = (it.next()?, it.next()?);
+    let kinds = ["ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521", "sk-ssh-ed25519@openssh.com"];
+    let b64 = body.len() >= 40 && body.len() <= 800 && body.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '='));
+    (kinds.contains(&kind) && b64).then(|| format!("{kind} {body}"))
+}
+
+async fn list_ssh_keys(State(st): State<AppState>, user: crate::auth::AuthUser) -> Result<Json<Value>> {
+    user.human_only()?;
+    let rows: Vec<(Id, String, String, String)> = sqlx::query_as("SELECT id, key, label, created_at FROM user_ssh_keys WHERE user_id = ? ORDER BY id").bind(user.id).fetch_all(&st.db).await?;
+    Ok(Json(Value::Array(rows.into_iter().map(|(id, key, label, at)| json!({ "id": id, "label": label, "created_at": at, "fingerprint": format!("{}…{}", &key[..key.find(' ').map_or(0, |i| i + 9).min(key.len())], &key[key.len().saturating_sub(10)..]) })).collect())))
+}
+
+#[derive(Deserialize)]
+struct NewKey {
+    key: String,
+    #[serde(default)]
+    label: String,
+}
+
+async fn add_ssh_key(State(st): State<AppState>, user: crate::auth::AuthUser, Json(b): Json<NewKey>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let key = clean_pubkey(&b.key).ok_or_else(|| AppError(StatusCode::BAD_REQUEST, "no parece una clave pública SSH (empieza con ssh-ed25519, ssh-rsa o ecdsa-sha2-…)".into()))?;
+    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_ssh_keys WHERE user_id = ?").bind(user.id).fetch_one(&st.db).await?;
+    if n >= 5 {
+        return Err(AppError(StatusCode::BAD_REQUEST, "máximo 5 claves por persona: borrá una que ya no uses".into()));
+    }
+    let label: String = b.label.chars().filter(|c| !c.is_control()).take(60).collect();
+    sqlx::query("INSERT OR IGNORE INTO user_ssh_keys (user_id, key, label) VALUES (?, ?, ?)").bind(user.id).bind(&key).bind(label.trim()).execute(&st.db).await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn del_ssh_key(State(st): State<AppState>, user: crate::auth::AuthUser, Path(id): Path<Id>) -> Result<StatusCode> {
+    user.human_only()?;
+    sqlx::query("DELETE FROM user_ssh_keys WHERE id = ? AND user_id = ?").bind(id).bind(user.id).execute(&st.db).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Las claves de las personas de los equipos de este agente, con su nivel: `owner` si lo es en alguno de esos equipos, si no `member`.
+async fn agent_ssh_keys(State(st): State<AppState>, user: crate::auth::AuthUser) -> Result<Json<Value>> {
+    if !user.bot {
+        return Err(AppError::forbidden());
+    }
+    let rows: Vec<(String, String, i64)> = sqlx::query_as(
+        "SELECT u.username, k.key, MAX(CASE WHEN m.role = 'owner' THEN 1 ELSE 0 END) \
+         FROM user_ssh_keys k JOIN users u ON u.id = k.user_id AND u.is_bot = 0 \
+         JOIN team_members m ON m.user_id = u.id \
+         WHERE m.team_id IN (SELECT team_id FROM team_members WHERE user_id = ?) \
+         GROUP BY k.id ORDER BY k.id",
+    )
+    .bind(user.id)
+    .fetch_all(&st.db)
+    .await?;
+    Ok(Json(Value::Array(rows.into_iter().map(|(who, key, o)| json!({ "who": who, "key": key, "level": if o == 1 { "owner" } else { "member" } })).collect())))
+}
+
 /// El agente pregunta cada segundo si hay una terminal para abrir (así también se sabe que está conectado).
 async fn agent_pending(user: crate::auth::AuthUser, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>> {
     if !user.bot {
@@ -702,5 +765,20 @@ async fn run_agent(sock: &mut WebSocket, st: &AppState, project: Id, task: Optio
     match err {
         Some(e) => Err(e),
         None => Ok(host),
+    }
+}
+
+#[cfg(test)]
+mod key_tests {
+    use super::clean_pubkey;
+
+    #[test]
+    fn la_clave_publica_se_limpia_y_se_valida() {
+        let body = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l8GKJl";
+        assert_eq!(clean_pubkey(&format!("ssh-ed25519 {body} pablo@pc")).as_deref(), Some(&*format!("ssh-ed25519 {body}")));
+        // opciones delante (command=, no-pty…) no son una clave: se rechaza
+        assert!(clean_pubkey(&format!("command=\"rm -rf /\" ssh-ed25519 {body}")).is_none());
+        assert!(clean_pubkey("ssh-ed25519 corta").is_none());
+        assert!(clean_pubkey("ssh-dss AAAA").is_none());
     }
 }

@@ -1072,3 +1072,7 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 .dock-term .term-box { height: 300px; border-radius: 0; }
 .dock-term.tall .term-box { height: 62vh; }
 .composer .ghost { flex: none; height: 40px; }
+
+/* claves SSH en el perfil */
+.sshkeys { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line, #2a2f45); display: grid; gap: 6px; }
+.sshkeys textarea, .sshkeys input { width: 100%; font-family: monospace; font-size: 12px; }
