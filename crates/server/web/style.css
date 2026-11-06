@@ -1066,3 +1066,9 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 .task-form .tf-more { display: flex; flex-direction: row; align-items: center; gap: 6px; padding-bottom: 8px; color: var(--fg); }
 .task-form .tf-more input { width: 16px; height: 16px; flex: none; }
 @media (max-width: 760px) { .tf-row.tf-flow { grid-template-columns: 1fr; } }
+
+/* terminal acoplada abajo de la charla de la tarea */
+.dock-term { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: #0b0d14; }
+.dock-term .term-box { height: 300px; border-radius: 0; }
+.dock-term.tall .term-box { height: 62vh; }
+.composer .ghost { flex: none; height: 40px; }

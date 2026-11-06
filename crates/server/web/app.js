@@ -1511,7 +1511,10 @@ function repoUrl(repo) {
   if (ssh) return `https://${ssh[1]}/${ssh[2]}`;
   return /^[\w.-]+\/[\w.-]+$/.test(r) ? "https://github.com/" + r : null;
 }
-function closeModal() { S.open = null; S.redrawSubs = null; document.getElementById("modal")?.remove(); }
+// terminal acoplada debajo de la charla de una tarea (una a la vez)
+let TDOCK = null;
+function closeDock() { if (!TDOCK) return; try { TDOCK.ws?.close(); } catch {} TDOCK.ro?.disconnect(); TDOCK.term?.dispose(); TDOCK = null; }
+function closeModal() { closeDock(); S.open = null; S.redrawSubs = null; document.getElementById("modal")?.remove(); }
 
 // resalta @usuario cuando coincide con un miembro del equipo (todo como texto, nunca como HTML)
 function withMentions(body) {
@@ -1688,6 +1691,21 @@ const openTask = guard(async (task) => {
   };
   desc.addEventListener("blur", () => { if (desc.value.trim()) drawDesc(); });
   title.classList.add("task-title"); title.title = FIELD_TIPS.title; desc.title = FIELD_TIPS.desc;
+  // terminal abajo de la charla: usa la conexión del proyecto y tus preferencias (herdr automático, etc.)
+  const dockSlot = h("div", { class: "dock-slot" });
+  const toggleDock = guard(async () => {
+    if (TDOCK) { closeDock(); dockSlot.replaceChildren(); return; }
+    const c0 = await api("GET", `/api/projects/${task.project_id}/ssh`);
+    if (!c0.host && !c0.agent_id) { S.dockAfter = task.id; toast("Primero configurá la conexión a la máquina del proyecto; al cerrar volvés a la tarea"); return openTerminal(cur()); }
+    await ensureXterm();
+    const box = h("div", { class: "term-box" }), st = h("span", { class: "tv-st" }, "⏳");
+    const pane = { pid: task.project_id, tid: task.id, box, st, started: false };
+    pane.el = h("div", { class: "dock-term" }, h("div", { class: "tv-head" }, st, h("b", {}, "💻 Terminal · tarea #" + task.id), h("span", { class: "spacer" }),
+      h("button", { class: "ghost", title: "Más alta o más baja", onclick: (e) => { const on = pane.el.classList.toggle("tall"); e.currentTarget.textContent = on ? "⤡" : "⤢"; setTimeout(() => { try { pane.fit?.fit(); } catch {} }, 80); } }, "⤢"),
+      h("button", { class: "ghost", title: "Cerrar la terminal (guarda la nota .md)", onclick: () => { closeDock(); dockSlot.replaceChildren(); } }, "✕")), box);
+    TDOCK = pane; dockSlot.replaceChildren(pane.el);
+    requestAnimationFrame(() => { startPane(pane); pane.el.scrollIntoView({ block: "nearest" }); setTimeout(() => pane.term?.focus(), 200); });
+  });
   const send = guard(async () => {
     if (!comment.value.trim()) return;
     const c = await api("POST", `/api/tasks/${task.id}/comments`, { body: comment.value });
@@ -1843,7 +1861,10 @@ const openTask = guard(async (task) => {
           h("div", { class: "comments", id: "comments" }),
           requestPanel(),
           reviewPanel(),
-          h("div", { class: "composer" }, comment, h("button", { class: "primary", onclick: send }, "Enviar"))),
+          h("div", { class: "composer" }, comment,
+            can("owner") && showTech() && h("button", { class: "ghost", title: "Abre una terminal acá abajo, en la carpeta del proyecto, ligada a esta tarea (solo owners)", onclick: toggleDock }, "💻 Terminal"),
+            h("button", { class: "primary", onclick: send }, "Enviar")),
+          dockSlot),
         h("aside", { class: "task-side" },
           h("div", { class: "grid2" },
             h("label", { title: FIELD_TIPS.status }, "Estado", status), h("label", { title: FIELD_TIPS.prio }, "Prioridad", prio),
@@ -1862,7 +1883,7 @@ const openTask = guard(async (task) => {
   document.body.append(modal);
   drawLabels(); drawSubs(); drawDeps(); drawAtts(); drawDesc();
   renderComments();
-  comment.focus();
+  if (S.dockOpen === task.id) { S.dockOpen = null; toggleDock(); } else comment.focus();
 });
 
 // ---------- chat con IAs: qué IA contesta en el chat y con qué topes ----------
@@ -3382,7 +3403,16 @@ async function openTerminal(task) {
       ag && ag.herdr && h("button", { title: "Abre herdr en la carpeta del proyecto: panel con el estado de cada IA", onclick: () => typeCmd("herdr") }, "▶ Abrir herdr"),
       ai && h("button", { title: task.id ? `Abre ${ai} ya enterado de esta tarea (título, descripción y lo último que se habló), en la carpeta del proyecto` : `Abre ${ai} en la carpeta del proyecto`, onclick: () => typeCmd(aiCmdFor(ai)) }, "🤖 Abrir " + ai + (task.id ? " con la tarea" : "")));
   };
-  const close = () => { stop(); closeModal(); };
+  const close = async () => {
+    stop(); closeModal();
+    // si venía desde la tarea, vuelve a ella con la terminal abajo (solo si la conexión quedó lista)
+    if (S.dockAfter && S.dockAfter === task.id) {
+      S.dockAfter = null;
+      const c = await api("GET", `/api/projects/${task.project_id}/ssh`).catch(() => ({}));
+      const t = S.tasks.find((x) => x.id === task.id);
+      if (t) { S.dockOpen = c.host || c.agent_id ? t.id : null; openTask(t); }
+    }
+  };
   const modal = h("div", { class: "overlay", id: "modal", onmousedown: (e) => e.target.id === "modal" && close() },
     h("div", { class: "modal term-modal" + (store.get("termMax") === "1" ? " max" : "") },
       h("h3", { class: "task-head" }, "💻 Terminal · " + (task.id ? "tarea #" + task.id : "configuración de la conexión"), h("span", { class: "spacer" }),
@@ -3485,8 +3515,10 @@ async function addPane(pid, tid, title) {
   PANES.push(pane); render(); startPanes();
 }
 function closePane(p) { try { p.ws?.close(); } catch {} p.ro?.disconnect(); p.term?.dispose(); PANES.splice(PANES.indexOf(p), 1); p.el.remove(); render(); startPanes(); }
-function startPanes() {
-  requestAnimationFrame(() => PANES.forEach((p) => {
+function startPanes() { requestAnimationFrame(() => PANES.forEach(startPane)); }
+// arranca la sesión de un panel (de «Terminales» o la acoplada en una tarea): mismo WebSocket, mismas preferencias
+function startPane(p) {
+  {
     if (p.started || !p.el.isConnected) { try { p.fit?.fit(); } catch {} return; }
     p.started = true;
     const term = new Terminal({ cursorBlink: true, fontSize: 13, fontFamily: "monospace", theme: { background: "#0b0d14" } });
@@ -3510,7 +3542,7 @@ function startPanes() {
     term.onData((d) => ws.readyState === 1 && ws.send(enc.encode(d)));
     term.onResize(({ cols, rows }) => ws.readyState === 1 && ws.send(JSON.stringify({ resize: [cols, rows] })));
     p.ro = new ResizeObserver(() => { try { fit.fit(); } catch {} }); p.ro.observe(p.box);
-  }));
+  }
 }
 
 
