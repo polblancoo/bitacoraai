@@ -44,6 +44,8 @@ struct Pending {
     /// quién abre la terminal y si es owner (el agente decide el HOME y si va dentro del sandbox)
     who: String,
     owner: bool,
+    /// espacio personal ajeno que un owner mira en solo lectura (auditoría)
+    view: Option<String>,
     handoff: Option<AgentEnd>,
 }
 static PENDING: LazyLock<Mutex<HashMap<String, Pending>>> = LazyLock::new(Default::default);
@@ -349,8 +351,12 @@ async fn session(mut sock: WebSocket, st: AppState, project: Id, task: Option<Id
         return say(&mut sock, json!({ "error": format!("máximo {MAX_PER_USER} terminales abiertas a la vez") })).await;
     }
     let started = Instant::now();
+    let view = v.get("space").and_then(Value::as_str).map(str::trim).filter(|x| !x.is_empty() && x.len() <= 64).map(String::from);
+    if view.is_some() && routes::require(&st, team, user.id, Role::Owner).await.is_err() {
+        return say(&mut sock, json!({ "error": "ver el espacio de otra persona es solo para owners" })).await;
+    }
     let res = match agent {
-        Some(a) => run_agent(&mut sock, &st, project, task, user.id, cols, rows, a).await,
+        Some(a) => run_agent(&mut sock, &st, project, task, user.id, cols, rows, a, view).await,
         None => run(&mut sock, &st, project, task, user.id, cols, rows).await,
     };
     if let Some(n) = OPEN.lock().unwrap().get_or_insert_with(HashMap::new).get_mut(&user.id) {
@@ -558,7 +564,7 @@ async fn agent_pending(user: crate::auth::AuthUser, Query(q): Query<HashMap<Stri
         .unwrap()
         .iter()
         .filter(|(_, p)| p.agent == user.id && p.handoff.is_some())
-        .map(|(sid, p)| json!({ "sid": sid, "dir": p.dir, "cols": p.cols, "rows": p.rows, "who": p.who, "owner": p.owner }))
+        .map(|(sid, p)| json!({ "sid": sid, "dir": p.dir, "cols": p.cols, "rows": p.rows, "who": p.who, "owner": p.owner, "view": p.view }))
         .collect();
     Ok(Json(Value::Array(list)))
 }
@@ -633,7 +639,7 @@ async fn task_context(st: &AppState, task: Id) -> Option<String> {
 
 /// Sesión por agente: reenvía bytes entre el navegador y el shell que abre `tm-agent` en la máquina del proyecto.
 #[allow(clippy::too_many_arguments)]
-async fn run_agent(sock: &mut WebSocket, st: &AppState, project: Id, task: Option<Id>, who: Id, cols: u32, rows: u32, agent: Id) -> std::result::Result<String, String> {
+async fn run_agent(sock: &mut WebSocket, st: &AppState, project: Id, task: Option<Id>, who: Id, cols: u32, rows: u32, agent: Id, view: Option<String>) -> std::result::Result<String, String> {
     let name: String = sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(agent).fetch_one(&st.db).await.map_err(|e| e.to_string())?;
     if !agent_online(agent) {
         return Err(format!("el agente «{name}» no está conectado. En su máquina tiene que correr tm-agent con TM_AGENT_TERMINAL=1 (y TM_TOKEN de esa IA)."));
@@ -644,7 +650,7 @@ async fn run_agent(sock: &mut WebSocket, st: &AppState, project: Id, task: Optio
     let (to_browser, mut from_agent) = mpsc::channel::<Message>(512);
     let who_name: String = sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(who).fetch_one(&st.db).await.unwrap_or_default();
     let owner = match team_of_project(st, project).await { Ok(t) => routes::require(st, t, who, Role::Owner).await.is_ok(), Err(_) => false };
-    PENDING.lock().unwrap().insert(sid.clone(), Pending { agent, dir, cols, rows, who: who_name, owner, handoff: Some(AgentEnd { from_browser, to_browser }) });
+    PENDING.lock().unwrap().insert(sid.clone(), Pending { agent, dir, cols, rows, who: who_name, owner, view: view.clone(), handoff: Some(AgentEnd { from_browser, to_browser }) });
     // el contexto de la tarea queda escrito en la carpeta del proyecto, para que una IA abierta en esta terminal sepa de qué se trata
     if let Some(t) = task {
         if let Some(body) = task_context(st, t).await {
@@ -652,7 +658,7 @@ async fn run_agent(sock: &mut WebSocket, st: &AppState, project: Id, task: Optio
         }
     }
     let started = chrono::Utc::now();
-    let host = format!("agente {name}");
+    let host = match &view { Some(v) => format!("espacio de {v} (solo lectura) por el agente {name}"), None => format!("agente {name}") };
     let mut transcript: Vec<u8> = Vec::new();
     let mut last = Instant::now();
     let mut tick = tokio::time::interval(Duration::from_secs(5));

@@ -605,6 +605,17 @@ async fn sweep(api: &Api, me: &str) {
             let (pname, wd) = (p["name"].as_str().unwrap_or(""), iso::expand_home(p["work_dir"].as_str().unwrap_or("")));
             let mut roots = vec![iso::work_path(ws.as_deref(), &wd, pname, 0).parent().map(PathBuf::from).unwrap_or_default(), iso::mine_path(ws.as_deref(), &wd, pname, me, 0).parent().map(PathBuf::from).unwrap_or_default()];
             roots.dedup();
+            // modo servidor: también los espacios de las personas y de las demás IAs (homeCrewHelm/<quien>/<proyecto>/<tarea>)
+            if let Some(w) = ws.as_deref() {
+                if let Ok(rd) = std::fs::read_dir(w.join("homeCrewHelm")) {
+                    for who in rd.flatten() {
+                        let r = who.path().join(iso::slug(pname));
+                        if r.is_dir() && !roots.contains(&r) {
+                            roots.push(r);
+                        }
+                    }
+                }
+            }
             for root in roots {
                 let Ok(rd) = std::fs::read_dir(&root) else { continue };
                 for e in rd.flatten() {

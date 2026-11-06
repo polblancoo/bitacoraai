@@ -3483,6 +3483,11 @@ function termsView() {
       h("button", { title: "Abre un panel por cada tarea abierta de este proyecto, con el título de la tarea y su responsable", onclick: openProjectPanes }, "📋 Abrir las tareas"),
       h("button", { class: store.get("tvZen") === "1" ? "on" : "", title: "Oculta el menú lateral y el panel del equipo para tener toda la pantalla para las terminales", onclick: () => { store.set("tvZen", store.get("tvZen") === "1" ? "0" : "1"); render(); startPanes(); } }, store.get("tvZen") === "1" ? "⛶ Mostrar barras" : "⛶ Ocultar barras"),
       h("button", { class: store.get("tvSide") === "0" ? "on" : "", title: "Muestra u oculta la lista de IAs de la izquierda", onclick: () => { store.set("tvSide", store.get("tvSide") === "0" ? "1" : "0"); render(); startPanes(); } }, store.get("tvSide") === "0" ? "◧ Mostrar IAs" : "◧ Ocultar IAs"),
+      can("owner") && (() => {
+        const sel = h("select", { title: "Mira en solo lectura el espacio personal de otra persona o IA en el servidor (auditoría)", onchange: (e) => { const v = e.target.value; e.target.value = ""; if (v) addPane(S.tvProject, null, "👁 espacio de " + v, v); } },
+          h("option", { value: "" }, "👁 Ver espacio de…"), ...(S.members || []).filter((m) => m.id !== S.me?.id).map((m) => h("option", { value: m.username }, (botInfo(m.username) ? "🤖 " : "👤 ") + m.username)));
+        return sel;
+      })(),
       h("button", { title: "Cómo llega la terminal a la máquina de este proyecto: por el agente (recomendado) o por SSH", onclick: guard(() => openTerminal({ id: null, project_id: S.tvProject })) }, "⚙ Conexión"),
       h("small", { class: "hint" }, "Hasta 8 a la vez. Lo que hagas queda anotado en .tm/ de la carpeta del proyecto para que la IA retome.")),
     h("div", { class: "tv-body" }, store.get("tvSide") !== "0" && tvSide,
@@ -3510,14 +3515,14 @@ const openProjectPanes = guard(async () => {
   for (const t of list) { if (PANES.length >= 8) break; if (PANES.some((p) => p.tid === t.id)) continue; await addPane(t.project_id, t.id, paneTitle(t)); n++; }
   toast(n ? `Abiertas ${n} terminales, una por tarea` : "No hay tareas abiertas sin terminal (máximo 8 a la vez)");
 });
-async function addPane(pid, tid, title) {
+async function addPane(pid, tid, title, space) {
   if (PANES.length >= 8) return toast("Máximo 8 terminales abiertas", true);
   if (tid && PANES.some((p) => p.tid === tid)) return toast("Esa tarea ya tiene su terminal abierta acá");
   try {
     const c0 = await api("GET", `/api/projects/${pid}/ssh`); if (!c0.host && !c0.agent_id) { toast("Este proyecto todavía no tiene conexión a su máquina: configurala primero"); return openTerminal({ id: null, project_id: pid }); }
   } catch (e) { return toast(e.message, true); }
   const box = h("div", { class: "term-box" }), st = h("span", { class: "tv-st" }, "⏳");
-  const pane = { pid, tid, box, st, started: false };
+  const pane = { pid, tid, box, st, started: false, space };
   pane.el = h("div", { class: "tv-pane" }, h("div", { class: "tv-head" }, st, h("b", {}, title), h("span", { class: "spacer" }),
     h("button", { class: "ghost", title: "Agranda esta terminal a toda la pantalla (el mismo botón para volver)", onclick: (e) => { const on = pane.el.classList.toggle("full"); e.currentTarget.textContent = on ? "⤡" : "⤢"; setTimeout(() => { try { pane.fit?.fit(); pane.term?.focus(); } catch {} }, 80); } }, "⤢"),
     h("button", { class: "ghost", title: "Cerrar esta terminal (guarda la nota .md)", onclick: () => closePane(pane) }, "✕")), box);
@@ -3534,7 +3539,7 @@ function startPane(p) {
     const fit = new FitAddon.FitAddon(); term.loadAddon(fit); term.open(p.box); fit.fit();
     Object.assign(p, { term, fit });
     const ws = new WebSocket(S.server.replace(/^http/, "ws") + `/api/projects/${p.pid}/term${p.tid ? "?task=" + p.tid : ""}`); p.ws = ws; ws.binaryType = "arraybuffer";
-    ws.onopen = () => { ws.send(JSON.stringify({ token: S.token, cols: term.cols, rows: term.rows })); p.st.textContent = "🟢"; };
+    ws.onopen = () => { ws.send(JSON.stringify({ token: S.token, cols: term.cols, rows: term.rows, space: p.space || undefined })); p.st.textContent = "🟢"; };
     // por defecto, la terminal de una tarea abre herdr en la carpeta del proyecto (si la máquina lo tiene; se apaga con store autoHerdr=0)
     if (p.tid && store.get("autoHerdr") !== "0") {
       let armed = true;

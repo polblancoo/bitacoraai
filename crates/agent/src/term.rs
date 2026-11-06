@@ -75,11 +75,18 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
     let pair = native_pty_system().openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })?;
     let who = job["who"].as_str().unwrap_or("").to_string();
     let owner = job["owner"].as_bool().unwrap_or(false);
+    // un owner mirando el espacio de otra persona: solo lectura, dentro de la cápsula
+    let view = job["view"].as_str().filter(|v| !v.is_empty()).map(String::from);
     let real_home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/root"));
     let mut cmd = match (workspace(), who.is_empty()) {
         (Some(root), false) => {
             let home = personal_home(&root, &who)?;
-            if owner {
+            let target = view.as_ref().map(|v| root.join("homeCrewHelm").join(crate::iso::slug(v)));
+            if view.is_some() && !target.as_ref().is_some_and(|t| t.is_dir()) {
+                let _ = ws.send(Message::Binary(b"\r\nEsa persona todavia no tiene espacio personal en este servidor.\r\n".to_vec().into())).await;
+                return Ok(());
+            }
+            if owner && view.is_none() {
                 // owner: shell completa con su espacio como HOME (las herramientas del servicio siguen en el PATH)
                 let mut c = CommandBuilder::new_default_prog();
                 let path = std::env::var("PATH").unwrap_or_default();
@@ -97,19 +104,23 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                 }
                 let exe = std::env::current_exe()?;
                 let mut ro = crate::iso::paths_for_shell();
-                if dir.is_dir() {
+                if let Some(t) = &target {
+                    ro.push(t.clone());
+                } else if dir.is_dir() {
                     ro.push(dir.clone());
                 }
                 let mut a = crate::iso::bwrap_args(&real_home, &crate::iso::Plan { work: &home, mine: &home, ia_home: Some(&home), exe: &exe, net: crate::iso::Net::Open, sock_dir: None, extra_rw: &[], extra_ro: &ro, new_session: false });
-                if dir.is_dir() {
-                    a.extend(["--chdir".into(), dir.to_string_lossy().to_string()]);
+                match &target {
+                    Some(t) => a.extend(["--chdir".into(), t.to_string_lossy().to_string()]),
+                    None if dir.is_dir() => a.extend(["--chdir".into(), dir.to_string_lossy().to_string()]),
+                    None => {}
                 }
                 a.extend(["--".into(), std::env::var("SHELL").unwrap_or_else(|_| "bash".into())]);
                 let mut c = CommandBuilder::new("bwrap");
                 c.args(a);
                 c.env_clear();
                 c.env("PATH", std::env::var("PATH").unwrap_or_default());
-                log(&format!("terminal de {who} (miembro) en sandbox: HOME = {}", home.display()));
+                log(&format!("terminal de {who} ({}) en sandbox: HOME = {}", if view.is_some() { "owner, mirando otro espacio en solo lectura" } else { "miembro" }, home.display()));
                 c
             }
         }

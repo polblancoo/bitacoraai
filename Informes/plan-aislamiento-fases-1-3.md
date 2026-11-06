@@ -83,4 +83,6 @@ Configuración → «Comandos permitidos y prohibidos para todas las IAs».
 - Miembros: pueden abrir la terminal solo si el agente del proyecto tiene `TM_WORKSPACE`; corre en cápsula `bwrap` (su espacio escribible, el proyecto en solo lectura, sin el home real). Sin `bwrap` no abre.
 - Por SSH directo a la máquina del proyecto siguen entrando solo los owners.
 - Preferencias de terminal (`autoHerdr`) guardadas por cuenta en el servidor (`/api/me/term-prefs`).
-- Pendiente: vista de solo lectura del admin sobre los espacios de otros, limpieza de espacios de personas, SSH con clave por persona hacia un único usuario de servicio.
+- Admin (owner): selector «👁 Ver espacio de…» en Terminales; abre una cápsula con el espacio de esa persona o IA en **solo lectura** (queda registrado en el log del servidor).
+- Limpieza: el barrido del agente también recorre `homeCrewHelm/*/<proyecto>/<tarea>` (personas y demás IAs), con el mismo aviso a los 23 días y borrado a los 30.
+- Pendiente: SSH con clave por persona hacia un único usuario de servicio.
