@@ -232,7 +232,7 @@ When an AI asks for a command, open the request task and press **✅ Allow comma
 
 ## 14. Terminal in the browser
 
-Owners only. The task's **💻 Terminal** button opens a console in the project folder. Two ways to connect it (chosen per project):
+For **owners** (members use their own space, see section 21). The task's **💻 Terminal** button opens a console in the project folder. Two ways to connect it (chosen per project):
 
 - **Through the agent** (recommended): run `tm-agent` with `TM_AGENT_TERMINAL=1` on the project machine. The connection starts from that machine: no keys, no open ports, works behind NAT.
 - **SSH with a key**: the app generates an ed25519 key (**🔑 Generate key**) and installs it with **🔐 Install key with password** (the password is not stored). The server fingerprint is pinned the first time and rejected if it changes.
@@ -325,11 +325,52 @@ Each task has its own working folder shaped like `.crewhelm/<user>/<task>/`: eve
 - Remote workers can upload their files from there.
 
 ## 20. Server roles and Processes
-Besides each team's roles there are three **server roles**: *User*, *CTO* and *Administrator*. The first person to register is the administrator. An administrator changes them in *Settings → 🛡 Server roles* (at least one administrator must always remain).
+Besides each team's roles there are three **server roles**: *User*, *CTO* and *Administrator*. The first person to register is the administrator. An administrator changes them in *Settings → 🛡 Roles and limits* (at least one administrator must always remain). The CTO also sets the terminal limits there and sees usage per person (section 24).
 
 - **🖥 Processes** (CTO and administrator): RAM, disk, load, CrewHelm processes with their CPU and RAM, containers and app usage (database, files, people, AIs, tasks). It refreshes every 5 seconds.
 - **Overload protection:** a per-IP per-minute request cap, a cap on simultaneous requests and a per-request time limit. A large network attack is stopped outside (firewall, proxy or CDN). Behind a proxy, set `TM_TRUSTED_PROXY=1`.
 - **Team shortcuts:** the prefix on the web is **Alt+K** (the browser keeps Ctrl+T).
+
+## 21. People's terminal: working copy and git bar
+When an owner turns on **“Allow the terminal for team people”** (🖥️ Terminals → ⚙ Connection), each member opens their terminal in a sandbox:
+
+- **Personal space** (`~`): theirs, writable, kept between sessions. Nobody else sees it (owners can look at it read-only with **👁 View space of…**).
+- **Working copy** (`~/<project>`): their own copy of the project where they can create folders and files and use editors. The original stays at `/proyectos/<project>`, read-only. The copy **updates itself** on entry.
+- **“🧭 Your work” bar** under the terminal, made for people who don't code. Each button shows the equivalent git command in its tooltip: *Update*, *New branch*, *Save*, *Send for review*, *My branches*, *Switch branch*.
+- **`cw` command** (the same, typed): `cw estado`, `cw actualizar`, `cw rama`, `cw guardar`, `cw enviar`, `cw ramas`, `cw cambiar`, `cw espacio` (how much space you use) and `cw ayuda`. Normal order: **branch → edit → save → send**.
+- **Send for review** pushes the branch to GitHub and opens the Pull Request **without the person needing a GitHub account**: the server does it with the owner's credentials. Each person's branches start with their name (`marta/topic`); others' branches can't be touched or force-pushed.
+- If the project **has no repository**, the bar says so and offers **🙋 Ask for a repository**, which notifies the owners.
+
+## 22. Project repository (git assistant)
+An owner connects the repository from **🐙 Repository** (in 🖥️ Terminals), from the **⚠ No repository** warning in the project header or, when creating a project, in the window that opens by itself. The assistant offers:
+
+- **⬇ Bring a GitHub repository** into the project folder.
+- **✨ Create a new one** in your GitHub account (private by default) and upload what is in the folder, without keys or heavy folders (`.gitignore` included).
+- **🔗 Connect** a folder that is already a local repository to one on GitHub.
+- **💻 Only on this machine**: `git init` without GitHub; it can be connected later.
+
+Your GitHub account must be connected (Settings → Alerts and connections) only during the operation. To push changes the server uses a **deploy key per repository**; you can renew it with 🔑. Each project can have its own repository, local or on GitHub.
+
+## 23. Integrate: review and merge the team's work
+The **🔀 Integrate** button (project header) lists open Pull Requests: who sent it, branch, files, `+/−` lines and status (ready, conflicts, failing tests, blocked).
+
+- **👁 View changes**: file by file, additions in green and deletions in red.
+- **✅ Integrate** (owners only): merges the work into the main branch (option “Combine into a single change”), deletes the person's branch and **updates the project folder**; the person gets a notice and runs `cw actualizar`.
+- **↩ Send back** (owners only): closes the request without merging and sends the person the reason.
+- Owners get a notice when someone sends their work. Drafts and requests with conflicts are not merged.
+
+## 24. Limits and quotas (Settings → 🛡 Roles and limits)
+The **CTO** and the **administrator** set the limits of members' terminals (owners have none); each machine's agent applies them to terminals opened from then on:
+
+- **💾 Disk per person** (5120 MB by default): when full, the terminal won't open; at 80 % it warns; past 125 % it closes. Measured every 90 seconds (not a hard cap).
+- **🧠 Memory** (4096 MB), **⚙ CPU** (200 % = two cores) and **🧵 Processes** (1024): applied with Linux control groups (`systemd-run`). If a program exceeds memory, only that program is killed. Without systemd, the terminal opens without these three limits.
+- **📊 View usage per person**: how much each space takes on each machine.
+- With `0` in a field there is no limit. Initial values can also be set with `TM_PERSON_QUOTA_MB`, `TM_PERSON_MEM_MB`, `TM_PERSON_CPU_PCT` and `TM_PERSON_TASKS`.
+
+## 25. Inviting and installing on another person's machine
+In **👥 Team → Invite with a code**, **Copy invitation** builds a message ready to paste in a chat: the server address (with the local network IP if you came in through `localhost`), the code and the steps. The easiest way is to **open the address in the browser**, installing nothing.
+
+For the desktop app on Linux, without a server: `curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh -s -- --client --server http://IP:7878`. It installs only the app (the service and terminal tools are left out); once open, enter the address under “Server”. In Settings each person sees only what applies to them: personal GitHub only for admins (or if already linked), Google only if the server has it, and the AI command list only for the administrator.
 
 ---
 

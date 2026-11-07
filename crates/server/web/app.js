@@ -1330,8 +1330,8 @@ function rolesPanel() {
   box.dataset.key = "srvroles";
   const load = async () => {
     const us = await api("GET", "/api/admin/users");
-    box.replaceChildren(h("p", { class: "hint" }, "Usuario: usa la app. CTO: además ve «Procesos». Administrador: todo, incluido cambiar estos roles. No cambia los roles dentro de cada equipo."),
-      us.map((u) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, u.username),
+    box.replaceChildren(h("p", { class: "hint" }, "Usuario: usa la app. CTO: además ve «Procesos», fija los límites de las terminales y ve el uso por persona. Administrador: todo, incluido cambiar estos roles. No cambia los roles dentro de cada equipo."),
+      ...us.map((u) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, u.username),
         h("select", { onchange: async (e) => { try { await api("PUT", `/api/admin/users/${u.id}/role`, { role: e.target.value }); toast("Rol actualizado"); } catch (x) { toast(x.message, true); } load(); } },
           Object.entries(ROLE_LBL).map(([k, v]) => h("option", { value: k, selected: u.role === k }, v))))));
   };
@@ -1356,9 +1356,19 @@ function limitsPanel() {
       const body = {}; for (const [k] of F) body[k] = Math.round(+ins[k].value);
       await api("PUT", "/api/admin/limits", body); toast("Límites guardados: se aplican a las terminales que se abran desde ahora"); load();
     });
+    const usage = h("div", { class: "usage" });
+    const seeUsage = guard(async () => {
+      usage.replaceChildren(h("small", { class: "hint" }, "⏳ Midiendo el espacio de cada persona…"));
+      const r = await api("GET", "/api/admin/usage");
+      if (!r.machines.length) { usage.replaceChildren(h("small", { class: "hint" }, "No hay ningún agente conectado con espacios personales.")); return; }
+      usage.replaceChildren(...r.machines.flatMap((m) => [h("b", {}, "🖥 " + m.agent), ...(m.people.length ? m.people.sort((a, b) => b.mb - a.mb).map((p) => {
+        const pct = m.limit_mb ? Math.round((p.mb * 100) / m.limit_mb) : 0;
+        return h("div", { class: "cfg-line" }, h("span", { class: "grow" }, p.name), h("span", { class: pct >= 80 ? "warn" : "hint" }, `${p.mb} MB` + (m.limit_mb ? ` de ${m.limit_mb} (${pct}%)` : "")));
+      }) : [h("small", { class: "hint" }, "Todavía nadie tiene espacio personal.")])]));
+    });
     box.replaceChildren(h("p", { class: "hint" }, "Límites de las terminales de los miembros (los owners no tienen límite). Los aplica el agente de cada máquina; las terminales ya abiertas siguen con los anteriores hasta cerrarse."),
       ...F.map(([k, l, t]) => h("div", { class: "cfg-line", title: t }, h("span", { class: "grow" }, l), ins[k])),
-      h("div", { class: "row" }, h("button", { class: "primary", onclick: save }, "Guardar límites")));
+      h("div", { class: "row" }, h("button", { class: "primary", onclick: save }, "Guardar límites"), h("button", { onclick: seeUsage, title: "Mide cuánto disco ocupa el espacio personal de cada persona en cada máquina" }, "📊 Ver uso por persona")), usage);
   };
   load().catch((e) => box.replaceChildren(h("p", { class: "warn" }, e.message)));
   return box;
@@ -2774,7 +2784,7 @@ const inviteModal = guard(async () => {
   const link = (code) => `${location.origin}/j/${code}`;
   const showList = async () => {
     const r = await api("GET", `/api/teams/${S.team.id}/call-invites`);
-    list.replaceChildren(r.items.length > 0 && h("h5", {}, "Invitaciones vigentes"), r.items.map((i) => h("div", { class: "cfg-line" },
+    list.replaceChildren(r.items.length > 0 && h("h5", {}, "Invitaciones vigentes"), ...r.items.map((i) => h("div", { class: "cfg-line" },
       h("span", { class: "grow" }, `${i.label || "Sin nombre"} · ${i.by} · vence ${i.expires_at.slice(5, 16)} UTC · usada ${i.uses}×`),
       h("button", { class: "ghost", title: "Copiar el enlace", onclick: () => copy(link(i.code), "Enlace copiado") }, "📋"),
       h("button", { class: "ghost", title: "Anular: el enlace deja de funcionar", onclick: guard(async () => { await api("DELETE", `/api/teams/${S.team.id}/call-invites/${i.code}`); showList(); }) }, "🚫"))));
@@ -3108,7 +3118,7 @@ const openSettings = guard(async () => {
           }) }, "Guardar servidor y reiniciar sesión"))),
       can("admin") && S.team && sec("Integraciones", line(["Videollamada y otras herramientas del equipo", "integrations"], h("button", { onclick: go(integAdmin) }, "Administrar"))),
       ["cto", "admin"].includes(S.me?.server_role) && sec("Procesos", procPanel()),
-      S.me?.server_role === "admin" && sec("Roles y límites del servidor", rolesPanel(), limitsPanel()),
+      ["cto", "admin"].includes(S.me?.server_role) && sec("Roles y límites del servidor", S.me?.server_role === "admin" && rolesPanel(), limitsPanel()),
       sec("Ayuda", line(["Manual con buscador e índice por temas", "manual"], h("button", { onclick: go(() => openManual()) }, "Abrir el manual")),
         line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos")),
         line(["Guía de inicio paso a paso", "guide"], h("button", { onclick: go(openWizard) }, "🧭 Guía de inicio"))),

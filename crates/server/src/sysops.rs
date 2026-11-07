@@ -12,6 +12,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/admin/procesos", get(procesos))
         .route("/api/admin/limits", get(limits_get).put(limits_put))
+        .route("/api/admin/usage", get(usage))
         .route("/api/admin/users", get(users))
         .route("/api/admin/users/{id}/role", put(set_role))
 }
@@ -170,7 +171,7 @@ async fn limits_get(State(st): State<AppState>, user: AuthUser) -> Result<Json<V
 }
 
 async fn limits_put(State(st): State<AppState>, user: AuthUser, Json(b): Json<Value>) -> Result<Json<Value>> {
-    need(&st, &user, true).await?;
+    need(&st, &user, false).await?;
     for (k, name, _, max) in LIMIT_KEYS {
         if let Some(v) = b.get(name) {
             let n = v.as_u64().ok_or_else(|| AppError::bad("los límites son números enteros (0 = sin límite)"))?;
@@ -187,4 +188,18 @@ async fn limits_put(State(st): State<AppState>, user: AuthUser, Json(b): Json<Va
     }
     tracing::info!("límites de terminal cambiados por el usuario {}", user.id);
     Ok(Json(limits_now(&st.db).await))
+}
+
+/// Espacio que ocupa cada persona en las máquinas con agente (se lo pide a cada agente conectado).
+async fn usage(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+    need(&st, &user, false).await?;
+    let agents: Vec<Id> = sqlx::query_scalar("SELECT DISTINCT agent_id FROM ssh_targets WHERE agent_id IS NOT NULL").fetch_all(&st.db).await?;
+    let mut out = Vec::new();
+    for a in agents.into_iter().filter(|a| crate::term::agent_online(*a)) {
+        if let Ok(v) = crate::gitsetup::dispatch(a, json!({ "mode": "usage", "dir": "/" }), 60).await {
+            let name: String = sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(a).fetch_one(&st.db).await.unwrap_or_default();
+            out.push(json!({ "agent": name, "limit_mb": v["limit_mb"], "people": v["people"] }));
+        }
+    }
+    Ok(Json(json!({ "machines": out })))
 }

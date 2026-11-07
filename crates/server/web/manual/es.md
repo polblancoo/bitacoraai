@@ -232,7 +232,7 @@ Cuando una IA te pide un comando, abrí la tarea de pedido y tocá **✅ Permiti
 
 ## 14. Terminal en el navegador
 
-Solo para **owners**. El botón **💻 Terminal** de la tarea abre una consola en la carpeta del proyecto. Hay dos formas de conectarla (se elige por proyecto):
+Para **owners** (los miembros usan su propio espacio, ver la sección 21). El botón **💻 Terminal** de la tarea abre una consola en la carpeta del proyecto. Hay dos formas de conectarla (se elige por proyecto):
 
 - **Por el agente** (recomendada): ejecutá `tm-agent` con `TM_AGENT_TERMINAL=1` en la máquina del proyecto. La conexión sale de esa máquina: sin claves ni puertos abiertos, y anda detrás de NAT.
 - **SSH con clave**: la app genera una clave ed25519 (**🔑 Generar clave**) y la instala con **🔐 Instalar clave con contraseña** (la contraseña no se guarda). La huella del servidor se fija la primera vez y si cambia, se rechaza.
@@ -325,11 +325,52 @@ Cada tarea tiene su carpeta de trabajo, con la forma `.crewhelm/<usuario>/<tarea
 - Quien trabaja de forma remota puede subir sus archivos desde ahí.
 
 ## 20. Roles del servidor y Procesos
-Aparte de los roles de cada equipo, hay tres **roles del servidor**: *Usuario*, *CTO* y *Administrador*. La primera persona registrada es administradora. Los cambia un administrador en *Configuración → 🛡 Roles del servidor* (siempre tiene que quedar al menos un administrador).
+Aparte de los roles de cada equipo, hay tres **roles del servidor**: *Usuario*, *CTO* y *Administrador*. La primera persona registrada es administradora. Los cambia un administrador en *Configuración → 🛡 Roles y límites* (siempre tiene que quedar al menos un administrador). El CTO también fija ahí los límites de las terminales y ve el uso por persona (sección 24).
 
 - **🖥 Procesos** (CTO y administrador): RAM, disco, carga, los procesos de CrewHelm con su CPU y RAM, los contenedores y el uso de la app (base de datos, archivos, personas, IAs, tareas). Se actualiza cada 5 segundos.
 - **Protección contra saturación:** tope de pedidos por IP y por minuto, tope de pedidos simultáneos y límite de tiempo por pedido. Un ataque de red grande se frena afuera (firewall, proxy o CDN). Detrás de un proxy, definí `TM_TRUSTED_PROXY=1`.
 - **Atajos del equipo:** el prefijo en la web es **Alt+K** (el navegador se queda con Ctrl+T).
+
+## 21. Terminal de las personas: copia de trabajo y barra de git
+Cuando un owner activa **«Permitir la terminal a las personas del equipo»** (🖥️ Terminales → ⚙ Conexión), cada miembro abre su terminal en un sandbox:
+
+- **Espacio personal** (`~`): es suyo, escribible y se conserva entre sesiones. Nadie más lo ve (los owners pueden mirarlo en solo lectura con **👁 Ver espacio de…**).
+- **Copia de trabajo** (`~/<proyecto>`): una copia propia del proyecto donde puede crear carpetas y archivos y usar editores. El original queda en `/proyectos/<proyecto>`, solo lectura. Al entrar, la copia se **actualiza sola**.
+- **Barra «🧭 Tu trabajo»** bajo la terminal, pensada para quien no programa. Cada botón muestra en su tooltip el comando de git equivalente: *Actualizar*, *Nueva rama*, *Guardar*, *Enviar a revisión*, *Mis ramas*, *Cambiar de rama*.
+- **Comando `cw`** (lo mismo, escrito): `cw estado`, `cw actualizar`, `cw rama`, `cw guardar`, `cw enviar`, `cw ramas`, `cw cambiar`, `cw espacio` (cuánto lugar usás) y `cw ayuda`. Orden normal: **rama → editás → guardar → enviar**.
+- **Enviar a revisión** sube la rama a GitHub y abre el Pull Request **sin que la persona tenga cuenta de GitHub**: lo hace el servidor con las credenciales del owner. Las ramas de cada persona empiezan con su nombre (`marta/tema`); no se puede forzar ni tocar las de otros.
+- Si el proyecto **no tiene repositorio**, la barra lo avisa y ofrece **🙋 Pedir repositorio**, que notifica a los owners.
+
+## 22. Repositorio del proyecto (asistente de git)
+Un owner conecta el repositorio desde **🐙 Repositorio** (en 🖥️ Terminales), desde el aviso **⚠ Sin repositorio** de la cabecera del proyecto o, al crear un proyecto, en la ventana que se abre sola. El asistente ofrece:
+
+- **⬇ Traer un repositorio de GitHub** a la carpeta del proyecto.
+- **✨ Crear uno nuevo** en tu cuenta de GitHub (privado por defecto) y subir lo que hay en la carpeta, sin claves ni carpetas pesadas (`.gitignore` incluido).
+- **🔗 Conectar** una carpeta que ya es un repositorio local con otro de GitHub.
+- **💻 Solo en esta máquina**: `git init` sin GitHub; se puede conectar más tarde.
+
+Hace falta tu cuenta de GitHub conectada (Configuración → Avisos y conexiones) solo durante la operación. Para subir cambios el servidor usa una **clave de despliegue por repositorio**; la podés renovar con 🔑. Cada proyecto puede tener su propio repositorio, local o de GitHub.
+
+## 23. Integrar: revisar y juntar el trabajo del equipo
+El botón **🔀 Integrar** (cabecera del proyecto) lista los Pull Requests abiertos: quién lo mandó, rama, archivos, líneas `+/−` y el estado (listo, conflictos, pruebas fallando, bloqueado).
+
+- **👁 Ver cambios**: archivo por archivo, con lo agregado en verde y lo borrado en rojo.
+- **✅ Integrar** (solo owners): junta el trabajo con la rama principal (opción «Juntar en un solo cambio»), borra la rama de la persona y **actualiza la carpeta del proyecto**; la persona recibe un aviso y corre `cw actualizar`.
+- **↩ Devolver** (solo owners): cierra el pedido sin juntarlo y le manda a la persona el motivo.
+- Los owners reciben un aviso cuando alguien envía su trabajo. No se integran borradores ni pedidos con conflictos.
+
+## 24. Límites y cuotas (Configuración → 🛡 Roles y límites)
+El **CTO** y el **administrador** fijan los límites de las terminales de los miembros (los owners no tienen límite); los aplica el agente de cada máquina a las terminales que se abran desde ese momento:
+
+- **💾 Disco por persona** (5120 MB por defecto): lleno, no abre la terminal; al 80 % avisa; al pasar el 125 % la cierra. Se mide cada 90 segundos (no es un tope duro).
+- **🧠 Memoria** (4096 MB), **⚙ CPU** (200 % = dos núcleos) y **🧵 Procesos** (1024): se aplican con grupos de control de Linux (`systemd-run`). Si un programa pasa la memoria, se corta solo ese programa. Sin systemd, la terminal abre sin estos tres límites.
+- **📊 Ver uso por persona**: cuánto ocupa cada espacio en cada máquina.
+- Con `0` en un campo no hay límite. Los valores iniciales también pueden ponerse con `TM_PERSON_QUOTA_MB`, `TM_PERSON_MEM_MB`, `TM_PERSON_CPU_PCT` y `TM_PERSON_TASKS`.
+
+## 25. Invitar e instalar en la máquina de otra persona
+En **👥 Equipo → Invitar con un código**, **Copiar invitación** arma un mensaje listo para pegar en un chat: la dirección del servidor (con la IP de la red local si entraste por `localhost`), el código y los pasos. Lo más fácil es **abrir la dirección en el navegador**, sin instalar nada.
+
+Para la app de escritorio en Linux, sin servidor: `curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh -s -- --client --server http://IP:7878`. Instala solo la app (el servicio y las herramientas de terminal se quedan afuera); al abrirla, en «Servidor» se pone la dirección. En Configuración, cada persona ve solo lo que le corresponde: GitHub personal solo para admins (o si ya lo vinculó), Google solo si el servidor lo tiene, y la lista de comandos de las IAs solo para el administrador.
 
 ---
 

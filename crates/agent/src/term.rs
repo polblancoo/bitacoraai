@@ -79,7 +79,7 @@ async fn fetch_config(api: &Api) -> Option<Config> {
 }
 
 /// Raíz de los espacios personales (`homeCrewHelm/<persona>/`): `TM_WORKSPACE` si se fijó; si no, `~/crewhelm` cuando la app permite la terminal a las personas.
-fn workspace() -> Option<PathBuf> {
+pub(crate) fn workspace() -> Option<PathBuf> {
     if let Some(w) = std::env::var("TM_WORKSPACE").ok().filter(|w| !w.trim().is_empty()) {
         return Some(crate::iso::expand_home(w.trim()));
     }

@@ -161,6 +161,22 @@ async fn run_job(p: &Value) -> Result<Value, String> {
     let mode = p["mode"].as_str().unwrap_or("");
     let mut steps: Vec<String> = Vec::new();
     match mode {
+        "usage" => {
+            // espacio que ocupa cada persona en esta máquina (para el panel del CTO)
+            let Some(root) = crate::term::workspace().map(|w| w.join("homeCrewHelm")) else { return Ok(json!({ "people": [], "limit_mb": 0 })) };
+            let mut people = Vec::new();
+            if let Ok(rd) = std::fs::read_dir(&root) {
+                for e in rd.flatten().take(60) {
+                    if !e.path().is_dir() {
+                        continue;
+                    }
+                    let path = e.path();
+                    let bytes = tokio::task::spawn_blocking(move || crate::iso::dir_usage(&path, 8)).await.unwrap_or(0);
+                    people.push(json!({ "name": e.file_name().to_string_lossy(), "mb": bytes >> 20 }));
+                }
+            }
+            return Ok(json!({ "people": people, "limit_mb": crate::iso::quota_mb() }));
+        }
         "status" => return Ok(status(&dir).await),
         "sync" => {
             // después de integrar un Pull Request: la carpeta del proyecto se pone al día con GitHub (solo si se puede sin pisar nada)
