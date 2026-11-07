@@ -422,7 +422,40 @@ pub fn person_args(p: &PersonPlan) -> Vec<String> {
     if !p.who.is_empty() {
         a.extend(["--setenv".into(), "CW_WHO".into(), p.who.into()]);
     }
+    a.extend(["--setenv".into(), "CW_QUOTA_MB".into(), quota_mb().to_string()]);
     a
+}
+
+/// Límite de disco de cada espacio personal, en MB (`TM_PERSON_QUOTA_MB`; 0 = sin límite). Por defecto 5 GB.
+pub fn quota_mb() -> u64 {
+    std::env::var("TM_PERSON_QUOTA_MB").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(5120)
+}
+
+/// Bytes que ocupa una carpeta (bloques reales en disco; no sigue enlaces simbólicos y cuenta una sola vez los archivos con enlace duro,
+/// como los objetos de git de una copia local). Se corta a los `max_secs` segundos y devuelve lo contado hasta ahí.
+pub fn dir_usage(root: &Path, max_secs: u64) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    let start = std::time::Instant::now();
+    let mut seen = std::collections::HashSet::new();
+    let (mut total, mut stack) = (0u64, vec![root.to_path_buf()]);
+    while let Some(d) = stack.pop() {
+        if start.elapsed().as_secs() >= max_secs {
+            break;
+        }
+        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        for e in rd.flatten() {
+            let Ok(m) = e.path().symlink_metadata() else { continue };
+            if m.is_dir() {
+                stack.push(e.path());
+                total += m.blocks() * 512;
+            } else if m.nlink() > 1 && !seen.insert((m.dev(), m.ino())) {
+                continue;
+            } else {
+                total += m.blocks() * 512;
+            }
+        }
+    }
+    total
 }
 
 /// Herramientas de terminal que se ofrecen dentro de la cápsula (en `/tools`) cuando están instaladas fuera de `/usr`, por ejemplo en
@@ -875,5 +908,24 @@ mod tests {
         assert!(out.contains("SERVER=hola-server"), "{out}");
         assert!(!out.contains("BLOQ=<"), "github no debería pasar: {out}");
         assert!(net.blocked.lock().unwrap().iter().any(|h| h.starts_with("github.com")), "{out} / {:?}", net.blocked.lock().unwrap());
+    }
+}
+
+#[cfg(test)]
+mod cuota_tests {
+    use super::*;
+    #[test]
+    fn dir_usage_cuenta_bloques_una_vez_y_no_sigue_enlaces() {
+        let d = std::env::temp_dir().join(format!("cw-cuota-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("a")).unwrap();
+        std::fs::write(d.join("a/grande"), vec![1u8; 1 << 20]).unwrap();
+        let base = dir_usage(&d, 10);
+        assert!(base >= 1 << 20 && base < 2 << 20, "{base}");
+        std::fs::hard_link(d.join("a/grande"), d.join("a/otro-nombre")).unwrap();
+        assert_eq!(dir_usage(&d, 10), base, "el enlace duro no suma dos veces");
+        std::os::unix::fs::symlink("/usr", d.join("enlace")).unwrap();
+        assert!(dir_usage(&d, 10) < base + (1 << 16), "no sigue enlaces simbólicos");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

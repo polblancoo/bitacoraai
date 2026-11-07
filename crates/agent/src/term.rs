@@ -305,6 +305,7 @@ async fn session(api: &Arc<Api>, sid: &str, job: &Value) -> anyhow::Result<()> {
     let view = job["view"].as_str().filter(|v| !v.is_empty()).map(String::from);
     let real_home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/root"));
     let stop = Arc::new(AtomicBool::new(false));
+    let mut quota: Option<(PathBuf, u64)> = None;
     let mut cmd = match (workspace(), who.is_empty()) {
         (Some(root), false) => {
             let home = personal_home(&root, &who)?;
@@ -331,6 +332,21 @@ async fn session(api: &Arc<Api>, sid: &str, job: &Value) -> anyhow::Result<()> {
                 if !crate::iso::bwrap_ok().await {
                     let _ = ws.send(Message::Binary(b"\r\nEsta terminal necesita `bwrap` en el servidor y no esta disponible.\r\n".to_vec().into())).await;
                     anyhow::bail!("terminal de {who} rechazada: falta bwrap");
+                }
+                // cuota de disco del espacio personal: lleno = no abre hasta que se libere; cerca del límite = aviso
+                let limit = crate::iso::quota_mb() * 1024 * 1024;
+                let mut quota_note = String::new();
+                if limit > 0 && view.is_none() {
+                    let hh = home.clone();
+                    let used = tokio::task::spawn_blocking(move || crate::iso::dir_usage(&hh, 25)).await.unwrap_or(0);
+                    if used >= limit {
+                        let _ = ws.send(Message::Binary(format!("\r\nTu espacio esta lleno: usas {} MB de {} MB. Pedile a un owner que te ayude a liberar lugar o que amplie el limite.\r\n", used >> 20, limit >> 20).into_bytes().into())).await;
+                        anyhow::bail!("terminal de {who} rechazada: espacio personal lleno ({} MB)", used >> 20);
+                    }
+                    if used * 10 >= limit * 8 {
+                        quota_note = format!("echo 'Atencion: tu espacio esta al {}% ({} MB de {} MB). Con cw espacio ves que ocupa lugar.'; ", used * 100 / limit, used >> 20, limit >> 20);
+                    }
+                    quota = Some((home.clone(), limit));
                 }
                 let tools = crate::iso::person_tools();
                 let pname = job["project"].as_str().unwrap_or("proyecto");
@@ -360,7 +376,7 @@ async fn session(api: &Arc<Api>, sid: &str, job: &Value) -> anyhow::Result<()> {
                 };
                 let sh = crate::iso::person_shell();
                 let upd = if work.is_some() { "cw actualizar --auto; " } else { "" };
-                a.extend(["--".into(), "/bin/bash".into(), "-c".into(), format!("{hello}; {upd}exec {sh}")]);
+                a.extend(["--".into(), "/bin/bash".into(), "-c".into(), format!("{hello}; {quota_note}{upd}exec {sh}")]);
                 let mut c = CommandBuilder::new("bwrap");
                 c.args(a);
                 c.env_clear();
@@ -389,8 +405,25 @@ async fn session(api: &Arc<Api>, sid: &str, job: &Value) -> anyhow::Result<()> {
         }
     });
     log(&format!("▶ terminal abierta en {}", if dir.is_dir() { dir.display().to_string() } else { "la carpeta por defecto".into() }));
+    let mut tick = tokio::time::interval(Duration::from_secs(90));
+    tick.tick().await;
+    let mut warned = false;
     loop {
         tokio::select! {
+            _ = tick.tick(), if quota.is_some() => {
+                let (hh, limit) = quota.clone().unwrap();
+                let used = tokio::task::spawn_blocking(move || crate::iso::dir_usage(&hh, 25)).await.unwrap_or(0);
+                if used >= limit / 100 * 125 {
+                    let _ = ws.send(Message::Binary(format!("\r\n\x1b[1;31mTu espacio supero el limite ({} MB de {} MB): cierro la terminal. Libera lugar (cw espacio te muestra que ocupa) y vuelve a abrirla.\x1b[0m\r\n", used >> 20, limit >> 20).into_bytes().into())).await;
+                    log(&format!("terminal de {who} cerrada: espacio personal {} MB sobre el limite de {} MB", used >> 20, limit >> 20));
+                    break;
+                } else if used >= limit && !warned {
+                    warned = true;
+                    let _ = ws.send(Message::Binary(format!("\r\n\x1b[1;33mAtencion: tu espacio llego al limite ({} MB de {} MB). Libera lugar con cw espacio; si sigue creciendo se cierra la terminal.\x1b[0m\r\n", used >> 20, limit >> 20).into_bytes().into())).await;
+                } else if used < limit {
+                    warned = false;
+                }
+            }
             out = rx.recv() => match out {
                 Some(b) => ws.send(Message::Binary(b.into())).await?,
                 None => {

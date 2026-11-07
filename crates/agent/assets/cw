@@ -57,10 +57,26 @@ Comandos de cw (todos se pueden usar sin saber git):
   cw enviar      mandar tu trabajo para que lo revisen (abre el Pull Request)
   cw ramas       ver tus ramas
   cw cambiar     pasar a otra de tus ramas
+  cw espacio     cuánto lugar usás en tu espacio y qué lo ocupa
 
 Orden normal:  rama → (editás archivos) → guardar → enviar
 Tu copia está en ~/$P. El proyecto compartido (solo lectura) está en $SH.
 EOF
+}
+
+cmd_espacio() {
+    local q=${CW_QUOTA_MB:-0} k
+    k=$(du -sk "$HOME" 2>/dev/null | cut -f1)
+    k=${k:-0}
+    if [ "$q" -gt 0 ] 2>/dev/null; then
+        echo "Usás $((k / 1024)) MB de $q MB ($((k * 100 / (q * 1024)))%)."
+        [ $((k * 10)) -ge $((q * 1024 * 8)) ] && amar "Tu espacio se está llenando. Si llega al límite no vas a poder abrir la terminal."
+    else
+        echo "Usás $((k / 1024)) MB (sin límite)."
+    fi
+    echo "Lo que más ocupa:"
+    du -sk "$HOME"/* "$HOME"/.[!.]* 2>/dev/null | sort -rn | head -6 | awk '{printf "  %7.1f MB  %s\n", $1 / 1024, $2}'
+    dim "→ Para liberar lugar: rm -rf carpeta/target carpeta/node_modules (se vuelven a generar)"
 }
 
 cmd_estado() {
@@ -298,6 +314,7 @@ c="${1:-ayuda}"
 case "$c" in
     ayuda|-h|--help|help) cmd_ayuda ;;
     estado|status) cmd_estado ;;
+    espacio|disco) cmd_espacio ;;
     actualizar|update) cmd_actualizar "$@" ;;
     traer) cmd_traer ;;
     rama|nueva) cmd_rama "$@" ;;
