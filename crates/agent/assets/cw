@@ -239,7 +239,7 @@ cmd_enviar() {
     echo "Enviando…"
     local seen=0 i total
     for i in $(seq 1 360); do
-        total=$(wc -l < "$PED/$id.out" 2>/dev/null || echo 0)
+        total=0; [ -e "$PED/$id.out" ] && total=$(wc -l < "$PED/$id.out")
         if [ "$total" -gt "$seen" ]; then
             sed -n "$((seen + 1)),${total}p" "$PED/$id.out"
             seen=$total
@@ -248,7 +248,7 @@ cmd_enviar() {
         sleep 0.5
     done
     if [ -e "$PED/$id.fin" ]; then
-        total=$(wc -l < "$PED/$id.out" 2>/dev/null || echo 0)
+        total=0; [ -e "$PED/$id.out" ] && total=$(wc -l < "$PED/$id.out")
         [ "$total" -gt "$seen" ] && sed -n "$((seen + 1)),${total}p" "$PED/$id.out"
         local ok
         ok=$(cat "$PED/$id.fin")
