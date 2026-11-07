@@ -1731,7 +1731,7 @@ const openTask = guard(async (task) => {
     const pane = { pid: task.project_id, tid: task.id, box, st, started: false };
     pane.el = h("div", { class: "dock-term" }, h("div", { class: "tv-head" }, st, h("b", {}, "💻 Terminal · tarea #" + task.id), h("span", { class: "spacer" }),
       h("button", { class: "ghost", title: "Más alta o más baja", onclick: (e) => { const on = pane.el.classList.toggle("tall"); e.currentTarget.textContent = on ? "⤡" : "⤢"; setTimeout(() => { try { pane.fit?.fit(); } catch {} }, 80); } }, "⤢"),
-      h("button", { class: "ghost", title: "Cerrar la terminal (guarda la nota .md)", onclick: () => { closeDock(); dockSlot.replaceChildren(); } }, "✕")), box);
+      h("button", { class: "ghost", title: "Cerrar la terminal (guarda la nota .md)", onclick: () => { closeDock(); dockSlot.replaceChildren(); } }, "✕")), box, gitBar(pane));
     TDOCK = pane; dockSlot.replaceChildren(pane.el);
     requestAnimationFrame(() => { startPane(pane); pane.el.scrollIntoView({ block: "nearest" }); setTimeout(() => pane.term?.focus(), 200); });
   });
@@ -3539,6 +3539,20 @@ function termsView() {
     h("div", { class: "tv-body" }, store.get("tvSide") !== "0" && tvSide,
       h("div", { class: "tv-grid" + (PANES.length === 1 ? " one" : ""), style: `--cols:${c}` }, PANES.length ? PANES.map((p) => p.el) : h("div", { class: "empty" }, "Tocá «+ Terminal» o elegí una IA de la izquierda."))));
 }
+// barra de acciones de git bajo la terminal de una persona (no owner): escribe en la terminal el comando `cw …`, así se ve qué se hizo y se aprende
+function gitBar(pane) {
+  if (can("owner") || pane.space) return null;
+  const run = (cmd) => { if (pane.ws?.readyState === 1) { pane.ws.send(new TextEncoder().encode(cmd + "\r")); pane.term?.focus(); } else toast("La terminal todavía no está conectada", true); };
+  const b = (txt, tip, cmd) => h("button", { class: "ghost", title: tip, onclick: () => run(cmd) }, txt);
+  return h("div", { class: "gitbar" },
+    h("span", { class: "gb-t", title: "Atajos para trabajar sin saber comandos. Cada botón escribe el comando en la terminal; usalos con la terminal en el símbolo normal (no dentro de un editor)." }, "🧭 Tu trabajo"),
+    b("🔄 Actualizar", "Trae a tu copia las novedades que hizo el resto del equipo", "cw actualizar"),
+    b("🌿 Empezar trabajo", "Crea tu propia rama para un trabajo nuevo: te pregunta cómo se llama", "cw rama"),
+    b("📋 Qué cambié", "Muestra en qué rama estás y qué archivos tocaste", "cw estado"),
+    b("💾 Guardar", "Guarda tus cambios con un mensaje corto (te lo pregunta)", "cw guardar"),
+    b("🚀 Enviar a revisión", "Sube tu trabajo y abre el Pull Request para que otra persona lo revise", "cw enviar"),
+    b("❓ Ayuda", "Lista de comandos y el orden normal: empezar → editar → guardar → enviar", "cw ayuda"));
+}
 // la terminal de una tarea se abre como un panel de «🖥️ Terminales»: sigue viva aunque mires otra tarea, la configuración o lo que sea
 const paneTitle = (t) => {
   const m = (S.members || []).find((x) => x.id === t.assignee_id);
@@ -3571,7 +3585,7 @@ async function addPane(pid, tid, title, space) {
   const pane = { pid, tid, box, st, started: false, space };
   pane.el = h("div", { class: "tv-pane" }, h("div", { class: "tv-head" }, st, h("b", {}, title), h("span", { class: "spacer" }),
     h("button", { class: "ghost", title: "Agranda esta terminal a toda la pantalla (el mismo botón para volver)", onclick: (e) => { const on = pane.el.classList.toggle("full"); e.currentTarget.textContent = on ? "⤡" : "⤢"; setTimeout(() => { try { pane.fit?.fit(); pane.term?.focus(); } catch {} }, 80); } }, "⤢"),
-    h("button", { class: "ghost", title: "Cerrar esta terminal (guarda la nota .md)", onclick: () => closePane(pane) }, "✕")), box);
+    h("button", { class: "ghost", title: "Cerrar esta terminal (guarda la nota .md)", onclick: () => closePane(pane) }, "✕")), box, gitBar(pane));
   PANES.push(pane); render(); startPanes();
 }
 function closePane(p) { try { p.ws?.close(); } catch {} p.ro?.disconnect(); p.term?.dispose(); PANES.splice(PANES.indexOf(p), 1); p.el.remove(); render(); startPanes(); }

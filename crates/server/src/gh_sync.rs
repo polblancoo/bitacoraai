@@ -29,6 +29,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/tasks/{id}/github/publish", post(publish_task))
         .route("/api/tasks/{id}/github/pr", post(open_pr))
         .route("/api/github/webhook/{id}", post(webhook))
+        .route("/api/agent/pr", post(agent_pr))
 }
 
 pub fn spawn(st: AppState) {
@@ -440,6 +441,55 @@ async fn open_pr(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id
     sqlx::query("UPDATE task_github SET pr_number = ?, pr_state = 'open' WHERE task_id = ?").bind(n).bind(task).execute(&st.db).await?;
     crate::extras::log_task(&st, task, user.id, format!("🐙 abrió el Pull Request #{n} desde la rama {branch}")).await;
     Ok(Json(json!({ "number": n, "url": url })))
+}
+
+#[derive(Deserialize)]
+struct AgentPr {
+    project: Id,
+    who: String,
+    branch: String,
+    title: String,
+    #[serde(default)]
+    body: String,
+}
+
+/// El agente abre un Pull Request en nombre de una persona del equipo (por ejemplo desde su terminal: `cw enviar`).
+/// La persona no necesita cuenta de GitHub: se usa la conexión de quien configuró GitHub en el proyecto y el Pull Request dice quién lo pidió.
+async fn agent_pr(State(st): State<AppState>, user: AuthUser, Json(b): Json<AgentPr>) -> Result<Json<Value>> {
+    if !user.bot {
+        return Err(AppError::forbidden());
+    }
+    let uid: Id = sqlx::query_scalar("SELECT id FROM users WHERE username = ?").bind(&b.who).fetch_optional(&st.db).await?.ok_or_else(AppError::forbidden)?;
+    let team = routes::team_of_project(&st, b.project).await?;
+    routes::ensure_writer(&st, team, uid).await?;
+    let branch = b.branch.trim().to_string();
+    if branch.is_empty() || branch.len() > 120 || !branch.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '/' | '.')) || branch.contains("..") {
+        return Err(AppError::bad("Nombre de rama no válido"));
+    }
+    let g = gh(&st)?;
+    let repo = repo_of(&st, b.project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene repositorio de GitHub"))?;
+    let cfg = load(&st, b.project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene GitHub conectado en CrewHelm"))?;
+    let token = token_of(&st, cfg.owner).await?;
+    let info = api_get(&g, &token, &format!("/repos/{repo}")).await?;
+    let base = info["default_branch"].as_str().unwrap_or("main").to_string();
+    let title: String = b.title.trim().chars().take(200).collect();
+    let body = format!("{}\n\n— Pedido desde CrewHelm por {}", b.body.trim().chars().take(7000).collect::<String>(), b.who);
+    let res = api_json(&g, &token, reqwest::Method::POST, &format!("/repos/{repo}/pulls"), json!({ "title": if title.is_empty() { branch.clone() } else { title }, "head": branch, "base": base, "body": body })).await;
+    let pr = match res {
+        Ok(pr) => pr,
+        Err(e) => {
+            // ya había uno abierto para esta rama: se devuelve ese
+            let owner = repo.split('/').next().unwrap_or_default();
+            let found = api_get(&g, &token, &format!("/repos/{repo}/pulls?state=open&head={owner}:{}", branch.replace('/', "%2F"))).await.ok();
+            match found.and_then(|v| v.as_array().and_then(|a| a.first().cloned())) {
+                Some(pr) => pr,
+                None => return Err(e),
+            }
+        }
+    };
+    let (n, url) = (pr["number"].as_i64().unwrap_or(0), pr["html_url"].as_str().unwrap_or("").to_string());
+    tracing::info!("github: {} pidió el Pull Request #{n} ({branch}) del proyecto {}", b.who, b.project);
+    Ok(Json(json!({ "number": n, "url": url, "base": base })))
 }
 
 /// Cuando una IA termina una tarea de un proyecto con «Pull Request» activado, se avisa a quien configuró GitHub.

@@ -88,6 +88,12 @@ impl Settings {
 }
 
 /// Nombre seguro para usar en rutas.
+/// Como `slug` pero solo con a-z, 0-9 y guiones (nombres de ramas de git).
+pub fn ascii_slug(s: &str) -> String {
+    let t: String = s.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>().split('-').filter(|x| !x.is_empty()).collect::<Vec<_>>().join("-");
+    if t.is_empty() { "x".into() } else { t.chars().take(30).collect() }
+}
+
 pub fn slug(s: &str) -> String {
     let t: String = s.to_lowercase().chars().map(|c| if c.is_alphanumeric() || c == '_' { c } else { '-' }).collect::<String>().split('-').filter(|x| !x.is_empty()).collect::<Vec<_>>().join("-");
     if t.is_empty() { "x".into() } else { t }
@@ -372,10 +378,12 @@ pub struct PersonPlan<'a> {
     pub tools: &'a [PathBuf],
     /// copia de trabajo (carpeta dentro del espacio personal): si existe, la shell arranca ahí
     pub work: Option<&'a str>,
+    /// nombre de la persona en minúsculas y solo ascii (prefijo de sus ramas: `<persona>/<tema>`)
+    pub who: &'a str,
 }
 
 pub const PERSON_HOME: &str = "/home/crewhelm";
-pub const PERSON_PATH: &str = "/usr/local/bin:/usr/bin:/bin:/tools";
+pub const PERSON_PATH: &str = "/usr/local/bin:/usr/bin:/bin:/tools:/home/crewhelm/.local/bin";
 
 pub fn person_args(p: &PersonPlan) -> Vec<String> {
     let s = |x: &Path| x.to_string_lossy().to_string();
@@ -410,6 +418,9 @@ pub fn person_args(p: &PersonPlan) -> Vec<String> {
     // herdr abre una sesión por proyecto (la shell lo usa para arrancar siempre en la carpeta del proyecto)
     if let Some((_, name)) = p.project {
         a.extend(["--setenv".into(), "CREWHELM_PROJECT".into(), slug(name)]);
+    }
+    if !p.who.is_empty() {
+        a.extend(["--setenv".into(), "CW_WHO".into(), p.who.into()]);
     }
     a
 }
@@ -670,7 +681,7 @@ mod tests {
         std::fs::create_dir_all(&home).unwrap();
         std::fs::create_dir_all(&proj).unwrap();
         std::fs::write(proj.join("f.txt"), "hola").unwrap();
-        let mut a = person_args(&PersonPlan { home: &home, project: Some((&proj, "Mi Proyecto")), other_space: None, tools: &[], work: None });
+        let mut a = person_args(&PersonPlan { home: &home, project: Some((&proj, "Mi Proyecto")), other_space: None, tools: &[], work: None, who: "" });
         let script = "echo P=$CREWHELM_PROJECT; ls -A /home; echo --; pwd; echo --; cat /proyectos/mi-proyecto/f.txt; touch /proyectos/mi-proyecto/x 2>&1 | head -1; touch ~/mio && echo escribe; ls /root /home/pablo 2>&1 | head -2";
         a.extend(["--".into(), "/bin/bash".into(), "-c".into(), script.into()]);
         let out = std::process::Command::new("bwrap").args(a).env_clear().output().unwrap();
@@ -680,7 +691,7 @@ mod tests {
         assert!(home.join("mio").exists());
         // con copia de trabajo: la shell arranca en ~/<proyecto> y ahí se puede crear
         std::fs::create_dir_all(home.join("mi-proyecto")).unwrap();
-        let mut a = person_args(&PersonPlan { home: &home, project: Some((&proj, "Mi Proyecto")), other_space: None, tools: &[], work: Some("mi-proyecto") });
+        let mut a = person_args(&PersonPlan { home: &home, project: Some((&proj, "Mi Proyecto")), other_space: None, tools: &[], work: Some("mi-proyecto"), who: "marta" });
         a.extend(["--".into(), "/bin/bash".into(), "-c".into(), "pwd; mkdir nueva && touch nueva/a.txt && echo ok".into()]);
         let out = std::process::Command::new("bwrap").args(a).env_clear().output().unwrap();
         let t = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);

@@ -1,0 +1,309 @@
+#!/bin/bash
+# cw — las acciones de git de siempre, con palabras simples. Lo instala CrewHelm en tu espacio (se actualiza solo).
+# Corre dentro de tu espacio: lo único que sale de acá es «cw enviar», que lo hace el servidor por vos.
+P="${CREWHELM_PROJECT:-}"
+WHO="${CW_WHO:-persona}"
+SH="${CW_SHARED:-/proyectos/$P}"
+W="$HOME/$P"
+PED="$HOME/.crewhelm/pedidos"
+
+verde() { printf '\033[32m%s\033[0m\n' "$*"; }
+amar() { printf '\033[33m%s\033[0m\n' "$*"; }
+rojo() { printf '\033[31m%s\033[0m\n' "$*"; }
+dim() { printf '\033[2m%s\033[0m\n' "$*"; }
+
+copia() {
+    if [ -z "$P" ] || [ ! -d "$W/.git" ]; then
+        rojo "No hay una copia de trabajo de este proyecto. Abrí la terminal desde un proyecto."
+        exit 1
+    fi
+    cd "$W" || exit 1
+}
+
+# rama principal del proyecto (main, master…)
+principal() {
+    local b
+    b=$(git -C "$SH" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)
+    b=${b#origin/}
+    if [ -z "$b" ]; then
+        for x in main master; do
+            if git -C "$SH" show-ref -q --verify "refs/remotes/origin/$x" 2>/dev/null || git -C "$SH" show-ref -q --verify "refs/heads/$x" 2>/dev/null; then
+                b=$x
+                break
+            fi
+        done
+    fi
+    echo "${b:-main}"
+}
+
+# trae a tu copia lo último que tiene el proyecto compartido (queda en refs/remotes/base/*)
+traer_base() {
+    git fetch -q "$SH" '+refs/remotes/origin/*:refs/remotes/base/*' 2>/dev/null
+    local b
+    b=$(principal)
+    git rev-parse -q --verify "refs/remotes/base/$b" >/dev/null 2>&1 || git fetch -q "$SH" '+refs/heads/*:refs/remotes/base/*' 2>/dev/null
+}
+
+sucio() { [ -n "$(git status --porcelain 2>/dev/null)" ]; }
+
+cmd_ayuda() {
+    cat <<EOF
+Comandos de cw (todos se pueden usar sin saber git):
+
+  cw estado      qué cambiaste y en qué rama estás
+  cw actualizar  traer las novedades del proyecto a tu copia
+  cw rama        empezar un trabajo nuevo (crea tu rama)
+  cw guardar     guardar tus cambios con un mensaje
+  cw enviar      mandar tu trabajo para que lo revisen (abre el Pull Request)
+  cw ramas       ver tus ramas
+  cw cambiar     pasar a otra de tus ramas
+
+Orden normal:  rama → (editás archivos) → guardar → enviar
+Tu copia está en ~/$P. El proyecto compartido (solo lectura) está en $SH.
+EOF
+}
+
+cmd_estado() {
+    copia
+    local b cur
+    b=$(principal)
+    cur=$(git branch --show-current)
+    echo "Proyecto: $P    Rama: ${cur:-?}"
+    if sucio; then
+        amar "Cambios sin guardar:"
+        git status -s
+        dim "→ cw guardar"
+    else
+        verde "No hay cambios sin guardar."
+    fi
+    if [ -n "$cur" ] && [ "$cur" != "$b" ] && git rev-parse -q --verify "refs/remotes/base/$b" >/dev/null 2>&1; then
+        local n
+        n=$(git rev-list --count "refs/remotes/base/$b..HEAD" 2>/dev/null)
+        [ "${n:-0}" -gt 0 ] && echo "Tu rama tiene $n cambio(s) guardado(s) que todavía nadie revisó → cw enviar"
+    fi
+}
+
+cmd_actualizar() {
+    local auto=0
+    [ "$1" = "--auto" ] && auto=1
+    copia
+    traer_base
+    local b cur
+    b=$(principal)
+    cur=$(git branch --show-current)
+    if ! git rev-parse -q --verify "refs/remotes/base/$b" >/dev/null 2>&1; then
+        [ $auto = 0 ] && amar "No encontré novedades del proyecto."
+        return 0
+    fi
+    if [ "$cur" = "$b" ]; then
+        if sucio; then
+            [ $auto = 0 ] && amar "Tenés cambios sin guardar: guardalos primero (cw guardar) y después actualizá."
+            return 0
+        fi
+        if [ "$(git rev-parse HEAD)" = "$(git rev-parse "refs/remotes/base/$b")" ]; then
+            [ $auto = 0 ] && verde "✔ Tu copia ya está al día."
+            return 0
+        fi
+        if git merge -q --ff-only "refs/remotes/base/$b" 2>/dev/null; then
+            verde "✔ Tu copia se actualizó con las novedades del proyecto."
+        else
+            amar "Tu copia de «$b» tiene cambios propios que el proyecto no tiene. Pedí ayuda antes de seguir."
+        fi
+    else
+        local n
+        n=$(git rev-list --count "HEAD..refs/remotes/base/$b" 2>/dev/null)
+        if [ "${n:-0}" -gt 0 ]; then
+            amar "El proyecto tiene $n novedad(es) que tu rama «$cur» todavía no tiene. Para traerlas:  cw traer"
+        elif [ $auto = 0 ]; then
+            verde "✔ Tu rama ya tiene todo lo del proyecto."
+        fi
+    fi
+}
+
+# trae las novedades del proyecto a la rama en la que estás
+cmd_traer() {
+    copia
+    traer_base
+    local b
+    b=$(principal)
+    git rev-parse -q --verify "refs/remotes/base/$b" >/dev/null 2>&1 || { amar "No encontré novedades."; return 0; }
+    if sucio; then
+        amar "Tenés cambios sin guardar: guardalos primero (cw guardar)."
+        return 1
+    fi
+    if git -c user.name="$WHO" -c user.email="$WHO@crewhelm.local" merge -q --no-edit "refs/remotes/base/$b" 2>/dev/null; then
+        verde "✔ Listo: tu rama tiene las novedades del proyecto."
+    else
+        git merge --abort 2>/dev/null
+        rojo "Hay cambios tuyos y del proyecto en las mismas líneas y no se pueden juntar solos. No toqué nada: pedí ayuda."
+        return 1
+    fi
+}
+
+limpio() {
+    printf '%s' "$1" | iconv -f utf8 -t ascii//TRANSLIT 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/[^a-z0-9]\{1,\}/-/g; s/^-//; s/-$//' | cut -c1-40
+}
+
+cmd_rama() {
+    copia
+    local n="$*" s br b
+    if [ -z "$n" ]; then
+        read -r -p "¿Qué vas a hacer? (ej: contrato nuevo): " n
+    fi
+    s=$(limpio "$n")
+    if [ -z "$s" ]; then
+        rojo "Escribí un nombre con letras o números."
+        return 1
+    fi
+    br="$WHO/$s"
+    if git rev-parse -q --verify "refs/heads/$br" >/dev/null 2>&1; then
+        git switch -q "$br" && verde "✔ Ya existía: seguís en tu rama «$br»."
+        return
+    fi
+    traer_base
+    b=$(principal)
+    if ! sucio && git rev-parse -q --verify "refs/remotes/base/$b" >/dev/null 2>&1; then
+        git switch -q -c "$br" "refs/remotes/base/$b"
+    else
+        git switch -q -c "$br"
+    fi && verde "✔ Rama «$br» lista. Editá lo que necesites y después:  cw guardar" || rojo "No pude crear la rama."
+}
+
+cmd_guardar() {
+    copia
+    if ! sucio; then
+        verde "No hay cambios para guardar."
+        return 0
+    fi
+    local b cur m="$*"
+    b=$(principal)
+    cur=$(git branch --show-current)
+    if [ "$cur" = "$b" ] || [ -z "$cur" ]; then
+        amar "Estás en la rama principal («$b»). Conviene trabajar en una rama propia: te ayudo a crearla."
+        cmd_rama || return 1
+    fi
+    git status -s
+    if [ -z "$m" ]; then
+        read -r -p "Describí en una frase qué cambiaste: " m
+    fi
+    [ -z "$m" ] && m="Cambios de $WHO"
+    git add -A
+    if git -c user.name="$WHO" -c user.email="$WHO@crewhelm.local" commit -q -m "$m"; then
+        verde "✔ Guardado: $m"
+        dim "→ Cuando termines:  cw enviar"
+    else
+        rojo "No pude guardar."
+        return 1
+    fi
+}
+
+cmd_enviar() {
+    copia
+    local b cur
+    b=$(principal)
+    cur=$(git branch --show-current)
+    if [ -z "$cur" ] || [ "$cur" = "$b" ]; then
+        amar "Primero creá tu rama (cw rama) y guardá tus cambios (cw guardar)."
+        return 1
+    fi
+    case "$cur" in
+        "$WHO"/*) ;;
+        *) rojo "Solo se envían ramas propias («$WHO/…»). Creá una con:  cw rama"; return 1 ;;
+    esac
+    if sucio; then
+        amar "Tenés cambios sin guardar."
+        local r
+        read -r -p "¿Los guardo ahora? [S/n] " r
+        case "$r" in n|N) return 1 ;; esac
+        cmd_guardar || return 1
+    fi
+    traer_base
+    local n
+    n=$(git rev-list --count "refs/remotes/base/$b..HEAD" 2>/dev/null || echo 1)
+    if [ "${n:-1}" = 0 ]; then
+        amar "Tu rama no tiene cambios nuevos respecto de «$b»: no hay nada para enviar."
+        return 0
+    fi
+    local def t d
+    def=$(git log -1 --format=%s)
+    read -r -p "Título para quien lo revisa [$def]: " t
+    [ -z "$t" ] && t="$def"
+    read -r -p "Explicá en pocas palabras qué cambia (opcional): " d
+    mkdir -p "$PED"
+    local id
+    id="$(date +%s)$$"
+    printf '%s' "$cur" > "$PED/$id.rama"
+    printf '%s' "$t" > "$PED/$id.titulo"
+    printf '%s' "$d" > "$PED/$id.cuerpo"
+    : > "$PED/$id.go"
+    echo "Enviando…"
+    local seen=0 i total
+    for i in $(seq 1 360); do
+        total=$(wc -l < "$PED/$id.out" 2>/dev/null || echo 0)
+        if [ "$total" -gt "$seen" ]; then
+            sed -n "$((seen + 1)),${total}p" "$PED/$id.out"
+            seen=$total
+        fi
+        [ -e "$PED/$id.fin" ] && break
+        sleep 0.5
+    done
+    if [ -e "$PED/$id.fin" ]; then
+        total=$(wc -l < "$PED/$id.out" 2>/dev/null || echo 0)
+        [ "$total" -gt "$seen" ] && sed -n "$((seen + 1)),${total}p" "$PED/$id.out"
+        local ok
+        ok=$(cat "$PED/$id.fin")
+        rm -f "$PED/$id".*
+        [ "$ok" = "ok" ] && return 0
+        return 1
+    fi
+    rm -f "$PED/$id".*
+    rojo "El servidor no respondió. Probá de nuevo en un minuto o avisale a un administrador."
+    return 1
+}
+
+cmd_ramas() {
+    copia
+    local cur
+    cur=$(git branch --show-current)
+    echo "Tus ramas (la que usás ahora tiene *):"
+    git branch --list "$WHO/*" --format='%(HEAD) %(refname:short)  — %(contents:subject)' | sed 's/^ /  /'
+    echo "Rama principal: $(principal)"
+}
+
+cmd_cambiar() {
+    copia
+    if sucio; then
+        amar "Tenés cambios sin guardar: guardalos primero (cw guardar)."
+        return 1
+    fi
+    local lista n i=1 elegido
+    mapfile -t lista < <(git branch --list "$WHO/*" --format='%(refname:short)')
+    lista+=("$(principal)")
+    for n in "${lista[@]}"; do
+        echo "  $i) $n"
+        i=$((i + 1))
+    done
+    read -r -p "¿A cuál pasás? (número): " n
+    elegido="${lista[$((n - 1))]}"
+    if [ -n "$elegido" ] && git switch -q "$elegido" 2>/dev/null; then
+        verde "✔ Ahora estás en «$elegido»."
+    else
+        rojo "No pude cambiar."
+        return 1
+    fi
+}
+
+c="${1:-ayuda}"
+[ $# -gt 0 ] && shift
+case "$c" in
+    ayuda|-h|--help|help) cmd_ayuda ;;
+    estado|status) cmd_estado ;;
+    actualizar|update) cmd_actualizar "$@" ;;
+    traer) cmd_traer ;;
+    rama|nueva) cmd_rama "$@" ;;
+    guardar|save) cmd_guardar "$@" ;;
+    enviar|pr) cmd_enviar ;;
+    ramas) cmd_ramas ;;
+    cambiar) cmd_cambiar ;;
+    *) rojo "No conozco «$c»."; cmd_ayuda; exit 1 ;;
+esac

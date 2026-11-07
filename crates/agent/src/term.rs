@@ -91,6 +91,15 @@ fn personal_home(ws: &Path, who: &str) -> std::io::Result<PathBuf> {
     // configuración por defecto (zsh y bash con colores, eza, fzf, starship…): se actualiza sola mientras la persona no la toque
     install_rc(&home.join(".zshrc"), include_str!("../assets/zshrc"))?;
     install_rc(&home.join(".bashrc"), include_str!("../assets/bashrc"))?;
+    // `cw`: acciones de git con palabras simples (actualizar, rama, guardar, enviar); se reescribe en cada sesión
+    let bin = home.join(".local/bin");
+    std::fs::create_dir_all(&bin)?;
+    std::fs::write(bin.join("cw"), include_str!("../assets/cw"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(bin.join("cw"), std::fs::Permissions::from_mode(0o755))?;
+    }
     let profile = home.join(".profile");
     if !profile.exists() {
         std::fs::write(&profile, "[ -n \"$BASH_VERSION\" ] && [ -f \"$HOME/.bashrc\" ] && . \"$HOME/.bashrc\"\n")?;
@@ -117,6 +126,135 @@ fn install_rc(path: &Path, content: &str) -> std::io::Result<()> {
 fn has_herdr() -> bool {
     let local = std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/bin/herdr"));
     local.is_some_and(|p| p.is_file()) || std::env::var_os("PATH").is_some_and(|p| std::env::split_paths(&p).any(|d| d.join("herdr").is_file()))
+}
+
+/// Última vez que se trajo `origin` de cada proyecto (para no pedirle a GitHub en cada terminal).
+static FETCHED: std::sync::LazyLock<Mutex<std::collections::HashMap<PathBuf, std::time::Instant>>> = std::sync::LazyLock::new(Default::default);
+
+/// Actualiza lo que se sabe de GitHub en la carpeta del proyecto (solo las ramas remotas: no toca archivos ni la rama en uso).
+async fn refresh_origin(project: &Path) {
+    {
+        let mut m = FETCHED.lock().unwrap();
+        if m.get(project).is_some_and(|t| t.elapsed() < Duration::from_secs(60)) {
+            return;
+        }
+        m.insert(project.to_path_buf(), std::time::Instant::now());
+    }
+    if !project.join(".git").exists() {
+        return;
+    }
+    let mut c = tokio::process::Command::new("git");
+    c.args(["fetch", "-q", "origin"]).current_dir(project).env("GIT_TERMINAL_PROMPT", "0").env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=10").stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).kill_on_drop(true);
+    let _ = tokio::time::timeout(Duration::from_secs(25), async { c.status().await }).await;
+}
+
+/// Pedidos que una persona hace desde su terminal con `cw enviar`: se atienden acá, con las credenciales del servicio,
+/// que nunca entran a la cápsula. La rama se trae a la carpeta del proyecto DENTRO de un sandbox (sin red ni credenciales:
+/// la configuración de la copia de la persona no se ejecuta con permisos del servicio) y recién ahí se sube a GitHub.
+struct Pedidos {
+    api: Arc<Api>,
+    home: PathBuf,
+    copy: PathBuf,
+    project_dir: PathBuf,
+    pid: i64,
+    who: String,
+    prefix: String,
+}
+
+impl Pedidos {
+    async fn watch(self, stop: Arc<AtomicBool>) {
+        let dir = self.home.join(".crewhelm/pedidos");
+        let _ = std::fs::create_dir_all(&dir);
+        while !stop.load(Ordering::Relaxed) {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+            let ids: Vec<String> = rd.flatten().filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".go")).map(String::from)).collect();
+            for id in ids {
+                if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) || dir.join(format!("{id}.fin")).exists() {
+                    continue;
+                }
+                let _ = std::fs::remove_file(dir.join(format!("{id}.go")));
+                let read = |ext: &str| std::fs::read_to_string(dir.join(format!("{id}.{ext}"))).unwrap_or_default().chars().take(4000).collect::<String>();
+                let (rama, titulo, cuerpo) = (read("rama"), read("titulo"), read("cuerpo"));
+                let res = self.enviar(&dir.join(format!("{id}.out")), rama.trim(), titulo.trim(), cuerpo.trim()).await;
+                let _ = std::fs::write(dir.join(format!("{id}.fin")), if res { "ok" } else { "error" });
+            }
+        }
+    }
+
+    async fn enviar(&self, out: &Path, rama: &str, titulo: &str, cuerpo: &str) -> bool {
+        let say = |s: &str| {
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(out) {
+                let _ = writeln!(f, "{s}");
+            }
+        };
+        let valida = rama.starts_with(&format!("{}/", self.prefix))
+            && rama.len() <= 100
+            && !rama.contains("..")
+            && !rama.ends_with(['/', '.'])
+            && !rama.ends_with(".lock")
+            && rama.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '/' | '.'));
+        if !valida {
+            say("\x1b[31mNombre de rama no permitido.\x1b[0m");
+            return false;
+        }
+        let git_dir = self.project_dir.join(".git");
+        if !git_dir.is_dir() || !self.copy.join(".git").is_dir() {
+            say("\x1b[31mEste proyecto no es un repositorio git en el servidor.\x1b[0m");
+            return false;
+        }
+        say("1/3 Llevando tu trabajo al proyecto…");
+        let reference = format!("refs/crewhelm/{rama}");
+        let mut f = tokio::process::Command::new("bwrap");
+        f.args(["--ro-bind", "/", "/", "--bind"]).arg(&git_dir).arg(&git_dir).args(["--dev", "/dev", "--proc", "/proc", "--unshare-net", "--unshare-pid", "--unshare-ipc", "--die-with-parent", "git", "-C"]);
+        f.arg(&self.project_dir)
+            .args(["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.alternateRefsCommand=/bin/false", "-c", "protocol.file.allow=always", "fetch", "-q"])
+            .arg(&self.copy)
+            .arg(format!("+refs/heads/{rama}:{reference}"))
+            .env_clear()
+            .env("PATH", std::env::var("PATH").unwrap_or_default())
+            .kill_on_drop(true);
+        match tokio::time::timeout(Duration::from_secs(60), f.output()).await {
+            Ok(Ok(o)) if o.status.success() => {}
+            Ok(Ok(o)) => {
+                say(&format!("\x1b[31mNo pude leer tu rama: {}\x1b[0m", crate::tail(&String::from_utf8_lossy(&o.stderr), 200)));
+                return false;
+            }
+            _ => {
+                say("\x1b[31mNo pude leer tu rama (tardó demasiado o falta bwrap).\x1b[0m");
+                return false;
+            }
+        }
+        say("2/3 Subiendo la rama a GitHub…");
+        let mut p = tokio::process::Command::new("git");
+        p.arg("-C").arg(&self.project_dir).args(["push", "-q", "origin", &format!("{reference}:refs/heads/{rama}")]).env("GIT_TERMINAL_PROMPT", "0").env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=10").kill_on_drop(true);
+        let pushed = tokio::time::timeout(Duration::from_secs(90), p.output()).await;
+        let _ = tokio::process::Command::new("git").arg("-C").arg(&self.project_dir).args(["update-ref", "-d", &reference]).status().await;
+        match pushed {
+            Ok(Ok(o)) if o.status.success() => {}
+            Ok(Ok(o)) => {
+                let e = String::from_utf8_lossy(&o.stderr).to_string();
+                let msg = if e.contains("rejected") || e.contains("non-fast-forward") { "esa rama ya existe en el proyecto con otros cambios: creá una rama nueva (cw rama)".to_string() } else { crate::tail(&e, 200) };
+                say(&format!("\x1b[31mNo pude subir la rama: {msg}\x1b[0m"));
+                return false;
+            }
+            _ => {
+                say("\x1b[31mNo pude subir la rama (sin conexión con GitHub o tardó demasiado).\x1b[0m");
+                return false;
+            }
+        }
+        say("3/3 Pidiendo la revisión (Pull Request)…");
+        match self.api.call(reqwest::Method::POST, "/api/agent/pr", Some(serde_json::json!({ "project": self.pid, "who": self.who, "branch": rama, "title": titulo, "body": cuerpo }))).await {
+            Ok(v) => {
+                say(&format!("\x1b[32m✔ Listo. Quien revisa ya puede verlo: {}\x1b[0m", v["url"].as_str().unwrap_or("")));
+                true
+            }
+            Err(e) => {
+                say(&format!("\x1b[33mTu rama quedó subida, pero no se abrió el Pull Request: {}\x1b[0m", crate::tail(&e.to_string(), 200)));
+                false
+            }
+        }
+    }
 }
 
 /// Copia de trabajo de una persona: `~/<proyecto>` (clon local del repositorio del proyecto, con su mismo `origin`).
@@ -152,7 +290,7 @@ async fn working_copy(project: &std::path::Path, home: &std::path::Path, name: &
     Some(slug)
 }
 
-async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
+async fn session(api: &Arc<Api>, sid: &str, job: &Value) -> anyhow::Result<()> {
     let (cols, rows) = (job["cols"].as_u64().unwrap_or(80).clamp(10, 500) as u16, job["rows"].as_u64().unwrap_or(24).clamp(2, 200) as u16);
     let dir = PathBuf::from(job["dir"].as_str().unwrap_or(""));
     let url = format!("{}/api/agent/term/{sid}", api.cfg.url.replacen("http", "ws", 1));
@@ -166,6 +304,7 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
     // un owner mirando el espacio de otra persona: solo lectura, dentro de la cápsula
     let view = job["view"].as_str().filter(|v| !v.is_empty()).map(String::from);
     let real_home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/root"));
+    let stop = Arc::new(AtomicBool::new(false));
     let mut cmd = match (workspace(), who.is_empty()) {
         (Some(root), false) => {
             let home = personal_home(&root, &who)?;
@@ -197,11 +336,21 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                 let pname = job["project"].as_str().unwrap_or("proyecto");
                 let proj = (target.is_none() && dir.is_dir()).then_some((dir.as_path(), pname));
                 // copia de trabajo propia del proyecto dentro del espacio de la persona (escribible): ahí edita, crea archivos y hace commits
+                if view.is_none() {
+                    if let Some((d, _)) = proj {
+                        refresh_origin(d).await;
+                    }
+                }
                 let work = match proj {
                     Some((d, n)) if view.is_none() => working_copy(d, &home, n).await,
                     _ => None,
                 };
-                let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: proj, other_space: target.as_deref(), tools: &tools, work: work.as_deref() });
+                if let (Some(w), Some(pid)) = (&work, job["pid"].as_i64()) {
+                    let ctx = Pedidos { api: api.clone(), home: home.clone(), copy: home.join(w), project_dir: dir.clone(), pid, who: who.clone(), prefix: crate::iso::ascii_slug(&who) };
+                    let f2 = stop.clone();
+                    tokio::spawn(async move { ctx.watch(f2).await });
+                }
+                let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: proj, other_space: target.as_deref(), tools: &tools, work: work.as_deref(), who: &crate::iso::ascii_slug(&who) });
                 // aviso de dónde está parada la persona (el nombre sale de slug(): sin comillas ni símbolos)
                 let hello = match (&view, proj) {
                     (Some(v), _) => format!("echo 'Espacio de {} (solo lectura) en /espacio. Tu espacio es ~'", crate::iso::slug(v)),
@@ -210,7 +359,8 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                     _ => "echo 'Tu espacio es ~ (escribible)'".to_string(),
                 };
                 let sh = crate::iso::person_shell();
-                a.extend(["--".into(), "/bin/bash".into(), "-c".into(), format!("{hello}; exec {sh}")]);
+                let upd = if work.is_some() { "cw actualizar --auto; " } else { "" };
+                a.extend(["--".into(), "/bin/bash".into(), "-c".into(), format!("{hello}; {upd}exec {sh}")]);
                 let mut c = CommandBuilder::new("bwrap");
                 c.args(a);
                 c.env_clear();
@@ -277,6 +427,7 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
             },
         }
     }
+    stop.store(true, Ordering::Relaxed);
     let _ = child.kill();
     log("■ terminal cerrada");
     Ok(())
@@ -400,7 +551,7 @@ pub async fn ssh_session(who: &str, level: &str, root: &str) -> anyhow::Result<(
             anyhow::bail!("esta entrada necesita `bwrap` en el servidor y no está disponible");
         }
         let tools = crate::iso::person_tools();
-        let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: None, other_space: None, tools: &tools, work: None });
+        let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: None, other_space: None, tools: &tools, work: None, who: "" });
         a.push("--".into());
         a.push(crate::iso::person_shell().into());
         std::process::Command::new("bwrap").args(a).env_clear().env("PATH", std::env::var("PATH").unwrap_or_default()).env("TERM", term).exec()
@@ -411,6 +562,51 @@ pub async fn ssh_session(who: &str, level: &str, root: &str) -> anyhow::Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sh(dir: &Path, args: &[&str]) -> String {
+        let o = std::process::Command::new("git").args(["-c", "user.email=a@b", "-c", "user.name=a"]).args(args).current_dir(dir).output().unwrap();
+        assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    }
+
+    /// `cw enviar`: la rama de la persona llega a GitHub (acá, un repositorio local) sin dejar referencias sueltas;
+    /// una rama que no es de la persona se rechaza.
+    #[tokio::test]
+    async fn enviar_sube_la_rama_de_la_persona() {
+        if !std::process::Command::new("bwrap").args(["--ro-bind", "/", "/", "--dev", "/dev", "true"]).status().is_ok_and(|s| s.success()) {
+            return;
+        }
+        let d = std::env::temp_dir().join(format!("tm-env-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let (gh, proj, home) = (d.join("gh.git"), d.join("proj"), d.join("home"));
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&proj).unwrap();
+        sh(&d, &["init", "-q", "--bare", "gh.git"]);
+        sh(&proj, &["init", "-q", "-b", "main"]);
+        std::fs::write(proj.join("a.txt"), "hola").unwrap();
+        sh(&proj, &["add", "."]);
+        sh(&proj, &["commit", "-q", "-m", "a"]);
+        sh(&proj, &["remote", "add", "origin", gh.to_str().unwrap()]);
+        sh(&proj, &["push", "-q", "origin", "main"]);
+        let copy = home.join("proj");
+        sh(&home, &["clone", "-q", "--local", proj.to_str().unwrap(), "proj"]);
+        sh(&copy, &["switch", "-q", "-c", "marta/tema"]);
+        std::fs::write(copy.join("b.txt"), "nuevo").unwrap();
+        sh(&copy, &["add", "."]);
+        sh(&copy, &["commit", "-q", "-m", "b"]);
+        let cfg = crate::Cfg { url: "http://127.0.0.1:1".into(), token: String::new(), cmd: String::new(), poll: 1, timeout: 1, max: 1, fallback_dir: None, once: true };
+        let p = Pedidos { api: Arc::new(Api { http: reqwest::Client::new(), cfg }), home: home.clone(), copy: copy.clone(), project_dir: proj.clone(), pid: 1, who: "Marta".into(), prefix: "marta".into() };
+        let out = d.join("out");
+        // sin servidor, el Pull Request no se abre (devuelve false) pero la rama ya tiene que estar subida
+        assert!(!p.enviar(&out, "marta/tema", "t", "").await);
+        assert!(sh(&gh, &["branch", "--list", "marta/tema"]).contains("marta/tema"), "salida: {}", std::fs::read_to_string(&out).unwrap_or_default());
+        assert!(sh(&proj, &["for-each-ref", "refs/crewhelm"]).is_empty());
+        // una rama ajena o con trucos no se acepta
+        assert!(!p.enviar(&d.join("out2"), "otra/cosa", "t", "").await);
+        assert!(!p.enviar(&d.join("out3"), "marta/../main", "t", "").await);
+        assert!(sh(&gh, &["branch", "--list", "otra/cosa"]).is_empty());
+        let _ = std::fs::remove_dir_all(&d);
+    }
 
     #[test]
     fn authorized_keys_conserva_lo_ajeno_y_reemplaza_el_bloque() {
