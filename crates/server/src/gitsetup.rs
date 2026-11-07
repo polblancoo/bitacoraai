@@ -98,7 +98,7 @@ async fn setup(State(st): State<AppState>, user: AuthUser, Path(project): Path<I
 }
 
 /// Qué agente atiende la carpeta de este proyecto y cuál es la carpeta. Si el proyecto no eligió agente, se usa el único que esté conectado.
-async fn target(st: &AppState, project: Id, team: Id) -> Result<(Id, String)> {
+pub(crate) async fn target(st: &AppState, project: Id, team: Id) -> Result<(Id, String)> {
     let chosen: Option<Id> = sqlx::query_scalar::<_, Option<Id>>("SELECT agent_id FROM ssh_targets WHERE project_id = ?").bind(project).fetch_optional(&st.db).await?.flatten();
     let agent = match chosen {
         Some(a) => a,
@@ -123,7 +123,7 @@ async fn target(st: &AppState, project: Id, team: Id) -> Result<(Id, String)> {
 }
 
 /// Manda el pedido al agente y espera su respuesta.
-async fn dispatch(agent: Id, payload: Value, secs: u64) -> Result<Value> {
+pub(crate) async fn dispatch(agent: Id, payload: Value, secs: u64) -> Result<Value> {
     let (tx, rx) = oneshot::channel();
     let id = uuid::Uuid::new_v4().simple().to_string();
     JOBS.lock().unwrap().insert(id.clone(), Job { agent, payload, taken: false, tx: Some(tx) });

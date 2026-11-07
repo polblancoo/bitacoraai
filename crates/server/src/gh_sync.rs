@@ -489,6 +489,11 @@ async fn agent_pr(State(st): State<AppState>, user: AuthUser, Json(b): Json<Agen
     };
     let (n, url) = (pr["number"].as_i64().unwrap_or(0), pr["html_url"].as_str().unwrap_or("").to_string());
     tracing::info!("github: {} pidió el Pull Request #{n} ({branch}) del proyecto {}", b.who, b.project);
+    // aviso a los owners para que lo revisen (botón «🔀 Integrar» del proyecto)
+    let owners: Vec<Id> = sqlx::query_scalar("SELECT m.user_id FROM team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = ? AND m.role = 'owner' AND u.is_bot = 0 AND m.user_id != ?").bind(team).bind(uid).fetch_all(&st.db).await.unwrap_or_default();
+    for o in owners {
+        crate::notify::notify(&st, o, "github", Some(team), None, format!("🔀 {} mandó «{}» a revisión. Abrí el proyecto y tocá «🔀 Integrar» para revisarlo.", b.who, if b.title.trim().is_empty() { branch.clone() } else { b.title.trim().chars().take(80).collect() })).await;
+    }
     Ok(Json(json!({ "number": n, "url": url, "base": base })))
 }
 

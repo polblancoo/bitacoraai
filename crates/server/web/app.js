@@ -595,6 +595,59 @@ const createTeam = guard(async () => {
   const t = await api("POST", "/api/teams", { name: f.name });
   S.teams.push(t); await selectTeam(t);
 });
+// Integrar: revisar y juntar (o devolver) el trabajo que el equipo manda con «Enviar a revisión» (Pull Requests de GitHub)
+const PR_STATE = { clean: ["✅ Listo para integrar", "ok"], has_hooks: ["✅ Listo para integrar", "ok"], unstable: ["⚠ Las pruebas no pasan", "bad"], dirty: ["⛔ Tiene conflictos: la persona debe actualizar su copia y volver a enviar", "bad"], blocked: ["⛔ GitHub lo bloquea (falta una aprobación o regla)", "bad"], behind: ["Desactualizado respecto de la rama principal", ""], draft: ["Borrador", ""] };
+async function openIntegrar() {
+  const p = S.project; if (!p) return;
+  const close = () => document.getElementById("integrar")?.remove();
+  const body = h("div", {}, h("p", { class: "hint" }, "⏳ Buscando lo que mandó el equipo…"));
+  const modal = h("div", { class: "overlay", id: "integrar", onmousedown: (e) => e.target.id === "integrar" && close() },
+    h("div", { class: "modal wide" }, h("h3", {}, "🔀 Integrar trabajo de «" + p.name + "»", h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: close, title: "Cerrar" }, "✕")), body));
+  document.getElementById("integrar")?.remove(); document.body.append(modal);
+  const squash = h("input", { type: "checkbox" });
+  const diffView = (f) => h("details", { class: "diff" }, h("summary", {}, `${f.name}  `, h("span", { class: "add" }, "+" + f.add), " ", h("span", { class: "del" }, "−" + f.del), f.status === "added" ? " (nuevo)" : f.status === "removed" ? " (borrado)" : ""),
+    f.binary ? h("small", { class: "hint" }, "Archivo que no se puede mostrar como texto (imagen, documento…).")
+      : h("pre", { class: "patch" }, ...f.patch.split("\n").map((l) => h("div", { class: l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : l.startsWith("@@") ? "hunk" : "" }, l || " ")), f.cut && h("div", { class: "hint" }, "… (se muestra solo el principio; el resto está en GitHub)")));
+  const load = async () => {
+    try {
+      const r = await api("GET", `/api/projects/${p.id}/prs`);
+      const cards = r.prs.map((x) => {
+        const [stTxt, stCls] = x.draft ? PR_STATE.draft : (PR_STATE[x.state] || [x.state || "", ""]);
+        const det = h("div", {});
+        return h("div", { class: "gitopt" },
+          h("b", {}, x.title), h("small", { class: "hint" }, `de ${x.by} · rama ${x.branch} · ${x.files ?? "?"} archivo(s) · `, h("span", { class: "add" }, "+" + (x.add ?? 0)), " ", h("span", { class: "del" }, "−" + (x.del ?? 0))),
+          stTxt && h("small", { class: stCls === "bad" ? "warn" : "hint" }, stTxt),
+          h("div", { class: "row" },
+            h("button", { class: "ghost", title: "Muestra qué archivos y líneas cambian  ·  git diff main...rama", onclick: guard(async () => {
+              det.replaceChildren(h("small", { class: "hint" }, "⏳ Cargando cambios…"));
+              const f = await api("GET", `/api/projects/${p.id}/prs/${x.number}/files`);
+              det.replaceChildren(...(f.files.length ? f.files.map(diffView) : [h("small", { class: "hint" }, "Sin cambios de archivos.")]));
+            }) }, "👁 Ver cambios"),
+            r.can_merge && h("button", { class: "primary", disabled: x.draft || x.mergeable === false, title: "Junta este trabajo con la rama principal y actualiza la carpeta del proyecto  ·  git merge rama", onclick: guard(async () => {
+              if (!(await ask(`¿Integrar «${x.title}» de ${x.by} al proyecto?`))) return;
+              body.replaceChildren(h("p", { class: "hint" }, "⏳ Integrando y actualizando la carpeta del proyecto…"));
+              const m = await api("POST", `/api/projects/${p.id}/prs/${x.number}/merge`, { squash: squash.checked });
+              toast(m.synced ? "Integrado y carpeta del proyecto actualizada" : "Integrado en GitHub (la carpeta se actualiza cuando el agente esté disponible)");
+              load();
+            }) }, "✅ Integrar"),
+            r.can_merge && h("button", { class: "ghost danger", title: "Cierra el pedido sin juntarlo y le avisa a la persona  ·  git branch -D rama (en GitHub: cerrar el Pull Request)", onclick: guard(async () => {
+              const f = await form("Devolver «" + x.title + "»", [{ name: "comment", label: "¿Qué tiene que corregir? (se lo mandamos a " + x.by + ")", type: "textarea", max: 2000 }]);
+              if (!f) return;
+              await api("POST", `/api/projects/${p.id}/prs/${x.number}/close`, { comment: f.comment || "" }); toast("Devuelto"); load();
+            }) }, "↩ Devolver"),
+            h("a", { class: "btnlike", href: x.url, target: "_blank", rel: "noopener", title: "Abrir en GitHub" }, "🐙")),
+          det);
+      });
+      body.replaceChildren(
+        h("small", { class: "hint" }, "Repositorio " + r.repo + ". Acá llega lo que las personas mandan con «Enviar a revisión». " + (r.can_merge ? "Revisá los cambios y, si está bien, integralo." : "Solo los owners pueden integrar o devolver.")),
+        r.can_merge && h("label", { class: "chk", title: "Junta todos los pasos del trabajo en uno solo, más prolijo en el historial  ·  git merge --squash" }, squash, " Juntar en un solo cambio"),
+        ...(cards.length ? cards : [h("p", { class: "hint" }, "No hay trabajo esperando revisión. 🎉")]),
+        h("div", { class: "actions" }, h("button", { class: "ghost", onclick: load }, "↻ Actualizar"), h("button", { class: "ghost", onclick: close }, "Cerrar")));
+    } catch (e) { body.replaceChildren(h("p", { class: "err" }, "⚠ " + e.message), h("div", { class: "actions" }, h("button", { class: "ghost", onclick: close }, "Cerrar"))); }
+  };
+  load();
+}
+
 // ventana con el asistente de git de un proyecto (al crearlo, o desde el aviso «Sin repositorio»)
 function openGitSetup(p) {
   const close = () => document.getElementById("git-setup")?.remove();
@@ -2343,6 +2396,7 @@ function appView() {
         !S.project.repo && can("member") && h("span", { class: "warn", title: "Sin repositorio git conectado, la carpeta del proyecto queda de solo lectura para el equipo: nadie puede editar ni enviar su trabajo a revisión" }, "⚠ Sin repositorio ",
           can("owner") ? h("button", { class: "ghost", onclick: () => openGitSetup(S.project), title: "Abre el asistente: traer un repo de GitHub, crear uno nuevo o dejarlo solo en la máquina" }, "🐙 Crear o conectar")
             : h("button", { class: "ghost", onclick: () => requestRepo(S.project.id), title: "Les avisa a los owners del equipo para que creen el repositorio" }, "🙋 Pedir que lo creen")),
+        S.project.repo && h("button", { class: "ghost", onclick: openIntegrar, title: "Revisar y juntar el trabajo que mandó el equipo (Pull Requests)  ·  git diff / git merge" }, "🔀 Integrar"),
         S.project.repo && (repoUrl(S.project.repo)
           ? h("a", { class: "repo-link", href: repoUrl(S.project.repo), target: "_blank", rel: "noopener", title: "Abrir el repositorio en una pestaña nueva" }, "🐙 " + S.project.repo.replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/\.git$/, "") + " ↗")
           : h("span", { title: "Repositorio" }, "🔗 " + S.project.repo))),

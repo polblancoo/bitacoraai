@@ -162,6 +162,28 @@ async fn run_job(p: &Value) -> Result<Value, String> {
     let mut steps: Vec<String> = Vec::new();
     match mode {
         "status" => return Ok(status(&dir).await),
+        "sync" => {
+            // después de integrar un Pull Request: la carpeta del proyecto se pone al día con GitHub (solo si se puede sin pisar nada)
+            if !dir.join(".git").exists() {
+                return Err("La carpeta todavía no es un repositorio".into());
+            }
+            git(&dir, &["fetch", "-q", "origin"]).await.map_err(|e| format!("no pude traer las novedades de GitHub: {e}"))?;
+            let cur = git(&dir, &["branch", "--show-current"]).await.unwrap_or_default();
+            let cur = cur.trim().to_string();
+            let remote = format!("refs/remotes/origin/{cur}");
+            if cur.is_empty() || git(&dir, &["rev-parse", "-q", "--verify", &remote]).await.is_err() {
+                steps.push("Novedades traídas (la carpeta no está en una rama que exista en GitHub, no se tocó)".into());
+            } else if !git(&dir, &["status", "--porcelain", "--untracked-files=no"]).await.unwrap_or_default().trim().is_empty() {
+                steps.push("Novedades traídas, pero la carpeta tiene cambios sin guardar: no se actualizó".into());
+            } else if git(&dir, &["merge", "-q", "--ff-only", &remote]).await.is_ok() {
+                steps.push(format!("La carpeta del proyecto quedó al día con «{cur}» de GitHub"));
+            } else {
+                steps.push("Novedades traídas, pero la carpeta tiene cambios propios que GitHub no tiene: no se actualizó".into());
+            }
+            let mut st = status(&dir).await;
+            st["steps"] = json!(steps);
+            return Ok(st);
+        }
         "local" => {
             init_local(&dir, &mut steps).await?;
         }

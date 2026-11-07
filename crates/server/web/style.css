@@ -1100,3 +1100,7 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 
 .warn{color:#d29922}
 .gitbar .gb-t.warn{cursor:default;opacity:1}
+
+.diff { margin: 4px 0; } .diff summary { cursor: pointer; font-family: monospace; font-size: 12px; }
+.patch { max-height: 320px; overflow: auto; font-size: 11px; line-height: 1.35; background: var(--bg2, #1118); padding: 6px; border-radius: 6px; margin: 4px 0; }
+.patch .add, .add { color: #3fb950; } .patch .del, .del { color: #f85149; } .patch .hunk { color: #8b949e; }
