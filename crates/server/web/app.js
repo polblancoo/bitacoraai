@@ -1338,6 +1338,7 @@ function chatPanel() {
         CHAT.trCfg?.enabled && h("button", { class: "ghost" + (trWanted() ? " on" : ""), title: trWanted() ? "Traducción automática activada: tocá para ver todo en su idioma original" : "Traducción automática desactivada: tocá para activarla", onclick: () => { store.set("chatTr", trWanted() ? "0" : "1"); chatDraw(); } }, "🌐"),
         can("admin") && h("button", { class: "ghost", title: "Traducción automática del chat (configurar)", onclick: chatTrModal }, "⚙🌐"),
         can("admin") && h("button", { class: "ghost", title: "Registro de todo lo que pasó en el chat", onclick: chatAudit }, "🧾"),
+        can("member") && showTech() && S.project && h("button", { class: "ghost", title: "Abrir una terminal del proyecto, sin crear tarea", onclick: guard(async () => { S.tvProject = S.project.id; await openTerms(); if (!PANES.some((p) => p.pid === S.tvProject && !p.tid)) await addPane(S.tvProject, null, "💻 " + S.project.name); }) }, "💻"),
         h("button", { class: "ghost", title: "Cerrar el chat", onclick: toggleChat }, "✕")),
       CHAT.tabs = h("div", { class: "comm-tabs" }), CHAT.video = h("div", { class: "comm-video", hidden: true }),
       CHAT.pane = h("div", { class: "chat-pane" },
@@ -1722,7 +1723,8 @@ const openTask = guard(async (task) => {
   const dockSlot = h("div", { class: "dock-slot" });
   const toggleDock = guard(async () => {
     if (TDOCK) { closeDock(); dockSlot.replaceChildren(); return; }
-    const c0 = await api("GET", `/api/projects/${task.project_id}/ssh`);
+    // los miembros no ven la configuración de conexión (es de owners): la terminal les contesta si está habilitada o no
+    const c0 = can("owner") ? await api("GET", `/api/projects/${task.project_id}/ssh`) : { agent_id: 1 };
     if (!c0.host && !c0.agent_id) { S.dockAfter = task.id; toast("Primero configurá la conexión a la máquina del proyecto; al cerrar volvés a la tarea"); return openTerminal(cur()); }
     await ensureXterm();
     const box = h("div", { class: "term-box" }), st = h("span", { class: "tv-st" }, "⏳");
@@ -2288,7 +2290,7 @@ function appView() {
       h("div", { class: "side-sec sec-teams" + secCls("teams") }, h("h2", {}, secTitle("teams", "👥 Equipos"), h("span", {}, S.team && h("button", { class: "ghost", onclick: () => { S.panel = true; store.set("panel", "1"); loadOverview(); setTimeout(() => document.querySelector(".tp-sec:last-child")?.scrollIntoView(), 400); }, title: "Editar o eliminar el equipo actual (ajustes en el panel de la derecha)" }, "⚙"), h("button", { class: "ghost", onclick: joinWithCode, title: "Unirse con un código" }, "↪"), h("button", { class: "ghost", onclick: createTeam, title: "Nuevo equipo" }, "+"))),
         h("div", { class: "nav" }, S.teams.map((t) => h("button", { class: t.id === S.team?.id ? "active" : "", onclick: () => selectTeam(t).catch((e) => toast(e.message, true)) }, t.name)))),
       S.team && h("div", { class: "side-sec sec-projects" + secCls("projects") }, h("h2", {}, secTitle("projects", "📁 Proyectos"), h("button", { class: "ghost", onclick: createProject, title: "Nuevo proyecto" }, "+")),
-        h("div", { class: "nav" }, S.projects.length > 0 && can("owner") && showTech() && h("button", { class: S.terms ? "active" : "", onclick: openTerms, title: "Terminales SSH de los proyectos y estado de las IAs, en paneles" }, "🖥️ Terminales"), S.projects.length > 0 && h("button", { class: S.portfolio ? "active" : "", onclick: openPortfolio, title: "Avance de todos los proyectos del equipo" }, "📊 Portafolio"),
+        h("div", { class: "nav" }, S.projects.length > 0 && can("member") && showTech() && h("button", { class: S.terms ? "active" : "", onclick: openTerms, title: "Terminales SSH de los proyectos y estado de las IAs, en paneles" }, "🖥️ Terminales"), S.projects.length > 0 && h("button", { class: S.portfolio ? "active" : "", onclick: openPortfolio, title: "Avance de todos los proyectos del equipo" }, "📊 Portafolio"),
           S.projects.map((p) => h("button", { class: p.id === S.project?.id && !S.portfolio && !S.terms ? "active" : "", onclick: () => selectProject(p).catch((e) => toast(e.message, true)) },
           h("span", { class: "dot", style: `background:${p.color}` }), p.name)))),
       S.team && h("div", { class: "side-sec sec-bots" + secCls("bots") }, h("h2", {}, secTitle("bots", "🤖 IAs"), can("admin") && h("button", { class: "ghost", onclick: createBot, title: "Sumar una IA al equipo (crea su token)" }, "+")),
@@ -3525,12 +3527,14 @@ function termsView() {
       h("button", { title: "Abre un panel por cada tarea abierta de este proyecto, con el título de la tarea y su responsable", onclick: openProjectPanes }, "📋 Abrir las tareas"),
       h("button", { class: store.get("tvZen") === "1" ? "on" : "", title: "Oculta el menú lateral y el panel del equipo para tener toda la pantalla para las terminales", onclick: () => { store.set("tvZen", store.get("tvZen") === "1" ? "0" : "1"); render(); startPanes(); } }, store.get("tvZen") === "1" ? "⛶ Mostrar barras" : "⛶ Ocultar barras"),
       h("button", { class: store.get("tvSide") === "0" ? "on" : "", title: "Muestra u oculta la lista de IAs de la izquierda", onclick: () => { store.set("tvSide", store.get("tvSide") === "0" ? "1" : "0"); render(); startPanes(); } }, store.get("tvSide") === "0" ? "◧ Mostrar IAs" : "◧ Ocultar IAs"),
-      can("owner") && (() => {
-        const sel = h("select", { title: "Mira en solo lectura el espacio personal de otra persona o IA en el servidor (auditoría)", onchange: (e) => { const v = e.target.value; e.target.value = ""; if (v) addPane(S.tvProject, null, "👁 espacio de " + v, v); } },
+      can("owner") && h("fieldset", { class: "tv-admin", title: "Herramientas de administración de las terminales: solo las ven los owners" },
+        h("legend", {}, "🛠 Administración"),
+        (() => {
+        const sel = h("select", { title: "Ver espacio: abre en solo lectura la carpeta personal de otra persona o IA en el servidor, para auditar o ayudar. No se puede modificar nada", onchange: (e) => { const v = e.target.value; e.target.value = ""; if (v) addPane(S.tvProject, null, "👁 espacio de " + v, v); } },
           h("option", { value: "" }, "👁 Ver espacio de…"), ...(S.members || []).filter((m) => m.id !== S.me?.id).map((m) => h("option", { value: m.username }, (botInfo(m.username) ? "🤖 " : "👤 ") + m.username)));
         return sel;
       })(),
-      h("button", { title: "Cómo llega la terminal a la máquina de este proyecto: por el agente (recomendado) o por SSH", onclick: guard(() => openTerminal({ id: null, project_id: S.tvProject })) }, "⚙ Conexión"),
+        h("button", { title: "Conexión: cómo llega la terminal a la máquina del proyecto (agente o SSH) y si las personas del equipo pueden usarla", onclick: guard(() => openTerminal({ id: null, project_id: S.tvProject })) }, "⚙ Conexión")),
       h("small", { class: "hint" }, "Hasta 8 a la vez. Lo que hagas queda anotado en .tm/ de la carpeta del proyecto para que la IA retome.")),
     h("div", { class: "tv-body" }, store.get("tvSide") !== "0" && tvSide,
       h("div", { class: "tv-grid" + (PANES.length === 1 ? " one" : ""), style: `--cols:${c}` }, PANES.length ? PANES.map((p) => p.el) : h("div", { class: "empty" }, "Tocá «+ Terminal» o elegí una IA de la izquierda."))));
@@ -3561,7 +3565,7 @@ async function addPane(pid, tid, title, space) {
   if (PANES.length >= 8) return toast("Máximo 8 terminales abiertas", true);
   if (tid && PANES.some((p) => p.tid === tid)) return toast("Esa tarea ya tiene su terminal abierta acá");
   try {
-    const c0 = await api("GET", `/api/projects/${pid}/ssh`); if (!c0.host && !c0.agent_id) { toast("Este proyecto todavía no tiene conexión a su máquina: configurala primero"); return openTerminal({ id: null, project_id: pid }); }
+    const c0 = can("owner") ? await api("GET", `/api/projects/${pid}/ssh`) : { agent_id: 1 }; if (!c0.host && !c0.agent_id) { toast("Este proyecto todavía no tiene conexión a su máquina: configurala primero"); return openTerminal({ id: null, project_id: pid }); }
   } catch (e) { return toast(e.message, true); }
   const box = h("div", { class: "term-box" }), st = h("span", { class: "tv-st" }, "⏳");
   const pane = { pid, tid, box, st, started: false, space };

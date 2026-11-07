@@ -1082,3 +1082,7 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 .peoplebox .chk { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; font-size: 13px; }
 .peoplebox .chk input { margin-top: 3px; }
 .peoplebox .chk small { grid-column: 2; }
+
+/* recuadro de administración en Terminales */
+.tv-admin { display: flex; gap: 8px; align-items: center; margin: 0; padding: 2px 10px 6px; border: 1px solid var(--line, #2a2f45); border-radius: 8px; background: var(--bg2); }
+.tv-admin legend { padding: 0 6px; font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }

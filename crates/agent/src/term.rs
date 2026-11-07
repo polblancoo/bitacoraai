@@ -136,20 +136,11 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                     let _ = ws.send(Message::Binary(b"\r\nEsta terminal necesita `bwrap` en el servidor y no esta disponible.\r\n".to_vec().into())).await;
                     anyhow::bail!("terminal de {who} rechazada: falta bwrap");
                 }
-                let exe = std::env::current_exe()?;
-                let mut ro = crate::iso::paths_for_shell();
-                if let Some(t) = &target {
-                    ro.push(t.clone());
-                } else if dir.is_dir() {
-                    ro.push(dir.clone());
-                }
-                let mut a = crate::iso::bwrap_args(&real_home, &crate::iso::Plan { work: &home, mine: &home, ia_home: Some(&home), exe: &exe, net: crate::iso::Net::Open, sock_dir: None, extra_rw: &[], extra_ro: &ro, new_session: false });
-                match &target {
-                    Some(t) => a.extend(["--chdir".into(), t.to_string_lossy().to_string()]),
-                    None if dir.is_dir() => a.extend(["--chdir".into(), dir.to_string_lossy().to_string()]),
-                    None => {}
-                }
-                a.extend(["--".into(), std::env::var("SHELL").unwrap_or_else(|_| "bash".into())]);
+                let tools = crate::iso::person_tools();
+                let proj = (target.is_none() && dir.is_dir()).then_some(dir.as_path());
+                let a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: proj, other_space: target.as_deref(), tools: &tools });
+                let mut a = a;
+                a.extend(["--".into(), "/bin/bash".into(), "-l".into()]);
                 let mut c = CommandBuilder::new("bwrap");
                 c.args(a);
                 c.env_clear();
@@ -338,10 +329,9 @@ pub async fn ssh_session(who: &str, level: &str, root: &str) -> anyhow::Result<(
         if !crate::iso::bwrap_ok().await {
             anyhow::bail!("esta entrada necesita `bwrap` en el servidor y no está disponible");
         }
-        let exe = std::env::current_exe()?;
-        let ro = crate::iso::paths_for_shell();
-        let mut a = crate::iso::bwrap_args(&real_home, &crate::iso::Plan { work: &home, mine: &home, ia_home: Some(&home), exe: &exe, net: crate::iso::Net::Open, sock_dir: None, extra_rw: &[], extra_ro: &ro, new_session: false });
-        a.extend(["--".into(), shell]);
+        let tools = crate::iso::person_tools();
+        let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: None, other_space: None, tools: &tools });
+        a.extend(["--".into(), "/bin/bash".into(), "-l".into()]);
         std::process::Command::new("bwrap").args(a).env_clear().env("PATH", std::env::var("PATH").unwrap_or_default()).env("TERM", term).exec()
     };
     Err(err.into())

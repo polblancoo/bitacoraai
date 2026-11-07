@@ -360,6 +360,60 @@ pub fn bwrap_args(real_home: &Path, p: &Plan) -> Vec<String> {
     a
 }
 
+/// Cápsula para PERSONAS (terminal web y SSH): el home real del servidor no existe ahí adentro, ni siquiera como carpetas vacías.
+/// El espacio personal aparece en `/home/crewhelm`, el proyecto (solo lectura) en `/proyecto`, el espacio ajeno que mira un admin
+/// (solo lectura) en `/espacio` y las pocas herramientas permitidas en `/tools`.
+pub struct PersonPlan<'a> {
+    pub home: &'a Path,
+    pub project: Option<&'a Path>,
+    pub other_space: Option<&'a Path>,
+    /// archivos sueltos que se ofrecen en `/tools` (por ejemplo `herdr`)
+    pub tools: &'a [PathBuf],
+}
+
+pub const PERSON_HOME: &str = "/home/crewhelm";
+pub const PERSON_PATH: &str = "/usr/local/bin:/usr/bin:/bin:/tools";
+
+pub fn person_args(p: &PersonPlan) -> Vec<String> {
+    let s = |x: &Path| x.to_string_lossy().to_string();
+    let mut a: Vec<String> = ["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"].iter().map(|x| x.to_string()).collect();
+    for d in ["/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/opt", "/etc"] {
+        let path = Path::new(d);
+        match std::fs::read_link(path) {
+            Ok(t) => a.extend(["--symlink".into(), s(&t), d.into()]),
+            Err(_) if path.exists() => a.extend(["--ro-bind".into(), d.into(), d.into()]),
+            Err(_) => {}
+        }
+    }
+    // red abierta, como en una shell normal (el DNS de systemd-resolved vive en /run)
+    if Path::new("/run/systemd/resolve").exists() {
+        a.extend(["--ro-bind".into(), "/run/systemd/resolve".into(), "/run/systemd/resolve".into()]);
+    }
+    a.extend(["--bind".into(), s(p.home), PERSON_HOME.into()]);
+    if let Some(d) = p.project {
+        a.extend(["--ro-bind".into(), s(d), "/proyecto".into()]);
+    }
+    if let Some(d) = p.other_space {
+        a.extend(["--ro-bind".into(), s(d), "/espacio".into()]);
+    }
+    for t in p.tools.iter().filter(|t| t.is_file()) {
+        if let Some(n) = t.file_name() {
+            a.extend(["--ro-bind".into(), s(t), format!("/tools/{}", n.to_string_lossy())]);
+        }
+    }
+    let chdir = if p.other_space.is_some() { "/espacio" } else if p.project.is_some() { "/proyecto" } else { PERSON_HOME };
+    a.extend(["--setenv".into(), "HOME".into(), PERSON_HOME.into(), "--setenv".into(), "PATH".into(), PERSON_PATH.into(), "--chdir".into(), chdir.into()]);
+    a
+}
+
+/// `herdr` si está instalado (en el PATH o en `~/.local/bin`), para ofrecerlo dentro de la cápsula.
+pub fn person_tools() -> Vec<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    let mut v = vec![home.join(".local/bin/herdr")];
+    v.extend(std::env::var_os("PATH").into_iter().flat_map(|p| std::env::split_paths(&p).map(|d| d.join("herdr")).collect::<Vec<_>>()));
+    v.into_iter().filter(|p| p.is_file()).take(1).collect()
+}
+
 /// Herramientas de solo lectura para la shell de `sandbox-shell` (las mismas que usa una ejecución).
 pub fn paths_for_shell() -> Vec<PathBuf> {
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
@@ -575,6 +629,29 @@ fn chrono_like(s: &str) -> Option<i64> {
 
 #[cfg(test)]
 mod tests {
+    /// La cápsula de una persona no deja ver nada del home real del servidor (ni los nombres de carpetas).
+    #[test]
+    fn la_capsula_de_una_persona_no_ve_el_home_real() {
+        let ok = std::process::Command::new("bwrap").args(["--ro-bind", "/", "/", "--dev", "/dev", "true"]).status().is_ok_and(|s| s.success());
+        if !ok {
+            return;
+        }
+        let d = std::env::temp_dir().join(format!("tm-person-{}", std::process::id()));
+        let (home, proj) = (d.join("espacio"), d.join("proy"));
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("f.txt"), "hola").unwrap();
+        let mut a = person_args(&PersonPlan { home: &home, project: Some(&proj), other_space: None, tools: &[] });
+        let script = "ls -A /home; echo --; pwd; echo --; cat /proyecto/f.txt; touch /proyecto/x 2>&1 | head -1; touch ~/mio && echo escribe; ls /root /home/pablo 2>&1 | head -2";
+        a.extend(["--".into(), "/bin/bash".into(), "-c".into(), script.into()]);
+        let out = std::process::Command::new("bwrap").args(a).env_clear().output().unwrap();
+        let t = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+        assert!(t.starts_with("crewhelm\n--\n/proyecto\n--\nhola"), "salida: {t}");
+        assert!(t.contains("escribe") && !t.contains("pablo\n") && !proj.join("x").exists(), "salida: {t}");
+        assert!(home.join("mio").exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     use super::*;
 
     fn tmp(name: &str) -> PathBuf {

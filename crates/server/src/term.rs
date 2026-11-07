@@ -344,7 +344,7 @@ async fn session(mut sock: WebSocket, st: AppState, project: Id, task: Option<Id
     if routes::require(&st, team, user.id, Role::Owner).await.is_err() {
         let sandboxed = agent.is_some_and(|a| AGENTS.lock().unwrap().get(&a).is_some_and(|t| t.2));
         if !(sandboxed && routes::require(&st, team, user.id, Role::Member).await.is_ok()) {
-            return say(&mut sock, json!({ "error": "la terminal es solo para owners (los miembros la usan cuando el agente del proyecto tiene espacios personales: TM_WORKSPACE)" })).await;
+            return say(&mut sock, json!({ "error": "La terminal todavía no está habilitada para las personas del equipo en este proyecto. Pedile a un owner que la active en «⚙ Conexión» (casilla «Permitir la terminal a las personas del equipo»)." })).await;
         }
     }
     let fresh = {
