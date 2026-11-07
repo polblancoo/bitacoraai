@@ -3609,7 +3609,8 @@ function termsView() {
           h("option", { value: "" }, "👁 Ver espacio de…"), ...(S.members || []).filter((m) => m.id !== S.me?.id).map((m) => h("option", { value: m.username }, (botInfo(m.username) ? "🤖 " : "👤 ") + m.username)));
         return sel;
       })(),
-        h("button", { title: "Conexión: cómo llega la terminal a la máquina del proyecto (agente o SSH) y si las personas del equipo pueden usarla", onclick: guard(() => openTerminal({ id: null, project_id: S.tvProject })) }, "⚙ Conexión")),
+        h("button", { title: "Conexión: cómo llega la terminal a la máquina del proyecto (agente o SSH) y si las personas del equipo pueden usarla", onclick: guard(() => openTerminal({ id: null, project_id: S.tvProject })) }, "⚙ Conexión"),
+        can("owner") && h("button", { title: "Repositorio git del proyecto: traer uno de GitHub, crear uno nuevo o dejarlo solo local", onclick: () => { const p = S.projects.find((x) => x.id === S.tvProject); if (p) openGitSetup(p); } }, "🐙 Repositorio")),
       h("small", { class: "hint" }, "Hasta 8 a la vez. Lo que hagas queda anotado en .tm/ de la carpeta del proyecto para que la IA retome.")),
     h("div", { class: "tv-body" }, store.get("tvSide") !== "0" && tvSide,
       h("div", { class: "tv-grid" + (PANES.length === 1 ? " one" : ""), style: `--cols:${c}` }, PANES.length ? PANES.map((p) => p.el) : h("div", { class: "empty" }, "Tocá «+ Terminal» o elegí una IA de la izquierda."))));
