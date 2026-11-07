@@ -2888,10 +2888,10 @@ const openSettings = guard(async () => {
           ? h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/telegram"); close(); openSettings(); }) }, "Desvincular")
           : h("button", { onclick: () => { close(); linkTelegram(); } }, "Vincular"))),
         line(["Cómo recibís los avisos (Telegram y email)", "digest"], npMode, npEvery, npHour, npPause),
-        line([`GitHub: ${!gh.available ? "el servidor no tiene GitHub configurado" : gh.linked ? "✓ conectado como @" + gh.login : "sin conectar"}`, "github"], gh.available && (gh.linked
+        (can("admin") || gh.linked) && line([`GitHub: ${!gh.available ? "el servidor no tiene GitHub configurado" : gh.linked ? "✓ conectado como @" + gh.login : "sin conectar"}`, "github"], gh.available && (gh.linked
           ? h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Desconectar tu cuenta de GitHub?"))) return; await api("DELETE", "/api/github"); close(); openSettings(); }) }, "Desconectar")
           : h("button", { onclick: () => { close(); linkGithub(); } }, "Conectar"))),
-        line([`Google Calendar: ${gcState}`, "google"], gc.available && (gc.linked
+        (gc.available || gc.linked) && line([`Google Calendar: ${gcState}`, "google"], gc.available && (gc.linked
           ? [h("button", { onclick: guard(async () => { const r = await api("POST", "/api/google/sync"); toast(`Calendario al día (${r.created} nuevos, ${r.updated} cambiados, ${r.deleted} quitados)`); close(); openSettings(); }) }, "Sincronizar"),
             h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Desconectar y quitar de tu calendario los eventos creados por la app?"))) return; await api("DELETE", "/api/google"); close(); openSettings(); }) }, "Desconectar")]
           : h("button", { onclick: guard(async () => { const l = await api("POST", "/api/google/link"); window.open(l.url, "_blank", "noopener"); toast("Autorizá en la pestaña de Google y después volvé a abrir Configuración"); }) }, "Conectar"))),
@@ -2961,7 +2961,7 @@ const openSettings = guard(async () => {
               }) }, "Crear ejemplo")];
             })())),
       sec("Licencia",
-        line(["Comandos permitidos y prohibidos para todas las IAs", "cmds"], h("button", { onclick: guard(async () => {
+        S.me?.server_role === "admin" && line(["Comandos permitidos y prohibidos para todas las IAs", "cmds"], h("button", { onclick: guard(async () => {
           const g = await api("GET", "/api/commands");
           if (!g.can_edit) { toast("Solo la primera persona registrada edita las listas generales. Cada IA tiene la suya en su ficha."); return; }
           const f = await form("Comandos de todas las IAs", [
