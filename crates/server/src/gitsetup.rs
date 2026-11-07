@@ -29,6 +29,8 @@ static JOBS: LazyLock<Mutex<HashMap<String, Job>>> = LazyLock::new(Default::defa
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/projects/{id}/git/setup", post(setup))
+        .route("/api/projects/{id}/git/state", get(state))
+        .route("/api/projects/{id}/git/request", post(request_repo))
         .route("/api/agent/git/pending", get(agent_pending))
         .route("/api/agent/git/{id}/result", post(agent_result))
 }
@@ -58,19 +60,7 @@ async fn setup(State(st): State<AppState>, user: AuthUser, Path(project): Path<I
     let team: Id = sqlx::query_scalar("SELECT team_id FROM projects WHERE id = ?").bind(project).fetch_optional(&st.db).await?.ok_or_else(AppError::forbidden)?;
     routes::require(&st, team, user.id, Role::Owner).await?;
     st.user_limiter.hit(&format!("gitsetup:{}", user.id), 12, Duration::from_secs(60)).map_err(|_| AppError::bad("demasiados intentos: esperá un minuto"))?;
-    let agent: Id = sqlx::query_scalar::<_, Option<Id>>("SELECT agent_id FROM ssh_targets WHERE project_id = ?")
-        .bind(project)
-        .fetch_optional(&st.db)
-        .await?
-        .flatten()
-        .ok_or_else(|| AppError::bad("Primero conectá el agente de la máquina del proyecto (botón «▶ Conectar»)"))?;
-    if !term::agent_online(agent) {
-        return Err(AppError::bad("El agente de la máquina del proyecto no está conectado ahora"));
-    }
-    let dir: String = sqlx::query_scalar("SELECT work_dir FROM projects WHERE id = ?").bind(project).fetch_one(&st.db).await.unwrap_or_default();
-    if dir.trim().is_empty() {
-        return Err(AppError::bad("El proyecto no tiene carpeta de trabajo: definila en los ajustes del proyecto"));
-    }
+    let (agent, dir) = target(&st, project, team).await?;
     let mut payload = json!({ "mode": b.mode, "dir": dir });
     match b.mode.as_str() {
         "status" | "local" => {}
@@ -93,10 +83,50 @@ async fn setup(State(st): State<AppState>, user: AuthUser, Path(project): Path<I
         }
         _ => return Err(AppError::bad("Opción no válida")),
     }
+    let data = dispatch(agent, payload, 170).await?;
+    // el repositorio queda vinculado al proyecto (issues, Pull Requests, sincronización)
+    if matches!(b.mode.as_str(), "clone" | "attach" | "new") {
+        if let Some(repo) = data["repo"].as_str().filter(|r| valid_repo(r)) {
+            sqlx::query("INSERT INTO project_github (project_id, repo) VALUES (?, ?) ON CONFLICT(project_id) DO UPDATE SET repo = excluded.repo").bind(project).bind(repo).execute(&st.db).await?;
+            sqlx::query("UPDATE projects SET repo = ? WHERE id = ? AND (repo IS NULL OR repo = '')").bind(repo).bind(project).execute(&st.db).await?;
+        }
+    }
+    STATE_CACHE.lock().unwrap().remove(&project);
+    tracing::info!("git: usuario {} ejecutó «{}» en el proyecto {project}", user.id, b.mode);
+    Ok(Json(data))
+}
+
+/// Qué agente atiende la carpeta de este proyecto y cuál es la carpeta. Si el proyecto no eligió agente, se usa el único que esté conectado.
+async fn target(st: &AppState, project: Id, team: Id) -> Result<(Id, String)> {
+    let chosen: Option<Id> = sqlx::query_scalar::<_, Option<Id>>("SELECT agent_id FROM ssh_targets WHERE project_id = ?").bind(project).fetch_optional(&st.db).await?.flatten();
+    let agent = match chosen {
+        Some(a) => a,
+        None => {
+            let bots: Vec<Id> = sqlx::query_scalar("SELECT u.id FROM team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = ? AND u.is_bot = 1").bind(team).fetch_all(&st.db).await?;
+            let online: Vec<Id> = bots.into_iter().filter(|b| term::agent_online(*b)).collect();
+            match online.as_slice() {
+                [one] => *one,
+                [] => return Err(AppError::bad("No hay ningún agente conectado para la máquina del proyecto")),
+                _ => return Err(AppError::bad("Hay varios agentes conectados: elegí el de este proyecto en «⚙ Conexión» (botón «▶ Conectar»)")),
+            }
+        }
+    };
+    if !term::agent_online(agent) {
+        return Err(AppError::bad("El agente de la máquina del proyecto no está conectado ahora"));
+    }
+    let dir: String = sqlx::query_scalar("SELECT work_dir FROM projects WHERE id = ?").bind(project).fetch_one(&st.db).await.unwrap_or_default();
+    if dir.trim().is_empty() {
+        return Err(AppError::bad("El proyecto no tiene carpeta de trabajo: definila en los ajustes del proyecto"));
+    }
+    Ok((agent, dir))
+}
+
+/// Manda el pedido al agente y espera su respuesta.
+async fn dispatch(agent: Id, payload: Value, secs: u64) -> Result<Value> {
     let (tx, rx) = oneshot::channel();
     let id = uuid::Uuid::new_v4().simple().to_string();
     JOBS.lock().unwrap().insert(id.clone(), Job { agent, payload, taken: false, tx: Some(tx) });
-    let res = tokio::time::timeout(Duration::from_secs(170), rx).await;
+    let res = tokio::time::timeout(Duration::from_secs(secs), rx).await;
     JOBS.lock().unwrap().remove(&id);
     let v = match res {
         Ok(Ok(v)) => v,
@@ -105,15 +135,50 @@ async fn setup(State(st): State<AppState>, user: AuthUser, Path(project): Path<I
     if v["ok"].as_bool() != Some(true) {
         return Err(AppError::bad(v["error"].as_str().unwrap_or("No se pudo completar")));
     }
-    let data = v["data"].clone();
-    // el repositorio queda vinculado al proyecto (issues, Pull Requests, sincronización)
-    if matches!(b.mode.as_str(), "clone" | "attach" | "new") {
-        if let Some(repo) = data["repo"].as_str().filter(|r| valid_repo(r)) {
-            sqlx::query("INSERT INTO project_github (project_id, repo) VALUES (?, ?) ON CONFLICT(project_id) DO UPDATE SET repo = excluded.repo").bind(project).bind(repo).execute(&st.db).await?;
+    Ok(v["data"].clone())
+}
+
+static STATE_CACHE: LazyLock<Mutex<HashMap<Id, (std::time::Instant, Value)>>> = LazyLock::new(Default::default);
+static ASKED: LazyLock<Mutex<HashMap<(Id, Id), std::time::Instant>>> = LazyLock::new(Default::default);
+
+/// ¿La carpeta del proyecto ya es un repositorio? Lo puede preguntar cualquier miembro (la terminal lo usa para avisar).
+async fn state(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let team: Id = sqlx::query_scalar("SELECT team_id FROM projects WHERE id = ?").bind(project).fetch_optional(&st.db).await?.ok_or_else(AppError::forbidden)?;
+    routes::require(&st, team, user.id, Role::Member).await?;
+    if let Some((t, v)) = STATE_CACHE.lock().unwrap().get(&project) {
+        if t.elapsed() < Duration::from_secs(20) {
+            return Ok(Json(v.clone()));
         }
     }
-    tracing::info!("git: usuario {} ejecutó «{}» en el proyecto {project}", user.id, b.mode);
-    Ok(Json(data))
+    let (agent, dir) = target(&st, project, team).await?;
+    let s = dispatch(agent, json!({ "mode": "status", "dir": dir }), 20).await?;
+    let v = json!({ "is_repo": s["is_repo"], "commits": s["commits"], "connected": s["origin"].as_str().is_some_and(|o| !o.is_empty()) });
+    STATE_CACHE.lock().unwrap().insert(project, (std::time::Instant::now(), v.clone()));
+    Ok(Json(v))
+}
+
+/// Un miembro le pide a los owners que creen el repositorio del proyecto.
+async fn request_repo(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    let team: Id = sqlx::query_scalar("SELECT team_id FROM projects WHERE id = ?").bind(project).fetch_optional(&st.db).await?.ok_or_else(AppError::forbidden)?;
+    routes::require(&st, team, user.id, Role::Member).await?;
+    {
+        let mut m = ASKED.lock().unwrap();
+        if m.get(&(project, user.id)).is_some_and(|t| t.elapsed() < Duration::from_secs(600)) {
+            return Err(AppError::bad("Ya les avisaste hace poco a los owners. Esperá un rato antes de volver a pedirlo."));
+        }
+        m.insert((project, user.id), std::time::Instant::now());
+    }
+    let (me, pname): (String, String) = (
+        sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?,
+        sqlx::query_scalar("SELECT name FROM projects WHERE id = ?").bind(project).fetch_one(&st.db).await?,
+    );
+    let owners: Vec<Id> = sqlx::query_scalar("SELECT user_id FROM team_members WHERE team_id = ? AND role = 'owner'").bind(team).fetch_all(&st.db).await?;
+    for o in &owners {
+        crate::notify::notify(&st, *o, "github", Some(team), None, format!("🙋 {me} pide que se cree el repositorio del proyecto «{pname}». Sin repositorio nadie del equipo puede editar ni enviar su trabajo. Abrí 🖥️ Terminales → ⚙ Conexión → «🐙 Git y GitHub».")).await;
+    }
+    Ok(Json(json!({ "notified": owners.len() })))
 }
 
 async fn agent_pending(user: AuthUser) -> Result<Json<Value>> {

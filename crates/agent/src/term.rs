@@ -355,7 +355,7 @@ async fn session(api: &Arc<Api>, sid: &str, job: &Value) -> anyhow::Result<()> {
                 let hello = match (&view, proj) {
                     (Some(v), _) => format!("echo 'Espacio de {} (solo lectura) en /espacio. Tu espacio es ~'", crate::iso::slug(v)),
                     (None, Some(_)) if work.is_some() => format!("echo 'Estás en tu copia de trabajo de {0} (~/{0}): acá podés crear y editar. El original compartido está en /proyectos/{0} (solo lectura)'", crate::iso::slug(pname)),
-                    (None, Some(_)) => format!("echo 'Proyecto {0}: sus archivos están en /proyectos/{0} (solo lectura). Tu espacio es ~ (escribible)'", crate::iso::slug(pname)),
+                    (None, Some(_)) => format!("echo 'Proyecto {0}: todavía no tiene repositorio git, por eso solo podés mirar sus archivos en /proyectos/{0}. Pedí que lo creen con el botón «Pedir repositorio» (abajo de la terminal). Tu espacio es ~ (escribible)'", crate::iso::slug(pname)),
                     _ => "echo 'Tu espacio es ~ (escribible)'".to_string(),
                 };
                 let sh = crate::iso::person_shell();

@@ -1097,3 +1097,6 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 .gitopt:first-of-type{border-top:0}
 .gitsteps{margin:4px 0;padding-left:18px}
 .gitbox .err{color:#e5484d}
+
+.warn{color:#d29922}
+.gitbar .gb-t.warn{cursor:default;opacity:1}

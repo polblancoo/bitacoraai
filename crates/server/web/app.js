@@ -595,6 +595,20 @@ const createTeam = guard(async () => {
   const t = await api("POST", "/api/teams", { name: f.name });
   S.teams.push(t); await selectTeam(t);
 });
+// ventana con el asistente de git de un proyecto (al crearlo, o desde el aviso «Sin repositorio»)
+function openGitSetup(p) {
+  const close = () => document.getElementById("git-setup")?.remove();
+  const modal = h("div", { class: "overlay", id: "git-setup", onmousedown: (e) => e.target.id === "git-setup" && close() },
+    h("div", { class: "modal wide" }, h("h3", {}, "🐙 Repositorio de «" + p.name + "»", h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: close, title: "Cerrar" }, "✕")),
+      h("small", { class: "hint" }, "El repositorio guarda el historial y permite que cada persona trabaje en su propia rama y la envíe a revisión. Sin él, la carpeta queda de solo lectura para el equipo."),
+      gitBox(p.id),
+      h("div", { class: "actions" }, h("button", { class: "ghost", onclick: close, title: "Podés hacerlo después desde el aviso «Sin repositorio» o desde 🖥️ Terminales → ⚙ Conexión" }, "Más tarde"))));
+  document.body.append(modal);
+}
+const requestRepo = guard(async (pid) => {
+  const r = await api("POST", `/api/projects/${pid}/git/request`);
+  toast(r.notified ? "Listo: les avisé a los owners del equipo" : "No hay owners a quienes avisar", !r.notified);
+});
 const createProject = guard(async () => {
   const f = await form("Nuevo proyecto", [
     { name: "name", label: "Nombre del proyecto", max: 60 },
@@ -604,6 +618,7 @@ const createProject = guard(async () => {
   const p = await api("POST", `/api/teams/${S.team.id}/projects`, { name: f.name, work_dir: f.work_dir, repo: f.repo });
   if (!S.projects.some((x) => x.id === p.id)) S.projects.push(p);
   await selectProject(p);
+  if (can("owner") && !p.repo) openGitSetup(p);
 });
 // ---------- IAs (cuentas bot con token propio) ----------
 const mcpConfig = (token) => JSON.stringify({ mcpServers: { "rust-tui-manager": { command: "tm-mcp", env: { TM_URL: S.server, TM_TOKEN: token } } } }, null, 2);
@@ -2315,6 +2330,9 @@ function appView() {
             try { await api("POST", `/api/projects/${S.project.id}/open-folder`); toast("Carpeta abierta"); }
             catch (e) { copy(S.project.work_dir, "La carpeta está en la máquina del servidor: no se abre desde acá. Ruta copiada"); }
           } }, "📂 Abrir"), " ", h("button", { class: "ghost", title: "Ver los archivos de la carpeta de trabajo (solo lectura), sin importar desde qué máquina entres", onclick: openFiles }, "🗂 Archivos")),
+        !S.project.repo && can("member") && h("span", { class: "warn", title: "Sin repositorio git conectado, la carpeta del proyecto queda de solo lectura para el equipo: nadie puede editar ni enviar su trabajo a revisión" }, "⚠ Sin repositorio ",
+          can("owner") ? h("button", { class: "ghost", onclick: () => openGitSetup(S.project), title: "Abre el asistente: traer un repo de GitHub, crear uno nuevo o dejarlo solo en la máquina" }, "🐙 Crear o conectar")
+            : h("button", { class: "ghost", onclick: () => requestRepo(S.project.id), title: "Les avisa a los owners del equipo para que creen el repositorio" }, "🙋 Pedir que lo creen")),
         S.project.repo && (repoUrl(S.project.repo)
           ? h("a", { class: "repo-link", href: repoUrl(S.project.repo), target: "_blank", rel: "noopener", title: "Abrir el repositorio en una pestaña nueva" }, "🐙 " + S.project.repo.replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/\.git$/, "") + " ↗")
           : h("span", { title: "Repositorio" }, "🔗 " + S.project.repo))),
@@ -3349,6 +3367,7 @@ function gitBox(pid) {
     try {
       const r = await api("POST", `/api/projects/${pid}/git/setup`, { mode, ...extra });
       toast("Listo");
+      if (r.repo && S.project?.id === pid && !S.project.repo) { S.project.repo = r.repo; render(); }
       draw(r);
     } catch (e) { toast(e.message, true); draw(null, e.message); }
   };
@@ -3600,7 +3619,7 @@ function gitBar(pane) {
   if (can("owner") || pane.space) return null;
   const run = (cmd) => { if (pane.ws?.readyState === 1) { pane.ws.send(new TextEncoder().encode(cmd + "\r")); pane.term?.focus(); } else toast("La terminal todavía no está conectada", true); };
   const b = (txt, tip, cmd) => h("button", { class: "ghost", title: tip, onclick: () => run(cmd) }, txt);
-  return h("div", { class: "gitbar" },
+  const bar = h("div", { class: "gitbar" },
     h("span", { class: "gb-t", title: "Atajos para trabajar sin saber comandos. Cada botón escribe el comando en la terminal; usalos con la terminal en el símbolo normal (no dentro de un editor)." }, "🧭 Tu trabajo"),
     b("🔄 Actualizar", "Trae a tu copia las novedades que hizo el resto del equipo.\nEn git: git fetch + git merge --ff-only", "cw actualizar"),
     b("🌿 Empezar trabajo", "Crea tu propia rama para un trabajo nuevo: te pregunta cómo se llama.\nEn git: git switch -c nombre-de-la-rama", "cw rama"),
@@ -3608,6 +3627,13 @@ function gitBar(pane) {
     b("💾 Guardar", "Guarda tus cambios con un mensaje corto (te lo pregunta).\nEn git: git add -A + git commit -m \"mensaje\"", "cw guardar"),
     b("🚀 Enviar a revisión", "Sube tu trabajo y abre el Pull Request para que otra persona lo revise.\nEn git: git push origin tu-rama (y el Pull Request se abre en GitHub)", "cw enviar"),
     b("❓ Ayuda", "Lista de comandos y el orden normal: empezar → editar → guardar → enviar", "cw ayuda"));
+  // si el proyecto todavía no tiene repositorio, los botones no sirven: se ofrece pedirlo
+  api("GET", `/api/projects/${pane.pid}/git/state`).then((s) => {
+    if (s.is_repo) return;
+    bar.replaceChildren(h("span", { class: "gb-t warn" }, "⚠ Este proyecto todavía no tiene repositorio: no se puede editar ni enviar trabajo."),
+      h("button", { title: "Les avisa a los owners del equipo para que creen el repositorio del proyecto", onclick: () => requestRepo(pane.pid) }, "🙋 Pedir repositorio"));
+  }).catch(() => {});
+  return bar;
 }
 // la terminal de una tarea se abre como un panel de «🖥️ Terminales»: sigue viva aunque mires otra tarea, la configuración o lo que sea
 const paneTitle = (t) => {
