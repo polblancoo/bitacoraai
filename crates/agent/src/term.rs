@@ -119,6 +119,39 @@ fn has_herdr() -> bool {
     local.is_some_and(|p| p.is_file()) || std::env::var_os("PATH").is_some_and(|p| std::env::split_paths(&p).any(|d| d.join("herdr").is_file()))
 }
 
+/// Copia de trabajo de una persona: `~/<proyecto>` (clon local del repositorio del proyecto, con su mismo `origin`).
+/// Se crea la primera vez y después se reutiliza tal cual (sus cambios no se tocan). Devuelve el nombre de la carpeta.
+async fn working_copy(project: &std::path::Path, home: &std::path::Path, name: &str) -> Option<String> {
+    let slug = crate::iso::slug(name);
+    let dest = home.join(&slug);
+    if dest.join(".git").exists() {
+        return Some(slug);
+    }
+    if !project.join(".git").exists() || dest.exists() {
+        return None;
+    }
+    let quiet = |c: &mut tokio::process::Command| {
+        c.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    };
+    let mut clone = tokio::process::Command::new("git");
+    clone.args(["clone", "--local"]).arg(project).arg(&dest).current_dir(home);
+    quiet(&mut clone);
+    if !clone.status().await.is_ok_and(|s| s.success()) {
+        return None;
+    }
+    // que `origin` apunte al mismo remoto que el proyecto (GitHub), no a la carpeta local
+    if let Ok(o) = tokio::process::Command::new("git").args(["config", "--get", "remote.origin.url"]).current_dir(project).output().await {
+        let url = String::from_utf8_lossy(&o.stdout).trim().to_string();
+        if !url.is_empty() {
+            let mut set = tokio::process::Command::new("git");
+            set.args(["remote", "set-url", "origin", &url]).current_dir(&dest);
+            quiet(&mut set);
+            let _ = set.status().await;
+        }
+    }
+    Some(slug)
+}
+
 async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
     let (cols, rows) = (job["cols"].as_u64().unwrap_or(80).clamp(10, 500) as u16, job["rows"].as_u64().unwrap_or(24).clamp(2, 200) as u16);
     let dir = PathBuf::from(job["dir"].as_str().unwrap_or(""));
@@ -163,10 +196,16 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                 let tools = crate::iso::person_tools();
                 let pname = job["project"].as_str().unwrap_or("proyecto");
                 let proj = (target.is_none() && dir.is_dir()).then_some((dir.as_path(), pname));
-                let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: proj, other_space: target.as_deref(), tools: &tools });
+                // copia de trabajo propia del proyecto dentro del espacio de la persona (escribible): ahí edita, crea archivos y hace commits
+                let work = match proj {
+                    Some((d, n)) if view.is_none() => working_copy(d, &home, n).await,
+                    _ => None,
+                };
+                let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: proj, other_space: target.as_deref(), tools: &tools, work: work.as_deref() });
                 // aviso de dónde está parada la persona (el nombre sale de slug(): sin comillas ni símbolos)
                 let hello = match (&view, proj) {
                     (Some(v), _) => format!("echo 'Espacio de {} (solo lectura) en /espacio. Tu espacio es ~'", crate::iso::slug(v)),
+                    (None, Some(_)) if work.is_some() => format!("echo 'Estás en tu copia de trabajo de {0} (~/{0}): acá podés crear y editar. El original compartido está en /proyectos/{0} (solo lectura)'", crate::iso::slug(pname)),
                     (None, Some(_)) => format!("echo 'Proyecto {0}: sus archivos están en /proyectos/{0} (solo lectura). Tu espacio es ~ (escribible)'", crate::iso::slug(pname)),
                     _ => "echo 'Tu espacio es ~ (escribible)'".to_string(),
                 };
@@ -361,7 +400,7 @@ pub async fn ssh_session(who: &str, level: &str, root: &str) -> anyhow::Result<(
             anyhow::bail!("esta entrada necesita `bwrap` en el servidor y no está disponible");
         }
         let tools = crate::iso::person_tools();
-        let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: None, other_space: None, tools: &tools });
+        let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: None, other_space: None, tools: &tools, work: None });
         a.push("--".into());
         a.push(crate::iso::person_shell().into());
         std::process::Command::new("bwrap").args(a).env_clear().env("PATH", std::env::var("PATH").unwrap_or_default()).env("TERM", term).exec()

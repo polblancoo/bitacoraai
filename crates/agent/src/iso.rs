@@ -370,6 +370,8 @@ pub struct PersonPlan<'a> {
     pub other_space: Option<&'a Path>,
     /// archivos sueltos que se ofrecen en `/tools` (por ejemplo `herdr`)
     pub tools: &'a [PathBuf],
+    /// copia de trabajo (carpeta dentro del espacio personal): si existe, la shell arranca ahí
+    pub work: Option<&'a str>,
 }
 
 pub const PERSON_HOME: &str = "/home/crewhelm";
@@ -403,7 +405,7 @@ pub fn person_args(p: &PersonPlan) -> Vec<String> {
             a.extend(["--ro-bind".into(), s(t), format!("/tools/{}", n.to_string_lossy())]);
         }
     }
-    let chdir = if p.other_space.is_some() { "/espacio".to_string() } else if let Some((_, at)) = &proj_at { at.clone() } else { PERSON_HOME.to_string() };
+    let chdir = if p.other_space.is_some() { "/espacio".to_string() } else if let Some(w) = p.work { format!("{PERSON_HOME}/{w}") } else if let Some((_, at)) = &proj_at { at.clone() } else { PERSON_HOME.to_string() };
     a.extend(["--setenv".into(), "HOME".into(), PERSON_HOME.into(), "--setenv".into(), "PATH".into(), PERSON_PATH.into(), "--chdir".into(), chdir]);
     // herdr abre una sesión por proyecto (la shell lo usa para arrancar siempre en la carpeta del proyecto)
     if let Some((_, name)) = p.project {
@@ -668,7 +670,7 @@ mod tests {
         std::fs::create_dir_all(&home).unwrap();
         std::fs::create_dir_all(&proj).unwrap();
         std::fs::write(proj.join("f.txt"), "hola").unwrap();
-        let mut a = person_args(&PersonPlan { home: &home, project: Some((&proj, "Mi Proyecto")), other_space: None, tools: &[] });
+        let mut a = person_args(&PersonPlan { home: &home, project: Some((&proj, "Mi Proyecto")), other_space: None, tools: &[], work: None });
         let script = "echo P=$CREWHELM_PROJECT; ls -A /home; echo --; pwd; echo --; cat /proyectos/mi-proyecto/f.txt; touch /proyectos/mi-proyecto/x 2>&1 | head -1; touch ~/mio && echo escribe; ls /root /home/pablo 2>&1 | head -2";
         a.extend(["--".into(), "/bin/bash".into(), "-c".into(), script.into()]);
         let out = std::process::Command::new("bwrap").args(a).env_clear().output().unwrap();
@@ -676,6 +678,14 @@ mod tests {
         assert!(t.starts_with("P=mi-proyecto\ncrewhelm\n--\n/proyectos/mi-proyecto\n--\nhola"), "salida: {t}");
         assert!(t.contains("escribe") && !t.contains("pablo\n") && !proj.join("x").exists(), "salida: {t}");
         assert!(home.join("mio").exists());
+        // con copia de trabajo: la shell arranca en ~/<proyecto> y ahí se puede crear
+        std::fs::create_dir_all(home.join("mi-proyecto")).unwrap();
+        let mut a = person_args(&PersonPlan { home: &home, project: Some((&proj, "Mi Proyecto")), other_space: None, tools: &[], work: Some("mi-proyecto") });
+        a.extend(["--".into(), "/bin/bash".into(), "-c".into(), "pwd; mkdir nueva && touch nueva/a.txt && echo ok".into()]);
+        let out = std::process::Command::new("bwrap").args(a).env_clear().output().unwrap();
+        let t = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+        assert!(t.starts_with("/home/crewhelm/mi-proyecto\nok"), "salida: {t}");
+        assert!(home.join("mi-proyecto/nueva/a.txt").exists());
         let _ = std::fs::remove_dir_all(&d);
     }
 
