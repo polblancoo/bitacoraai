@@ -3546,11 +3546,11 @@ function gitBar(pane) {
   const b = (txt, tip, cmd) => h("button", { class: "ghost", title: tip, onclick: () => run(cmd) }, txt);
   return h("div", { class: "gitbar" },
     h("span", { class: "gb-t", title: "Atajos para trabajar sin saber comandos. Cada botón escribe el comando en la terminal; usalos con la terminal en el símbolo normal (no dentro de un editor)." }, "🧭 Tu trabajo"),
-    b("🔄 Actualizar", "Trae a tu copia las novedades que hizo el resto del equipo", "cw actualizar"),
-    b("🌿 Empezar trabajo", "Crea tu propia rama para un trabajo nuevo: te pregunta cómo se llama", "cw rama"),
-    b("📋 Qué cambié", "Muestra en qué rama estás y qué archivos tocaste", "cw estado"),
-    b("💾 Guardar", "Guarda tus cambios con un mensaje corto (te lo pregunta)", "cw guardar"),
-    b("🚀 Enviar a revisión", "Sube tu trabajo y abre el Pull Request para que otra persona lo revise", "cw enviar"),
+    b("🔄 Actualizar", "Trae a tu copia las novedades que hizo el resto del equipo.\nEn git: git fetch + git merge --ff-only", "cw actualizar"),
+    b("🌿 Empezar trabajo", "Crea tu propia rama para un trabajo nuevo: te pregunta cómo se llama.\nEn git: git switch -c nombre-de-la-rama", "cw rama"),
+    b("📋 Qué cambié", "Muestra en qué rama estás y qué archivos tocaste.\nEn git: git status", "cw estado"),
+    b("💾 Guardar", "Guarda tus cambios con un mensaje corto (te lo pregunta).\nEn git: git add -A + git commit -m \"mensaje\"", "cw guardar"),
+    b("🚀 Enviar a revisión", "Sube tu trabajo y abre el Pull Request para que otra persona lo revise.\nEn git: git push origin tu-rama (y el Pull Request se abre en GitHub)", "cw enviar"),
     b("❓ Ayuda", "Lista de comandos y el orden normal: empezar → editar → guardar → enviar", "cw ayuda"));
 }
 // la terminal de una tarea se abre como un panel de «🖥️ Terminales»: sigue viva aunque mires otra tarea, la configuración o lo que sea
