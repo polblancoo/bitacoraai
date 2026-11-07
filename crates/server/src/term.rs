@@ -57,7 +57,7 @@ static PENDING: LazyLock<Mutex<HashMap<String, Pending>>> = LazyLock::new(Defaul
 static AGENTS: LazyLock<Mutex<HashMap<Id, (Instant, bool, bool)>>> = LazyLock::new(Default::default);
 const AGENT_ONLINE: Duration = Duration::from_secs(15);
 
-fn agent_online(id: Id) -> bool {
+pub(crate) fn agent_online(id: Id) -> bool {
     AGENTS.lock().unwrap().get(&id).is_some_and(|t| t.0.elapsed() < AGENT_ONLINE)
 }
 const IDLE: Duration = Duration::from_secs(30 * 60);

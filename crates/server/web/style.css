@@ -1090,3 +1090,10 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 .gitbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px;border-top:1px solid var(--border,#2a2f3f);background:rgba(120,140,255,.06)}
 .gitbar .gb-t{font-size:.8rem;opacity:.8;margin-right:4px;cursor:help}
 .gitbar button{font-size:.82rem;padding:4px 9px}
+
+.gitbox{margin-top:10px;border:1px solid var(--border,#2a2f3f);border-radius:8px;padding:8px 12px}
+.gitbox legend{font-weight:600;padding:0 6px;cursor:help}
+.gitopt{display:flex;flex-direction:column;gap:6px;padding:8px 0;border-top:1px dashed var(--border,#2a2f3f)}
+.gitopt:first-of-type{border-top:0}
+.gitsteps{margin:4px 0;padding-left:18px}
+.gitbox .err{color:#e5484d}

@@ -12,6 +12,7 @@ use std::{
 };
 use tokio::{process::Command, sync::Semaphore};
 
+mod gitsetup;
 mod iso;
 mod term;
 
@@ -697,6 +698,7 @@ async fn main() -> Result<()> {
     // la terminal y la entrada por SSH se activan desde la app (Conexión del proyecto); las variables TM_AGENT_TERMINAL y TM_SSH_KEYS siguen valiendo
     if !once {
         tokio::spawn(term::serve(api.clone()));
+        tokio::spawn(gitsetup::serve(api.clone()));
         tokio::spawn(term::sync_keys(api.clone()));
     }
     let sem = Arc::new(Semaphore::new(max));

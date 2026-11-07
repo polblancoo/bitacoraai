@@ -20,7 +20,7 @@ use tm_core::Id;
 pub struct Github {
     client_id: String,
     scope: String,
-    base: String,
+    pub(crate) base: String,
     pub(crate) api: String,
     pub(crate) http: reqwest::Client,
 }

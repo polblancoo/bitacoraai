@@ -3339,6 +3339,62 @@ function peopleBox(pid) {
   return box;
 }
 
+// asistente de git del proyecto: traer un repo de GitHub, crear uno nuevo o dejarlo solo en la máquina (lo hace el agente de esa máquina)
+function gitBox(pid) {
+  const box = h("fieldset", { class: "gitbox" }, h("legend", { title: "Deja la carpeta del proyecto lista para trabajar en equipo: repositorio git, conexión con GitHub y clave para subir cambios" }, "🐙 Git y GitHub"));
+  const body = h("div", {}); box.append(body);
+  const repoOf = (url) => (String(url || "").match(/[:/]([\w.-]+\/[\w.-]+?)(?:\.git)?$/) || [])[1] || "";
+  const run = async (mode, extra, label) => {
+    body.replaceChildren(h("p", { class: "hint" }, "⏳ " + label + " (puede tardar hasta un minuto)…"));
+    try {
+      const r = await api("POST", `/api/projects/${pid}/git/setup`, { mode, ...extra });
+      toast("Listo");
+      draw(r);
+    } catch (e) { toast(e.message, true); draw(null, e.message); }
+  };
+  const draw = (st, err) => {
+    const parts = [];
+    if (err) parts.push(h("p", { class: "err" }, "⚠ " + err));
+    if (st?.steps?.length) parts.push(h("ul", { class: "gitsteps" }, st.steps.map((x) => h("li", {}, "✔ " + x))));
+    if (!st) { parts.push(h("button", { class: "ghost", onclick: load }, "↻ Revisar de nuevo")); return body.replaceChildren(...parts); }
+    const repoIn = h("input", { placeholder: "usuario/repositorio", title: "Por ejemplo polblancoo/crewhelm" });
+    const nameIn = h("input", { placeholder: "nombre del repositorio nuevo", value: "", title: "Letras, números, guiones y puntos" });
+    const priv = h("input", { type: "checkbox", checked: true });
+    const newBlock = h("div", { class: "gitopt" }, h("b", {}, "✨ Crear un repositorio nuevo en GitHub"),
+      h("small", { class: "hint" }, "Sube lo que haya en la carpeta (menos claves y carpetas pesadas, que se dejan afuera con un .gitignore)."),
+      nameIn, h("label", { class: "chk", title: "Privado: solo lo ven las personas que invites en GitHub. Público: lo puede ver cualquiera (escribir siempre requiere permiso)." }, priv, " Privado"),
+      h("button", { title: "Crea el repositorio en tu cuenta de GitHub, sube la carpeta y deja lista la clave para subir cambios", onclick: () => nameIn.value.trim() ? run("new", { name: nameIn.value.trim(), private: priv.checked }, "Creando el repositorio") : toast("Escribí un nombre", true) }, "✨ Crear y subir"));
+    if (st.is_repo && st.origin) {
+      const r = repoOf(st.origin);
+      parts.push(h("p", {}, "✔ Conectado a ", h("b", {}, r || st.origin), st.branch ? " · rama " + st.branch : "", st.dirty ? " · hay cambios sin guardar" : ""));
+      parts.push(h("button", { class: "ghost", title: "Vuelve a registrar la clave con la que este servidor sube cambios a GitHub (si dejó de funcionar)", onclick: () => run("attach", { repo: r }, "Renovando la clave de subida") }, "🔑 Renovar la clave de subida"));
+    } else if (st.is_repo) {
+      parts.push(h("p", {}, "La carpeta ya es un repositorio git, pero no está conectada con GitHub."));
+      parts.push(h("div", { class: "gitopt" }, h("b", {}, "🔗 Conectar con un repositorio que ya existe"), repoIn,
+        h("button", { title: "Registra una clave para subir cambios y apunta la carpeta a ese repositorio", onclick: () => repoIn.value.trim() ? run("attach", { repo: repoIn.value.trim() }, "Conectando con GitHub") : toast("Escribí usuario/repositorio", true) }, "🔗 Conectar")), newBlock);
+    } else {
+      parts.push(h("p", {}, st.exists ? (st.empty ? "La carpeta del proyecto está vacía." : "La carpeta del proyecto tiene archivos pero todavía no es un repositorio.") : "La carpeta del proyecto todavía no existe."));
+      if (!st.exists || st.empty) parts.push(h("div", { class: "gitopt" }, h("b", {}, "⬇ Traer un repositorio de GitHub"), repoIn,
+        h("button", { title: "Descarga el repositorio a la carpeta del proyecto y deja lista la clave para subir cambios", onclick: () => repoIn.value.trim() ? run("clone", { repo: repoIn.value.trim() }, "Trayendo el repositorio") : toast("Escribí usuario/repositorio", true) }, "⬇ Traer")));
+      parts.push(newBlock);
+      parts.push(h("div", { class: "gitopt" }, h("b", {}, "💻 Solo en esta máquina"), h("small", { class: "hint" }, "Crea el repositorio git sin GitHub. Se puede conectar más tarde."),
+        h("button", { class: "ghost", title: "git init + primer commit, sin subir nada a internet", onclick: () => run("local", {}, "Creando el repositorio") }, "💻 Crear solo local")));
+    }
+    body.replaceChildren(...parts);
+  };
+  const load = async () => {
+    body.replaceChildren(h("p", { class: "hint" }, "⏳ Mirando la carpeta del proyecto…"));
+    try {
+      const gh = await api("GET", "/api/github").catch(() => ({}));
+      if (!gh.available) return body.replaceChildren(h("p", { class: "hint" }, "GitHub no está configurado en este servidor (lo activa quien administra el servidor)."));
+      if (!gh.linked) return body.replaceChildren(h("p", { class: "hint" }, "Primero conectá tu cuenta de GitHub en Configuración → Avisos y conexiones."));
+      draw(await api("POST", `/api/projects/${pid}/git/setup`, { mode: "status" }));
+    } catch (e) { body.replaceChildren(h("p", { class: "hint" }, "No pude revisar la carpeta: " + e.message)); }
+  };
+  load();
+  return box;
+}
+
 async function openTerminal(task) {
   if (!window.Terminal) { await loadScript("xterm.js"); await loadScript("xterm-fit.js"); }
   const pid = task.project_id;
@@ -3350,7 +3406,7 @@ async function openTerminal(task) {
   const agentSel = h("select", {}, agents.length ? agents.map((a) => h("option", { value: a.id, selected: a.id === cfg.agent_id }, `🤖 ${a.name}${a.model ? " · " + a.model : ""} — ${a.online ? "🟢 conectado" : "⚪ sin conectar"}`)) : h("option", { value: "" }, "(no hay IAs en este equipo)"));
   const agentBox = h("div", {}, h("label", {}, "Agente de la máquina", agentSel),
     h("small", { class: "hint" }, "Alcanza con que el agente de esa IA esté corriendo en la máquina del proyecto: se conecta solo hacia el servidor, sin abrir puertos, copiar claves ni cargar IPs. Funciona también detrás de NAT y en Windows."),
-    can("owner") && peopleBox(pid));
+    can("owner") && peopleBox(pid), can("owner") && gitBox(pid));
   const f = {
     host: h("input", { value: cfg.host, placeholder: "máquina (IP o nombre)" }),
     port: h("input", { type: "number", value: cfg.port, placeholder: "22" }),
