@@ -149,6 +149,9 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                 c.env("HOME", &home);
                 c.env("CARGO_HOME", real_home.join(".cargo"));
                 c.env("RUSTUP_HOME", real_home.join(".rustup"));
+                if let Some(n) = job["project"].as_str().filter(|n| !n.is_empty()) {
+                    c.env("CREWHELM_PROJECT", crate::iso::slug(n));
+                }
                 log(&format!("terminal de {who} (owner): HOME = {}", home.display()));
                 c
             } else {

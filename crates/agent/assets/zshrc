@@ -1,4 +1,4 @@
-# crewhelm-default v1
+# crewhelm-default v2
 # Configuración por defecto de CrewHelm. Para personalizarla, borrá la primera línea (así CrewHelm ya no la reemplaza).
 
 export LANG="${LANG:-C.UTF-8}"
@@ -46,6 +46,11 @@ alias ..='cd ..' ...='cd ../..' ....='cd ../../..'
 alias gs='git status -sb' gd='git diff' gl='git log --oneline --graph --decorate -n 20'
 alias h='history 1' c='clear'
 alias git='noglob git'
+
+# herdr: una sesión por proyecto, así siempre abre en la carpeta del proyecto (y no en lo último que se usó)
+if [ -n "$CREWHELM_PROJECT" ]; then
+  herdr() { if [ $# -eq 0 ]; then command herdr --session "$CREWHELM_PROJECT"; else command herdr "$@"; fi; }
+fi
 
 # búsqueda con fzf (Ctrl+R historial, Ctrl+T archivos, Alt+C carpetas), si está instalado
 for f in /usr/share/doc/fzf/examples/key-bindings.zsh /usr/share/doc/fzf/examples/completion.zsh; do [ -r "$f" ] && source "$f"; done
