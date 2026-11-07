@@ -426,9 +426,73 @@ pub fn person_args(p: &PersonPlan) -> Vec<String> {
     a
 }
 
-/// Límite de disco de cada espacio personal, en MB (`TM_PERSON_QUOTA_MB`; 0 = sin límite). Por defecto 5 GB.
+/// Límites de las terminales de las personas, que fija el administrador en la app (0 = sin límite).
+#[derive(Clone, Copy)]
+pub struct Limits {
+    pub disk_mb: u64,
+    pub mem_mb: u64,
+    pub cpu_pct: u64,
+    pub tasks: u64,
+}
+
+static LIMITS: std::sync::Mutex<Option<Limits>> = std::sync::Mutex::new(None);
+
+fn env_num(k: &str, def: u64) -> u64 {
+    std::env::var(k).ok().and_then(|v| v.trim().parse().ok()).unwrap_or(def)
+}
+
+/// Límites vigentes: lo que dice la app; mientras no llegue, las variables `TM_PERSON_QUOTA_MB`, `TM_PERSON_MEM_MB`,
+/// `TM_PERSON_CPU_PCT`, `TM_PERSON_TASKS`, y si no están, 5 GB de disco, 4 GB de memoria, 2 CPU y 1024 procesos.
+pub fn limits() -> Limits {
+    LIMITS.lock().unwrap().unwrap_or_else(|| Limits { disk_mb: env_num("TM_PERSON_QUOTA_MB", 5120), mem_mb: env_num("TM_PERSON_MEM_MB", 4096), cpu_pct: env_num("TM_PERSON_CPU_PCT", 200), tasks: env_num("TM_PERSON_TASKS", 1024) })
+}
+
+pub fn set_limits(v: &serde_json::Value) {
+    let g = |k: &str, d: u64| v[k].as_u64().unwrap_or(d);
+    let d = limits();
+    *LIMITS.lock().unwrap() = Some(Limits { disk_mb: g("disk_mb", d.disk_mb), mem_mb: g("mem_mb", d.mem_mb), cpu_pct: g("cpu_pct", d.cpu_pct), tasks: g("tasks", d.tasks) });
+}
+
 pub fn quota_mb() -> u64 {
-    std::env::var("TM_PERSON_QUOTA_MB").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(5120)
+    limits().disk_mb
+}
+
+/// ¿Se puede poner un proceso en un grupo de control propio (systemd-run --user --scope)? Se prueba una vez.
+fn scope_ok() -> bool {
+    static OK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *OK.get_or_init(|| std::process::Command::new("systemd-run").args(["--user", "--scope", "--quiet", "-p", "TasksMax=100", "--", "true"]).output().map(|o| o.status.success()).unwrap_or(false))
+}
+
+/// Pone el comando de la cápsula dentro de un «scope» de systemd con tope de memoria, CPU y procesos (cgroup v2).
+/// Devuelve (programa, argumentos, ¿hay que pasarle el entorno de systemd del usuario?). Sin systemd o sin límites, sale tal cual.
+pub fn with_limits(prog: &str, args: Vec<String>) -> (String, Vec<String>, bool) {
+    let l = limits();
+    if (l.mem_mb == 0 && l.cpu_pct == 0 && l.tasks == 0) || !scope_ok() {
+        return (prog.to_string(), args, false);
+    }
+    let mut a: Vec<String> = vec!["--user".into(), "--scope".into(), "--quiet".into()];
+    let mut p = |s: String| a.extend(["-p".to_string(), s]);
+    if l.mem_mb > 0 {
+        p(format!("MemoryMax={}M", l.mem_mb));
+        p("MemorySwapMax=0".into());
+        // si un programa pasa el tope solo se corta ese programa, no toda la terminal de la persona
+        p("OOMPolicy=continue".into());
+    }
+    if l.cpu_pct > 0 {
+        p(format!("CPUQuota={}%", l.cpu_pct));
+    }
+    if l.tasks > 0 {
+        p(format!("TasksMax={}", l.tasks));
+    }
+    a.push("--".into());
+    a.push(prog.to_string());
+    a.extend(args);
+    ("systemd-run".to_string(), a, true)
+}
+
+/// Variables que necesita `systemd-run --user` cuando el entorno se limpia.
+pub fn systemd_env() -> Vec<(&'static str, String)> {
+    ["XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"].into_iter().filter_map(|k| std::env::var(k).ok().map(|v| (k, v))).collect()
 }
 
 /// Bytes que ocupa una carpeta (bloques reales en disco; no sigue enlaces simbólicos y cuenta una sola vez los archivos con enlace duro,

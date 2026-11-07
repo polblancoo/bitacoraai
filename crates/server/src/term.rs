@@ -608,7 +608,7 @@ async fn agent_term_config(State(st): State<AppState>, user: crate::auth::AuthUs
     }
     let used: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ssh_targets WHERE agent_id = ?").bind(user.id).fetch_one(&st.db).await?;
     let (people, ssh) = (flag(&st, "people", user.id).await, flag(&st, "ssh", user.id).await);
-    Ok(Json(json!({ "terminal": used > 0, "people": people, "ssh": people && ssh })))
+    Ok(Json(json!({ "terminal": used > 0, "people": people, "ssh": people && ssh, "limits": crate::sysops::limits_now(&st.db).await })))
 }
 
 // ---------- claves SSH de las personas (entrada por SSH al usuario de servicio, con su espacio personal) ----------

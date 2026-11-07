@@ -30,6 +30,7 @@ Variables de entorno:
   TM_AGENT_TERMINAL=1  habilita la terminal desde la web: un owner abre un shell en esta máquina (carpeta del proyecto)
   TM_SSH_KEYS=1        con TM_WORKSPACE: las claves SSH que cada persona carga en su perfil entran a esta cuenta, cada una a su espacio (miembros en sandbox)
   TM_PERSON_QUOTA_MB   límite de disco del espacio de cada persona, en MB (por defecto 5120; 0 = sin límite): lleno no abre la terminal
+  TM_PERSON_MEM_MB / TM_PERSON_CPU_PCT / TM_PERSON_TASKS   tope de memoria (MB), CPU (100 = un núcleo) y procesos de cada terminal de persona; el administrador los cambia en la app (Configuración → Roles y límites)
   TM_AGENT_ONCE=1   procesa lo pendiente y sale
 
 El comando corre en la carpeta de trabajo del proyecto con TM_TASK_PROMPT, TM_TASK_ID, TM_TASK_TITLE,

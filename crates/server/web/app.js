@@ -1339,6 +1339,31 @@ function rolesPanel() {
   return box;
 }
 
+// límites de las terminales de las personas (los aplica el agente de cada máquina)
+function limitsPanel() {
+  const box = h("div", { class: "cfg-item" });
+  box.dataset.key = "srvlimits";
+  const F = [
+    ["disk_mb", "💾 Disco por persona (MB)", "Cuánto puede ocupar el espacio personal de cada miembro. Lleno: no abre la terminal; al pasar el 125 % se cierra.  ·  0 = sin límite"],
+    ["mem_mb", "🧠 Memoria por persona (MB)", "Tope de memoria RAM de todo lo que corre en la terminal de una persona (sin swap). Si lo pasa, el sistema corta el programa que más usa.  ·  0 = sin límite"],
+    ["cpu_pct", "⚙ CPU por persona (%)", "100 % es un núcleo entero. 200 % = hasta dos núcleos a la vez, aunque el equipo tenga más.  ·  0 = sin límite"],
+    ["tasks", "🧵 Procesos por persona", "Cantidad máxima de procesos e hilos a la vez (frena los que se multiplican sin control).  ·  0 = sin límite"],
+  ];
+  const load = async () => {
+    const v = await api("GET", "/api/admin/limits");
+    const ins = Object.fromEntries(F.map(([k]) => [k, h("input", { type: "number", min: 0, value: v[k], style: "width:110px" })]));
+    const save = guard(async () => {
+      const body = {}; for (const [k] of F) body[k] = Math.round(+ins[k].value);
+      await api("PUT", "/api/admin/limits", body); toast("Límites guardados: se aplican a las terminales que se abran desde ahora"); load();
+    });
+    box.replaceChildren(h("p", { class: "hint" }, "Límites de las terminales de los miembros (los owners no tienen límite). Los aplica el agente de cada máquina; las terminales ya abiertas siguen con los anteriores hasta cerrarse."),
+      ...F.map(([k, l, t]) => h("div", { class: "cfg-line", title: t }, h("span", { class: "grow" }, l), ins[k])),
+      h("div", { class: "row" }, h("button", { class: "primary", onclick: save }, "Guardar límites")));
+  };
+  load().catch((e) => box.replaceChildren(h("p", { class: "warn" }, e.message)));
+  return box;
+}
+
 // Comunicación: una sola entrada con dos solapas, chat y videollamada
 function commDraw() {
   if (!CHAT.el) return;
@@ -3083,7 +3108,7 @@ const openSettings = guard(async () => {
           }) }, "Guardar servidor y reiniciar sesión"))),
       can("admin") && S.team && sec("Integraciones", line(["Videollamada y otras herramientas del equipo", "integrations"], h("button", { onclick: go(integAdmin) }, "Administrar"))),
       ["cto", "admin"].includes(S.me?.server_role) && sec("Procesos", procPanel()),
-      S.me?.server_role === "admin" && sec("Roles del servidor", rolesPanel()),
+      S.me?.server_role === "admin" && sec("Roles y límites del servidor", rolesPanel(), limitsPanel()),
       sec("Ayuda", line(["Manual con buscador e índice por temas", "manual"], h("button", { onclick: go(() => openManual()) }, "Abrir el manual")),
         line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos")),
         line(["Guía de inicio paso a paso", "guide"], h("button", { onclick: go(openWizard) }, "🧭 Guía de inicio"))),
@@ -3096,7 +3121,7 @@ const openSettings = guard(async () => {
     ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["integraciones", "🔌 Integraciones", ["integrations"]],
     ["procesos", "🖥 Procesos", ["procesos"]],
-    ["srvroles", "🛡 Roles del servidor", ["srvroles"]],
+    ["srvroles", "🛡 Roles y límites", ["srvroles", "srvlimits"]],
     ["licencia", "🏢 Licencia", ["license"]],
     ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "bars", "herdr", "server", "manual", "shortcuts", "guide"]],
   ];

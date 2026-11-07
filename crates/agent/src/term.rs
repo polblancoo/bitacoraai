@@ -72,6 +72,9 @@ static PEOPLE: AtomicBool = AtomicBool::new(false);
 
 async fn fetch_config(api: &Api) -> Option<Config> {
     let v = api.get("/api/agent/term/config").await.ok()?;
+    if v["limits"].is_object() {
+        crate::iso::set_limits(&v["limits"]);
+    }
     Some(Config { terminal: v["terminal"].as_bool()?, people: v["people"].as_bool().unwrap_or(false), ssh: v["ssh"].as_bool().unwrap_or(false) })
 }
 
@@ -377,10 +380,16 @@ async fn session(api: &Arc<Api>, sid: &str, job: &Value) -> anyhow::Result<()> {
                 let sh = crate::iso::person_shell();
                 let upd = if work.is_some() { "cw actualizar --auto; " } else { "" };
                 a.extend(["--".into(), "/bin/bash".into(), "-c".into(), format!("{hello}; {quota_note}{upd}exec {sh}")]);
-                let mut c = CommandBuilder::new("bwrap");
+                let (prog, a, scoped) = crate::iso::with_limits("bwrap", a);
+                let mut c = CommandBuilder::new(prog);
                 c.args(a);
                 c.env_clear();
                 c.env("PATH", std::env::var("PATH").unwrap_or_default());
+                if scoped {
+                    for (k, v) in crate::iso::systemd_env() {
+                        c.env(k, v);
+                    }
+                }
                 log(&format!("terminal de {who} ({}) en sandbox: HOME = {}", if view.is_some() { "owner, mirando otro espacio en solo lectura" } else { "miembro" }, home.display()));
                 c
             }
@@ -587,7 +596,13 @@ pub async fn ssh_session(who: &str, level: &str, root: &str) -> anyhow::Result<(
         let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: None, other_space: None, tools: &tools, work: None, who: "" });
         a.push("--".into());
         a.push(crate::iso::person_shell().into());
-        std::process::Command::new("bwrap").args(a).env_clear().env("PATH", std::env::var("PATH").unwrap_or_default()).env("TERM", term).exec()
+        let (prog, a, scoped) = crate::iso::with_limits("bwrap", a);
+        let mut c = std::process::Command::new(prog);
+        c.args(a).env_clear().env("PATH", std::env::var("PATH").unwrap_or_default()).env("TERM", term);
+        if scoped {
+            c.envs(crate::iso::systemd_env());
+        }
+        c.exec()
     };
     Err(err.into())
 }

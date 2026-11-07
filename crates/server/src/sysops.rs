@@ -11,6 +11,7 @@ use tm_core::Id;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/admin/procesos", get(procesos))
+        .route("/api/admin/limits", get(limits_get).put(limits_put))
         .route("/api/admin/users", get(users))
         .route("/api/admin/users/{id}/role", put(set_role))
 }
@@ -140,4 +141,50 @@ async fn procesos(State(st): State<AppState>, user: AuthUser) -> Result<Json<Val
         },
         "docker": docker,
     })))
+}
+
+
+// ---- límites de las terminales de las personas (disco, memoria, CPU, procesos): los aplica el agente de cada máquina ----
+
+const LIMIT_KEYS: [(&str, &str, u64, u64); 4] = [
+    // (clave en la app, nombre en el JSON, valor por defecto, máximo)
+    ("lim_disk_mb", "disk_mb", 5120, 10_000_000),
+    ("lim_mem_mb", "mem_mb", 4096, 4_000_000),
+    ("lim_cpu_pct", "cpu_pct", 200, 100_000),
+    ("lim_tasks", "tasks", 1024, 1_000_000),
+];
+
+/// Límites vigentes (0 = sin límite). Los usa también el agente, que los pide en `/api/agent/term/config`.
+pub async fn limits_now(db: &sqlx::SqlitePool) -> Value {
+    let mut o = serde_json::Map::new();
+    for (k, name, def, _) in LIMIT_KEYS {
+        let v = crate::license::meta_get(db, k).await.and_then(|v| v.parse::<u64>().ok()).unwrap_or(def);
+        o.insert(name.into(), json!(v));
+    }
+    Value::Object(o)
+}
+
+async fn limits_get(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+    need(&st, &user, false).await?;
+    Ok(Json(limits_now(&st.db).await))
+}
+
+async fn limits_put(State(st): State<AppState>, user: AuthUser, Json(b): Json<Value>) -> Result<Json<Value>> {
+    need(&st, &user, true).await?;
+    for (k, name, _, max) in LIMIT_KEYS {
+        if let Some(v) = b.get(name) {
+            let n = v.as_u64().ok_or_else(|| AppError::bad("los límites son números enteros (0 = sin límite)"))?;
+            if n > max {
+                return Err(AppError::bad("valor demasiado grande"));
+            }
+            // un mínimo razonable para que la terminal siga siendo usable
+            let min = match name { "mem_mb" => 256, "cpu_pct" => 25, "tasks" => 64, "disk_mb" => 50, _ => 0 };
+            if n != 0 && n < min {
+                return Err(AppError::bad(match name { "mem_mb" => "memoria: el mínimo es 256 MB (o 0 para no limitar)", "cpu_pct" => "CPU: el mínimo es 25 % (o 0 para no limitar)", "tasks" => "procesos: el mínimo es 64 (o 0 para no limitar)", _ => "disco: el mínimo es 50 MB (o 0 para no limitar)" }));
+            }
+            crate::license::meta_set(&st.db, k, &n.to_string()).await?;
+        }
+    }
+    tracing::info!("límites de terminal cambiados por el usuario {}", user.id);
+    Ok(Json(limits_now(&st.db).await))
 }
