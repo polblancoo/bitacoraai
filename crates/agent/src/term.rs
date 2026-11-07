@@ -146,7 +146,7 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                     (None, Some(_)) => format!("echo 'Proyecto {0}: sus archivos están en /proyectos/{0} (solo lectura). Tu espacio es ~ (escribible)'", crate::iso::slug(pname)),
                     _ => "echo 'Tu espacio es ~ (escribible)'".to_string(),
                 };
-                a.extend(["--".into(), "/bin/bash".into(), "-lc".into(), format!("{hello}; exec /bin/bash -l")]);
+                a.extend(["--".into(), "/bin/bash".into(), "-c".into(), format!("{hello}; exec /bin/bash")]);
                 let mut c = CommandBuilder::new("bwrap");
                 c.args(a);
                 c.env_clear();
@@ -337,7 +337,7 @@ pub async fn ssh_session(who: &str, level: &str, root: &str) -> anyhow::Result<(
         }
         let tools = crate::iso::person_tools();
         let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: None, other_space: None, tools: &tools });
-        a.extend(["--".into(), "/bin/bash".into(), "-l".into()]);
+        a.extend(["--".into(), "/bin/bash".into()]);
         std::process::Command::new("bwrap").args(a).env_clear().env("PATH", std::env::var("PATH").unwrap_or_default()).env("TERM", term).exec()
     };
     Err(err.into())
