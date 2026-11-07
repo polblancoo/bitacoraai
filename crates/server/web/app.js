@@ -2571,7 +2571,18 @@ const githubProject = guard(async () => {
   const p = S.project; if (!p) return;
   const info = await api("GET", `/api/projects/${p.id}/github`);
   if (!info.available) { toast("El servidor no tiene GitHub configurado (TM_GITHUB_CLIENT_ID)", true); return; }
-  if (!info.linked) { toast("Primero conectá tu cuenta en Configuración → Avisos y conexiones → GitHub", true); return; }
+  if (!info.linked || (!p.repo && can("owner"))) {
+    const shut = () => document.getElementById("gh-intro")?.remove();
+    document.body.append(h("div", { class: "overlay", id: "gh-intro", onmousedown: (e) => e.target.id === "gh-intro" && shut() },
+      h("div", { class: "modal" }, h("h3", {}, "🐙 GitHub de «" + p.name + "»"),
+        h("p", { class: "hint" }, "Acá hay dos cosas distintas:"),
+        h("p", {}, h("b", {}, "1. El repositorio del proyecto"), p.repo ? ": " + p.repo + " ✓" : ": todavía no tiene. Es lo que permite que el equipo trabaje en ramas y mande su trabajo a revisión, sin que cada persona necesite cuenta de GitHub."),
+        !p.repo && can("owner") && h("div", { class: "row" }, h("button", { class: "primary", onclick: () => { shut(); openGitSetup(p); } }, "🐙 Crear o conectar el repositorio")),
+        h("p", {}, h("b", {}, "2. Tu cuenta personal de GitHub"), info.linked ? ": conectada ✓" : ": sin conectar. Sirve solo para traer issues como tareas y ver el estado de los PR y las pruebas. No hace falta para trabajar."),
+        !info.linked && h("div", { class: "row" }, h("button", { onclick: () => { shut(); linkGithub(); } }, "Conectar mi cuenta")),
+        h("div", { class: "actions" }, h("button", { class: "ghost", onclick: shut }, info.linked ? "Seguir" : "Cerrar")))));
+    return;
+  }
   const close = () => box.remove();
   // si el proyecto ya tiene «Repositorio» cargado en ⚙ Proyecto, se usa ese (usuario/repo o URL de GitHub)
   const fromProject = (p.repo || "").trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
