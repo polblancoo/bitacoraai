@@ -28,6 +28,7 @@ static JOBS: LazyLock<Mutex<HashMap<String, Job>>> = LazyLock::new(Default::defa
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/api/lan", get(lan))
         .route("/api/projects/{id}/git/setup", post(setup))
         .route("/api/projects/{id}/git/state", get(state))
         .route("/api/projects/{id}/git/request", post(request_repo))
@@ -142,6 +143,12 @@ static STATE_CACHE: LazyLock<Mutex<HashMap<Id, (std::time::Instant, Value)>>> = 
 static ASKED: LazyLock<Mutex<HashMap<(Id, Id), std::time::Instant>>> = LazyLock::new(Default::default);
 
 /// ¿La carpeta del proyecto ya es un repositorio? Lo puede preguntar cualquier miembro (la terminal lo usa para avisar).
+/// Dirección de esta máquina en la red local (para armar la invitación cuando el admin entra por localhost).
+async fn lan(_user: AuthUser) -> Json<Value> {
+    let ip = std::net::UdpSocket::bind("0.0.0.0:0").and_then(|s| { s.connect("192.0.2.1:9")?; s.local_addr() }).ok().map(|a| a.ip().to_string());
+    Json(json!({ "ip": ip }))
+}
+
 async fn state(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
     user.human_only()?;
     let team: Id = sqlx::query_scalar("SELECT team_id FROM projects WHERE id = ?").bind(project).fetch_optional(&st.db).await?.ok_or_else(AppError::forbidden)?;

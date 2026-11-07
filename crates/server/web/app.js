@@ -1033,7 +1033,7 @@ const openTeam = guard(async () => {
       h("h3", {}, "Invitar con un código (si todavía no tiene cuenta)"),
       h("div", { class: "row" }, invRole, h("button", { onclick: guard(async () => {
         const r = await api("POST", `/api/teams/${S.team.id}/invites`, { role: invRole.value });
-        const msg = inviteMessage(r.code);
+        const msg = inviteMessage(r.code, await reachableServer());
         inv.replaceChildren(h("code", {}, r.code), h("button", { onclick: () => navigator.clipboard?.writeText(r.code).then(() => toast("Código copiado")) }, "Copiar"),
           h("button", { title: "Texto listo para pegar en WhatsApp, Telegram, etc.", onclick: () => navigator.clipboard?.writeText(msg).then(() => toast("Invitación copiada: pegala en un chat")) }, "Copiar invitación"),
           h("a", { class: "btnlike", href: `mailto:?subject=${encodeURIComponent("Invitación a " + APP_NAME)}&body=${encodeURIComponent(msg)}` }, "Enviar por email"),
@@ -1431,14 +1431,24 @@ function teamPanel() {
   return box;
 }
 const RELEASES_URL = "https://github.com/polblancoo/crewhelm/releases/latest";
-const inviteMessage = (code) => [
+// dirección que la otra persona puede alcanzar: si el admin entra por localhost, se usa la IP de la red local
+async function reachableServer() {
+  if (!/localhost|127\.0\.0\.1/.test(S.server)) return S.server;
+  try { const r = await api("GET", "/api/lan"); if (r.ip) return `http://${r.ip}:${new URL(S.server).port || 7878}`; } catch {}
+  return S.server;
+}
+const inviteMessage = (code, srv = S.server) => [
   `Te invito al equipo «${S.team.name}» en ${APP_NAME}.`,
   "",
-  `1. Instalá la app (Linux .deb/.rpm/AppImage): ${RELEASES_URL}`,
-  `   o abrila directo en el navegador: ${S.server}`,
-  `2. Servidor: ${S.server}`,
-  "3. Creá tu cuenta y tocá «Unirme con un código» (el ↪ de la barra lateral).",
-  `4. Pegá este código: ${code}`,
+  "LO MÁS FÁCIL (sin instalar nada):",
+  `1. Abrí en el navegador: ${srv}`,
+  "2. Creá tu cuenta y tocá «Unirme con un código» (el ↪ de la barra lateral).",
+  `3. Pegá este código: ${code}`,
+  "",
+  "Si preferís la app de escritorio:",
+  `- Windows / Mac / Linux: ${RELEASES_URL}`,
+  `- Linux, en una línea: curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh -s -- --client --server ${srv}`,
+  `  (al abrirla, en «Servidor» poné ${srv})`,
   "",
   "El código vence en 7 días.",
 ].join("\n");
