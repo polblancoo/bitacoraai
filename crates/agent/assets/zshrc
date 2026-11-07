@@ -1,0 +1,65 @@
+# crewhelm-default v1
+# Configuración por defecto de CrewHelm. Para personalizarla, borrá la primera línea (así CrewHelm ya no la reemplaza).
+
+export LANG="${LANG:-C.UTF-8}"
+export COLORTERM=truecolor
+export EDITOR="${EDITOR:-nvim}"; command -v nvim >/dev/null || export EDITOR=nano
+export VISUAL="$EDITOR"
+export PAGER=less LESS='-R'
+typeset -U path; path=("$HOME/.local/bin" $path)
+
+# historial (se conserva entre sesiones)
+HISTFILE="$HOME/.zsh_history"; HISTSIZE=50000; SAVEHIST=50000
+setopt APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE HIST_FIND_NO_DUPS
+setopt AUTOCD NO_BEEP INTERACTIVE_COMMENTS NUMERIC_GLOB_SORT
+
+# colores y completado
+autoload -U colors && colors
+command -v dircolors >/dev/null && eval "$(dircolors -b)"
+mkdir -p "$HOME/.cache"
+autoload -Uz compinit && compinit -d "$HOME/.cache/zcompdump"
+zstyle ':completion:*' menu select
+zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+zstyle ':completion:*' format '%B%F{green}%d%f%b'
+
+# teclas: flechas buscan en el historial lo que ya escribiste; Ctrl+←/→ saltan de palabra
+autoload -U up-line-or-beginning-search down-line-or-beginning-search
+zle -N up-line-or-beginning-search; zle -N down-line-or-beginning-search
+bindkey '^[[A' up-line-or-beginning-search '^[[B' down-line-or-beginning-search '^[OA' up-line-or-beginning-search '^[OB' down-line-or-beginning-search
+bindkey '^[[1;5C' forward-word '^[[1;5D' backward-word '^[[3~' delete-char '^[[H' beginning-of-line '^[[F' end-of-line
+
+# comandos de todos los días, con colores
+if command -v eza >/dev/null; then
+  alias ls='eza --group-directories-first'
+  alias ll='eza -lah --group-directories-first --git'
+  alias lt='eza --tree --level=2 --group-directories-first'
+else
+  alias ls='ls --color=auto --group-directories-first'
+  alias ll='ls -lah'
+fi
+alias la='ls -A'
+alias grep='grep --color=auto' egrep='grep -E --color=auto' diff='diff --color=auto'
+command -v bat >/dev/null || { command -v batcat >/dev/null && alias bat=batcat; }
+command -v fd >/dev/null || { command -v fdfind >/dev/null && alias fd=fdfind; }
+alias ..='cd ..' ...='cd ../..' ....='cd ../../..'
+alias gs='git status -sb' gd='git diff' gl='git log --oneline --graph --decorate -n 20'
+alias h='history 1' c='clear'
+alias git='noglob git'
+
+# búsqueda con fzf (Ctrl+R historial, Ctrl+T archivos, Alt+C carpetas), si está instalado
+for f in /usr/share/doc/fzf/examples/key-bindings.zsh /usr/share/doc/fzf/examples/completion.zsh; do [ -r "$f" ] && source "$f"; done
+
+# sugerencias grises mientras escribís (→ las acepta) y resaltado de sintaxis, si están instalados
+[ -r /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] && source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=244'
+
+# prompt: starship si está instalado; si no, uno simple con color
+if command -v starship >/dev/null; then
+  eval "$(starship init zsh)"
+else
+  PROMPT='%F{cyan}%n@crewhelm%f %F{yellow}%~%f %(?.%F{green}.%F{red})%#%f '
+fi
+
+[ -r /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+true

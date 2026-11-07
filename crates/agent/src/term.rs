@@ -35,6 +35,12 @@ pub async fn serve(api: Arc<Api>) {
         if !said {
             said = true;
             log(&format!("terminal habilitada: los owners abren un shell en esta máquina desde la web{}", if workspace().is_some() { "; las demás personas entran a su espacio personal dentro de un sandbox" } else { "" }));
+            if workspace().is_some() {
+                let falta = crate::iso::missing_shell_tools();
+                if !falta.is_empty() {
+                    log(&format!("faltan herramientas de terminal para las personas: {} (se instalan con  sh install.sh --shell-tools-only )", falta.join(", ")));
+                }
+            }
         }
         let Ok(list) = api.get(&format!("/api/agent/term/pending?herdr={}&ws={}", u8::from(has_herdr()), u8::from(workspace().is_some()))).await else { continue };
         for job in list.as_array().into_iter().flatten() {
@@ -81,15 +87,30 @@ fn workspace() -> Option<PathBuf> {
 fn personal_home(ws: &Path, who: &str) -> std::io::Result<PathBuf> {
     let home = ws.join("homeCrewHelm").join(crate::iso::slug(who));
     std::fs::create_dir_all(home.join(".config"))?;
-    let rc = home.join(".bashrc");
-    if !rc.exists() {
-        std::fs::write(&rc, "# Espacio personal de CrewHelm: editá este archivo, es solo tuyo y se conserva entre sesiones.\nexport PATH=\"$HOME/.local/bin:$PATH\"\nexport EDITOR=${EDITOR:-nano}\nPS1='\\[\\e[36m\\]\\u@crewhelm\\[\\e[0m\\] \\w \\$ '\n")?;
-    }
+    std::fs::create_dir_all(home.join(".cache"))?;
+    // configuración por defecto (zsh y bash con colores, eza, fzf, starship…): se actualiza sola mientras la persona no la toque
+    install_rc(&home.join(".zshrc"), include_str!("../assets/zshrc"))?;
+    install_rc(&home.join(".bashrc"), include_str!("../assets/bashrc"))?;
     let profile = home.join(".profile");
     if !profile.exists() {
         std::fs::write(&profile, "[ -n \"$BASH_VERSION\" ] && [ -f \"$HOME/.bashrc\" ] && . \"$HOME/.bashrc\"\n")?;
     }
     Ok(home)
+}
+
+/// Escribe `content` si el archivo no existe, o si es un archivo de CrewHelm (primera línea `# crewhelm-default vN`, o el `.bashrc` de la
+/// primera versión) de una versión anterior. Si la persona borró esa primera línea, el archivo es suyo y no se toca.
+fn install_rc(path: &Path, content: &str) -> std::io::Result<()> {
+    let version = |t: &str| t.lines().next().and_then(|l| l.strip_prefix("# crewhelm-default v")).and_then(|v| v.trim().parse::<u32>().ok());
+    let new_v = version(content).unwrap_or(1);
+    let replace = match std::fs::read_to_string(path) {
+        Err(_) => true,
+        Ok(cur) => version(&cur).is_some_and(|v| v < new_v) || cur.starts_with("# Espacio personal de CrewHelm"),
+    };
+    if replace {
+        std::fs::write(path, content)?;
+    }
+    Ok(())
 }
 
 /// ¿Está `herdr` instalado en esta máquina? (en el PATH o en ~/.local/bin, donde lo deja su instalador)
@@ -146,7 +167,8 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                     (None, Some(_)) => format!("echo 'Proyecto {0}: sus archivos están en /proyectos/{0} (solo lectura). Tu espacio es ~ (escribible)'", crate::iso::slug(pname)),
                     _ => "echo 'Tu espacio es ~ (escribible)'".to_string(),
                 };
-                a.extend(["--".into(), "/bin/bash".into(), "-c".into(), format!("{hello}; exec /bin/bash")]);
+                let sh = crate::iso::person_shell();
+                a.extend(["--".into(), "/bin/bash".into(), "-c".into(), format!("{hello}; exec {sh}")]);
                 let mut c = CommandBuilder::new("bwrap");
                 c.args(a);
                 c.env_clear();
@@ -337,7 +359,8 @@ pub async fn ssh_session(who: &str, level: &str, root: &str) -> anyhow::Result<(
         }
         let tools = crate::iso::person_tools();
         let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: None, other_space: None, tools: &tools });
-        a.extend(["--".into(), "/bin/bash".into()]);
+        a.push("--".into());
+        a.push(crate::iso::person_shell().into());
         std::process::Command::new("bwrap").args(a).env_clear().env("PATH", std::env::var("PATH").unwrap_or_default()).env("TERM", term).exec()
     };
     Err(err.into())

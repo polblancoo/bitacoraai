@@ -408,12 +408,33 @@ pub fn person_args(p: &PersonPlan) -> Vec<String> {
     a
 }
 
-/// `herdr` si está instalado (en el PATH o en `~/.local/bin`), para ofrecerlo dentro de la cápsula.
+/// Herramientas de terminal que se ofrecen dentro de la cápsula (en `/tools`) cuando están instaladas fuera de `/usr`, por ejemplo en
+/// `~/.local/bin` o `~/.cargo/bin`: son binarios sueltos, no dejan ver nada más del home.
+pub const TOOL_NAMES: &[&str] = &["herdr", "eza", "starship", "fzf", "bat", "fd", "rg", "zoxide"];
+
 pub fn person_tools() -> Vec<PathBuf> {
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
-    let mut v = vec![home.join(".local/bin/herdr")];
-    v.extend(std::env::var_os("PATH").into_iter().flat_map(|p| std::env::split_paths(&p).map(|d| d.join("herdr")).collect::<Vec<_>>()));
-    v.into_iter().filter(|p| p.is_file()).take(1).collect()
+    let mut dirs = vec![home.join(".local/bin"), home.join(".cargo/bin")];
+    dirs.extend(std::env::var_os("PATH").into_iter().flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>()));
+    TOOL_NAMES
+        .iter()
+        .filter_map(|n| dirs.iter().map(|d| d.join(n)).find(|p| p.is_file()))
+        // lo que ya vive en /usr se ve sin ofrecerlo
+        .filter(|p| !p.starts_with("/usr") && !p.starts_with("/bin") && !p.starts_with("/opt"))
+        .collect()
+}
+
+/// El shell de las personas: `zsh` si el sistema lo tiene (con la configuración por defecto de CrewHelm), si no `bash`.
+pub fn person_shell() -> &'static str {
+    if Path::new("/usr/bin/zsh").exists() { "/usr/bin/zsh" } else { "/bin/bash" }
+}
+
+/// Herramientas de terminal recomendadas que no están en ningún lado (ni en el sistema ni en `~/.local/bin`).
+pub fn missing_shell_tools() -> Vec<&'static str> {
+    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    let mut dirs = vec![home.join(".local/bin"), home.join(".cargo/bin")];
+    dirs.extend(std::env::var_os("PATH").into_iter().flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>()));
+    ["zsh", "eza", "starship", "fzf", "rg"].into_iter().filter(|n| !dirs.iter().any(|d| d.join(n).is_file())).collect()
 }
 
 /// Herramientas de solo lectura para la shell de `sandbox-shell` (las mismas que usa una ejecución).

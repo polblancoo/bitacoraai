@@ -1,15 +1,17 @@
 #!/bin/sh
 # Instalador de CrewHelm (tm-server) para Linux: sin sudo, todo dentro de tu usuario.
 #   curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh
-# Opciones (después de «sh -s --»):  --port 7878   --no-service   --with-agent   --with-opencode   --with-claude   --with-gemini   --with-codex   --with-all-ais   --version v0.7.1
+# Opciones (después de «sh -s --»):  --port 7878   --no-service   --no-shell-tools   --shell-tools-only   --with-agent   --with-opencode   --with-claude   --with-gemini   --with-codex   --with-all-ais   --version v0.7.1
 set -eu
 
 REPO="polblancoo/crewhelm"
-PORT=7878; SERVICE=1; AGENT=0; OPENCODE=0; CLAUDE=0; GEMINI=0; CODEX=0; VERSION="latest"
+PORT=7878; SERVICE=1; SHELLTOOLS=1; ONLYTOOLS=0; AGENT=0; OPENCODE=0; CLAUDE=0; GEMINI=0; CODEX=0; VERSION="latest"
 while [ $# -gt 0 ]; do
   case "$1" in
     --port) PORT="$2"; shift 2 ;;
     --no-service) SERVICE=0; shift ;;
+    --no-shell-tools) SHELLTOOLS=0; shift ;;  # no instalar zsh, eza, starship, fzf… para las terminales
+    --shell-tools-only) ONLYTOOLS=1; shift ;;  # solo las herramientas de terminal (no toca tm-server ni el servicio)
     --with-agent) AGENT=1; shift ;;
     --with-opencode) OPENCODE=1; AGENT=1; shift ;;  # agente para usar OpenRouter (modelos gratis y de pago)
     --with-claude) CLAUDE=1; AGENT=1; shift ;;
@@ -28,6 +30,39 @@ die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 [ "$(uname -s)" = "Linux" ] || die "este instalador es para Linux (Windows y macOS: próximamente)"
 case "$(uname -m)" in x86_64|amd64) ARCH=x86_64 ;; *) die "arquitectura $(uname -m) no soportada todavía (probá: cargo install crewhelm-server)" ;; esac
 command -v curl >/dev/null 2>&1 || die "falta curl"
+
+# Herramientas de terminal para las personas del equipo (zsh con colores, eza, fzf, starship…): se instalan solo las que faltan.
+# Los paquetes del sistema necesitan root (si hay sudo sin contraseña se usan; si no, se muestra el comando); el resto va a ~/.local/bin sin sudo.
+shell_tools() {
+  BIN="$HOME/.local/bin"; mkdir -p "$BIN"
+  missing=""; for t in zsh eza fzf starship rg tree; do command -v "$t" >/dev/null 2>&1 || [ -x "$BIN/$t" ] || missing="$missing $t"; done
+  for t in bat batcat; do command -v "$t" >/dev/null 2>&1 && have_bat=1; done; [ "${have_bat:-0}" = 1 ] || missing="$missing bat"
+  [ -n "$missing" ] || { say "Herramientas de terminal: ya están todas"; return 0; }
+  say "Herramientas de terminal que faltan:$missing"
+  SUDO=""; [ "$(id -u)" = 0 ] || { command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1 && SUDO="sudo -n"; }
+  if command -v apt-get >/dev/null 2>&1; then PM="apt-get install -y zsh git ripgrep fd-find bat fzf tree nano vim htop zsh-autosuggestions zsh-syntax-highlighting eza"
+  elif command -v dnf >/dev/null 2>&1; then PM="dnf install -y zsh git ripgrep fd-find bat fzf tree nano vim htop zsh-autosuggestions zsh-syntax-highlighting eza"
+  elif command -v pacman >/dev/null 2>&1; then PM="pacman -S --noconfirm --needed zsh git ripgrep fd bat fzf tree nano vim htop zsh-autosuggestions zsh-syntax-highlighting eza"
+  else PM=""; fi
+  if [ -n "$PM" ] && { [ "$(id -u)" = 0 ] || [ -n "$SUDO" ]; }; then
+    say "Instalando paquetes del sistema ($PM)"
+    # shellcheck disable=SC2086
+    $SUDO $PM >/dev/null 2>&1 || echo "   (algún paquete no se pudo instalar; seguimos con lo demás)"
+  elif [ -n "$PM" ]; then
+    echo "   (no tengo permisos de administrador: para el resto ejecutá una vez  sudo $PM)"
+  fi
+  # lo que sigue faltando se instala en ~/.local/bin, sin sudo
+  if ! command -v starship >/dev/null 2>&1 && [ ! -x "$BIN/starship" ]; then
+    say "Instalando starship en $BIN"
+    curl -fsSL https://starship.rs/install.sh | sh -s -- -b "$BIN" -y >/dev/null 2>&1 || echo "   (no pude instalar starship; probá: curl -sS https://starship.rs/install.sh | sh -s -- -b \$HOME/.local/bin)"
+  fi
+  if command -v cargo >/dev/null 2>&1 && ! command -v eza >/dev/null 2>&1 && [ ! -x "$BIN/eza" ]; then
+    say "Instalando eza con cargo (tarda unos minutos)"
+    cargo install eza --locked --root "$HOME/.local" >/dev/null 2>&1 || echo "   (no pude instalar eza)"
+  fi
+  say "Herramientas de terminal: listo (las que no se pudieron instalar se pueden pedir después con  sh install.sh --shell-tools-only)"
+}
+if [ "$ONLYTOOLS" = 1 ]; then shell_tools; exit 0; fi
 command -v sha256sum >/dev/null 2>&1 || die "falta sha256sum"
 
 BIN="$HOME/.local/bin"; DATA="$HOME/.local/share/crewhelm"
@@ -93,4 +128,5 @@ else
   say "Sin servicio: para arrancarlo a mano ejecutá  TM_DATABASE=sqlite://$DATA/tm-server.db?mode=rwc TM_ADDR=0.0.0.0:$PORT $BIN/tm-server"
 fi
 
+[ "$SHELLTOOLS" = 1 ] && shell_tools
 printf '\n\033[1;32m¡Listo!\033[0m Abrí  \033[1mhttp://localhost:%s\033[0m  en el navegador: la guía de inicio te lleva paso a paso.\n' "$PORT"
