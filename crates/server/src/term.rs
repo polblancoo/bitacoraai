@@ -71,6 +71,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/me/ssh-keys", get(list_ssh_keys).post(add_ssh_key))
         .route("/api/me/ssh-keys/{id}", axum::routing::delete(del_ssh_key))
         .route("/api/agent/ssh-keys", get(agent_ssh_keys))
+        .route("/api/projects/{id}/term/settings", get(get_term_settings).put(put_term_settings))
+        .route("/api/agent/term/config", get(agent_term_config))
         .route("/api/agent/term/pending", get(agent_pending))
         .route("/api/agent/term/{sid}", get(agent_ws))
 }
@@ -553,6 +555,56 @@ async fn put_term_prefs(State(st): State<AppState>, user: crate::auth::AuthUser,
     cur.extend(out);
     sqlx::query("UPDATE users SET term_prefs = ? WHERE id = ?").bind(Value::Object(cur.clone()).to_string()).bind(user.id).execute(&st.db).await?;
     Ok(Json(Value::Object(cur)))
+}
+
+// ---------- ajustes de la terminal para las personas del equipo (los prende un owner desde la app, sin consola) ----------
+
+fn flag_key(kind: &str, agent: Id) -> String {
+    format!("term_{kind}_{agent}")
+}
+
+async fn flag(st: &AppState, kind: &str, agent: Id) -> bool {
+    crate::license::meta_get(&st.db, &flag_key(kind, agent)).await.is_some_and(|v| v == "1")
+}
+
+async fn project_agent(st: &AppState, project: Id) -> Option<Id> {
+    sqlx::query_scalar("SELECT agent_id FROM ssh_targets WHERE project_id = ?").bind(project).fetch_optional(&st.db).await.ok().flatten().flatten()
+}
+
+async fn get_term_settings(State(st): State<AppState>, user: crate::auth::AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
+    user.human_only()?;
+    routes::require(&st, team_of_project(&st, project).await?, user.id, Role::Owner).await?;
+    let agent = project_agent(&st, project).await;
+    let (people, ssh) = match agent { Some(a) => (flag(&st, "people", a).await, flag(&st, "ssh", a).await), None => (false, false) };
+    Ok(Json(json!({ "agent_id": agent, "people": people, "ssh": ssh })))
+}
+
+#[derive(Deserialize)]
+struct TermSettings {
+    people: bool,
+    #[serde(default)]
+    ssh: bool,
+}
+
+async fn put_term_settings(State(st): State<AppState>, user: crate::auth::AuthUser, Path(project): Path<Id>, Json(b): Json<TermSettings>) -> Result<Json<Value>> {
+    user.human_only()?;
+    routes::require(&st, team_of_project(&st, project).await?, user.id, Role::Owner).await?;
+    let agent = project_agent(&st, project).await.ok_or_else(|| AppError::bad("primero elegí el agente de la máquina y conectá"))?;
+    // la entrada por SSH usa los espacios personales: sin permitir la terminal a las personas no tiene sentido
+    let ssh = b.ssh && b.people;
+    crate::license::meta_set(&st.db, &flag_key("people", agent), if b.people { "1" } else { "0" }).await?;
+    crate::license::meta_set(&st.db, &flag_key("ssh", agent), if ssh { "1" } else { "0" }).await?;
+    Ok(Json(json!({ "agent_id": agent, "people": b.people, "ssh": ssh })))
+}
+
+/// Lo que el agente necesita saber para activarse solo: si algún proyecto lo usa como terminal, y si abre espacios para las personas / entrada por SSH.
+async fn agent_term_config(State(st): State<AppState>, user: crate::auth::AuthUser) -> Result<Json<Value>> {
+    if !user.bot {
+        return Err(AppError::forbidden());
+    }
+    let used: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ssh_targets WHERE agent_id = ?").bind(user.id).fetch_one(&st.db).await?;
+    let (people, ssh) = (flag(&st, "people", user.id).await, flag(&st, "ssh", user.id).await);
+    Ok(Json(json!({ "terminal": used > 0, "people": people, "ssh": people && ssh })))
 }
 
 // ---------- claves SSH de las personas (entrada por SSH al usuario de servicio, con su espacio personal) ----------

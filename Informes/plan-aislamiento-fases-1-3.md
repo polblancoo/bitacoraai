@@ -88,3 +88,9 @@ Configuración → «Comandos permitidos y prohibidos para todas las IAs».
 - **SSH por persona:** cada persona carga su clave pública en su perfil («🔑 Entrar por SSH», hasta 5). Con `TM_SSH_KEYS=1` (y `TM_WORKSPACE`), `tm-agent` escribe cada minuto un bloque propio en `~/.ssh/authorized_keys` del usuario de servicio. Cada clave lleva `restrict,pty,command="tm-agent ssh-session <persona> <nivel>"`: no abre túneles, agente ni X11, y rechaza comandos sueltos (`ssh host comando`).
   Owner → shell con su espacio como HOME; miembro → cápsula `bwrap` (no ve `~/.ssh`, home real ni a otras personas). El nivel sale del rol en los equipos del agente.
   Conectarse: `ssh <usuario-de-servicio>@<servidor>` con la clave privada correspondiente. Las líneas ajenas de `authorized_keys` no se tocan.
+
+### Activación desde la app (sin consola)
+La terminal para las personas y la entrada por SSH se prenden en «⚙ Conexión» del proyecto (solo owners), con dos interruptores:
+«Permitir la terminal a las personas del equipo» y «También permitir entrar por ssh con su clave».
+El agente consulta `/api/agent/term/config` cada 10 s y se activa solo; no hacen falta `TM_AGENT_TERMINAL`, `TM_WORKSPACE` ni `TM_SSH_KEYS` (siguen valiendo como alternativa).
+La carpeta de espacios por defecto es `~/crewhelm` del usuario que corre `tm-agent`. Los espacios y copias de trabajo de las IAs usan `TM_WORKSPACE` si está fijado (si no, siguen dentro de la carpeta de cada proyecto).

@@ -1076,3 +1076,9 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 /* claves SSH en el perfil */
 .sshkeys { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line, #2a2f45); display: grid; gap: 6px; }
 .sshkeys textarea, .sshkeys input { width: 100%; font-family: monospace; font-size: 12px; }
+
+/* interruptores de la terminal para las personas */
+.peoplebox { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--bg2); display: grid; gap: 8px; }
+.peoplebox .chk { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; font-size: 13px; }
+.peoplebox .chk input { margin-top: 3px; }
+.peoplebox .chk small { grid-column: 2; }

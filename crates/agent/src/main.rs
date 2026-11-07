@@ -670,8 +670,8 @@ async fn main() -> Result<()> {
     }
     if std::env::args().nth(1).as_deref() == Some("ssh-session") {
         let mut it = std::env::args().skip(2);
-        let (who, level) = (it.next().unwrap_or_default(), it.next().unwrap_or_default());
-        if let Err(e) = term::ssh_session(&who, &level).await {
+        let (who, level, root) = (it.next().unwrap_or_default(), it.next().unwrap_or_default(), it.next().unwrap_or_default());
+        if let Err(e) = term::ssh_session(&who, &level, &root).await {
             eprintln!("CrewHelm: {e}");
             std::process::exit(1);
         }
@@ -694,10 +694,9 @@ async fn main() -> Result<()> {
     publish_lists(&api).await;
     log(&format!("conectado como {} (id {my_id}) a {}; reviso cada {poll} s, hasta {max} en paralelo", me["username"].as_str().unwrap_or("?"), api.cfg.url));
 
-    if std::env::var("TM_AGENT_TERMINAL").is_ok_and(|v| v == "1") && !once {
+    // la terminal y la entrada por SSH se activan desde la app (Conexión del proyecto); las variables TM_AGENT_TERMINAL y TM_SSH_KEYS siguen valiendo
+    if !once {
         tokio::spawn(term::serve(api.clone()));
-    }
-    if std::env::var("TM_SSH_KEYS").is_ok_and(|v| v == "1") && !once {
         tokio::spawn(term::sync_keys(api.clone()));
     }
     let sem = Arc::new(Semaphore::new(max));

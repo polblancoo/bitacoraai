@@ -9,7 +9,7 @@ use std::{
     collections::HashSet,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex},
     time::Duration,
 };
 use tokio::sync::mpsc;
@@ -17,10 +17,25 @@ use tokio_tungstenite::{connect_async, tungstenite::{client::IntoClientRequest, 
 
 /// Consulta cada segundo si hay terminales pendientes y atiende cada una en su propia tarea.
 pub async fn serve(api: Arc<Api>) {
-    log("terminal habilitada (TM_AGENT_TERMINAL=1): las personas con rol owner pueden abrir un shell en esta máquina desde la web");
     let active: Arc<Mutex<HashSet<String>>> = Default::default();
+    let (mut cfg, mut n, mut said) = (Config::default(), 0u32, false);
     loop {
         tokio::time::sleep(Duration::from_secs(1)).await;
+        // la app dice si esta máquina es la terminal de algún proyecto y si abre espacios para las personas (sin variables de entorno)
+        if n % 10 == 0 {
+            if let Some(c) = fetch_config(&api).await {
+                PEOPLE.store(c.people, Ordering::Relaxed);
+                cfg = c;
+            }
+        }
+        n = n.wrapping_add(1);
+        if !(cfg.terminal || std::env::var("TM_AGENT_TERMINAL").is_ok_and(|v| v == "1")) {
+            continue;
+        }
+        if !said {
+            said = true;
+            log(&format!("terminal habilitada: los owners abren un shell en esta máquina desde la web{}", if workspace().is_some() { "; las demás personas entran a su espacio personal dentro de un sandbox" } else { "" }));
+        }
         let Ok(list) = api.get(&format!("/api/agent/term/pending?herdr={}&ws={}", u8::from(has_herdr()), u8::from(workspace().is_some()))).await else { continue };
         for job in list.as_array().into_iter().flatten() {
             let Some(sid) = job["sid"].as_str().map(String::from) else { continue };
@@ -38,9 +53,28 @@ pub async fn serve(api: Arc<Api>) {
     }
 }
 
-/// Raíz del modo servidor (`TM_WORKSPACE`): ahí cada persona tiene su espacio en `homeCrewHelm/<persona>/`.
+/// Lo que la app le indica a este agente sobre su terminal.
+#[derive(Default, Clone)]
+struct Config {
+    terminal: bool,
+    people: bool,
+    ssh: bool,
+}
+
+/// Un owner dejó prendido «permitir la terminal a las personas del equipo» en la app.
+static PEOPLE: AtomicBool = AtomicBool::new(false);
+
+async fn fetch_config(api: &Api) -> Option<Config> {
+    let v = api.get("/api/agent/term/config").await.ok()?;
+    Some(Config { terminal: v["terminal"].as_bool()?, people: v["people"].as_bool().unwrap_or(false), ssh: v["ssh"].as_bool().unwrap_or(false) })
+}
+
+/// Raíz de los espacios personales (`homeCrewHelm/<persona>/`): `TM_WORKSPACE` si se fijó; si no, `~/crewhelm` cuando la app permite la terminal a las personas.
 fn workspace() -> Option<PathBuf> {
-    std::env::var("TM_WORKSPACE").ok().filter(|w| !w.trim().is_empty()).map(|w| crate::iso::expand_home(w.trim()))
+    if let Some(w) = std::env::var("TM_WORKSPACE").ok().filter(|w| !w.trim().is_empty()) {
+        return Some(crate::iso::expand_home(w.trim()));
+    }
+    PEOPLE.load(Ordering::Relaxed).then(|| std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join("crewhelm"))
 }
 
 /// Espacio personal de una persona: su HOME en la terminal (herdr, shell, preferencias e intermedios persisten acá).
@@ -214,26 +248,38 @@ pub async fn sync_keys(api: Arc<Api>) {
     let Ok(exe) = std::env::current_exe() else { return };
     let exe = exe.to_string_lossy().to_string();
     if exe.contains(['"', '\n', '\\']) {
-        log("TM_SSH_KEYS: la ruta de tm-agent tiene caracteres que no puedo usar en authorized_keys");
+        log("entrada por SSH: la ruta de tm-agent tiene caracteres que no puedo usar en authorized_keys");
         return;
     }
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return };
-    log("entrada por SSH habilitada (TM_SSH_KEYS=1): las claves cargadas en los perfiles abren una sesión con su espacio personal");
-    let mut last = String::new();
+    let mut last: Option<String> = None;
     loop {
-        if let Ok(list) = api.get("/api/agent/ssh-keys").await {
+        // se activa desde la app («Permitir entrar por SSH»); TM_SSH_KEYS=1 sigue valiendo como alternativa
+        if let Some(cfg) = fetch_config(&api).await {
+            PEOPLE.store(cfg.people, Ordering::Relaxed);
+            let on = (cfg.ssh || std::env::var("TM_SSH_KEYS").is_ok_and(|v| v == "1")) && workspace().is_some();
             let mut block = String::new();
-            for k in list.as_array().into_iter().flatten() {
-                let (Some(who), Some(key), Some(level)) = (k["who"].as_str(), k["key"].as_str(), k["level"].as_str()) else { continue };
-                let safe = !who.is_empty() && who.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
-                if !safe || !matches!(level, "owner" | "member") || key.contains(['\n', '\r', '"']) {
-                    continue;
+            if on {
+                let root = workspace().unwrap_or_default().to_string_lossy().to_string();
+                if root.contains(['"', '\n', '\\', ' ']) {
+                    log("entrada por SSH: la carpeta de espacios no puede tener espacios ni comillas");
+                } else if let Ok(list) = api.get("/api/agent/ssh-keys").await {
+                    for k in list.as_array().into_iter().flatten() {
+                        let (Some(who), Some(key), Some(level)) = (k["who"].as_str(), k["key"].as_str(), k["level"].as_str()) else { continue };
+                        let safe = !who.is_empty() && who.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
+                        if !safe || !matches!(level, "owner" | "member") || key.contains(['\n', '\r', '"']) {
+                            continue;
+                        }
+                        block.push_str(&format!("restrict,pty,command=\"{exe} ssh-session {who} {level} {root}\" {key} crewhelm:{who}\n"));
+                    }
+                } else {
+                    block = last.clone().unwrap_or_default();
                 }
-                block.push_str(&format!("restrict,pty,command=\"{exe} ssh-session {who} {level}\" {key} crewhelm:{who}\n"));
             }
-            if block != last {
+            // sin nada que escribir y nada escrito antes, no se toca authorized_keys
+            if Some(&block) != last.as_ref() && !(last.is_none() && block.is_empty()) {
                 match write_keys(&home, &block) {
-                    Ok(()) => { log(&format!("authorized_keys actualizado ({} claves)", block.lines().count())); last = block; }
+                    Ok(()) => { log(&format!("entrada por SSH: authorized_keys actualizado ({} claves)", block.lines().count())); last = Some(block); }
                     Err(e) => log(&format!("no pude escribir authorized_keys: {e}")),
                 }
             }
@@ -266,12 +312,13 @@ fn write_keys(home: &Path, block: &str) -> std::io::Result<()> {
 }
 
 /// Comando forzado de una clave: abre el shell de la persona. Owner: shell completa con su espacio como HOME; miembro: dentro de `bwrap`.
-pub async fn ssh_session(who: &str, level: &str) -> anyhow::Result<()> {
+pub async fn ssh_session(who: &str, level: &str, root: &str) -> anyhow::Result<()> {
     use std::os::unix::process::CommandExt;
     if std::env::var_os("SSH_ORIGINAL_COMMAND").is_some_and(|c| !c.is_empty()) {
         anyhow::bail!("solo se permiten sesiones interactivas (ssh usuario@servidor, sin comando)");
     }
-    let root = workspace().ok_or_else(|| anyhow::anyhow!("falta TM_WORKSPACE en el servidor"))?;
+    // sshd arranca este comando sin el entorno del agente: la carpeta de espacios viene en la línea de la clave
+    let root = Some(root).filter(|r| !r.is_empty()).map(PathBuf::from).or_else(workspace).ok_or_else(|| anyhow::anyhow!("falta la carpeta de espacios personales"))?;
     let home = personal_home(&root, who)?;
     let real_home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/root"));
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "bash".into());

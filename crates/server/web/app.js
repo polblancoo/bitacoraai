@@ -3315,6 +3315,28 @@ if (S.token) boot(true).catch(() => { S.token = null; render(); }); else checkFi
 // ---------- terminal SSH integrada (solo owners): el servidor abre SSH con clave a la máquina del proyecto ----------
 const loadScript = (src) => new Promise((ok, no) => { const el = document.createElement("script"); el.src = src; el.onload = ok; el.onerror = () => no(new Error("no pude cargar " + src)); document.head.append(el); });
 
+// interruptores para el equipo: la terminal de las personas y la entrada por SSH (el agente se activa solo, sin variables ni consola)
+function peopleBox(pid) {
+  const box = h("div", { class: "peoplebox" });
+  const people = h("input", { type: "checkbox" }), ssh = h("input", { type: "checkbox" });
+  const save = guard(async () => {
+    if (!pid) return;
+    const r = await api("PUT", `/api/projects/${pid}/term/settings`, { people: people.checked, ssh: ssh.checked });
+    people.checked = r.people; ssh.checked = r.ssh; ssh.disabled = !r.people;
+    toast(r.people ? "Listo: en un minuto las personas del equipo pueden abrir su terminal" : "Terminal para las personas: apagada");
+  });
+  people.onchange = () => { if (!people.checked) ssh.checked = false; ssh.disabled = !people.checked; save(); };
+  ssh.onchange = save;
+  box.append(
+    h("label", { class: "chk" }, people, " Permitir la terminal a las personas del equipo",
+      h("small", { class: "hint" }, "Cada persona tiene su espacio propio en el servidor, que se conserva entre sesiones. Quienes no son owners trabajan dentro de un sandbox: no ven el resto de la máquina ni los espacios de otros.")),
+    h("label", { class: "chk" }, ssh, " También permitir entrar por ssh con su clave",
+      h("small", { class: "hint" }, "Cada persona carga su clave pública en su perfil («🔑 Entrar por SSH»).")));
+  ssh.disabled = true;
+  if (pid) api("GET", `/api/projects/${pid}/term/settings`).then((r) => { people.checked = !!r.people; ssh.checked = !!r.ssh; ssh.disabled = !r.people; if (!r.agent_id) box.append(h("small", { class: "hint" }, "Primero guardá la conexión con el agente (botón «▶ Conectar»).")); }).catch(() => {});
+  return box;
+}
+
 async function openTerminal(task) {
   if (!window.Terminal) { await loadScript("xterm.js"); await loadScript("xterm-fit.js"); }
   const pid = task.project_id;
@@ -3325,7 +3347,8 @@ async function openTerminal(task) {
     h("option", { value: "ssh", selected: !cfg.agent_id && (!!cfg.host || !agents.some((a) => a.online)) }, "🔑 Por SSH con clave"));
   const agentSel = h("select", {}, agents.length ? agents.map((a) => h("option", { value: a.id, selected: a.id === cfg.agent_id }, `🤖 ${a.name}${a.model ? " · " + a.model : ""} — ${a.online ? "🟢 conectado" : "⚪ sin conectar"}`)) : h("option", { value: "" }, "(no hay IAs en este equipo)"));
   const agentBox = h("div", {}, h("label", {}, "Agente de la máquina", agentSel),
-    h("small", { class: "hint" }, "En la máquina donde está el proyecto, el agente se arranca con TM_AGENT_TERMINAL=1 (junto a TM_TOKEN y TM_URL de esa IA). Sale solo hacia el servidor: no hay que abrir puertos, ni copiar claves, ni cargar IPs. Funciona también detrás de NAT y en Windows."));
+    h("small", { class: "hint" }, "Alcanza con que el agente de esa IA esté corriendo en la máquina del proyecto: se conecta solo hacia el servidor, sin abrir puertos, copiar claves ni cargar IPs. Funciona también detrás de NAT y en Windows."),
+    can("owner") && peopleBox(pid));
   const f = {
     host: h("input", { value: cfg.host, placeholder: "máquina (IP o nombre)" }),
     port: h("input", { type: "number", value: cfg.port, placeholder: "22" }),
