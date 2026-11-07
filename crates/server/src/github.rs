@@ -179,6 +179,15 @@ async fn unlink(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value
 
 const IMPORT_MAX: usize = 30;
 
+/// «dueño/repo» a partir de lo que se pegue: URL de GitHub (con o sin www), git@github.com:dueño/repo.git, con .git o barra final.
+pub(crate) fn clean_repo(s: &str) -> String {
+    let mut r = s.trim().to_string();
+    for p in ["https://", "http://", "ssh://", "git@"] { if let Some(x) = r.strip_prefix(p) { r = x.to_string(); } }
+    for p in ["git@", "www."] { if let Some(x) = r.strip_prefix(p) { r = x.to_string(); } }
+    for p in ["github.com/", "github.com:"] { if let Some(x) = r.strip_prefix(p) { r = x.to_string(); } }
+    r.trim_end_matches('/').trim_end_matches(".git").trim_matches('/').to_string()
+}
+
 pub(crate) fn valid_repo(r: &str) -> bool {
     let mut it = r.split('/');
     let ok = |p: &str| !p.is_empty() && p.len() <= 100 && p.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
@@ -283,7 +292,7 @@ async fn set_project_repo(State(st): State<AppState>, user: AuthUser, Path(proje
     user.human_only()?;
     let team = crate::routes::team_of_project(&st, project).await?;
     crate::routes::ensure_writer(&st, team, user.id).await?;
-    let repo = b.repo.trim().trim_start_matches("https://github.com/").trim_end_matches(".git").trim_matches('/').to_string();
+    let repo = clean_repo(&b.repo);
     if repo.is_empty() {
         sqlx::query("DELETE FROM project_github WHERE project_id = ?").bind(project).execute(&st.db).await?;
         return Ok(Json(json!({ "repo": null })));
@@ -432,4 +441,15 @@ async fn close_issue(State(st): State<AppState>, user: AuthUser, Path(task): Pat
     let _ = api_send(&g, &token, reqwest::Method::POST, &format!("/repos/{repo}/issues/{n}/comments"), json!({ "body": "Tarea terminada en el gestor de tareas." })).await;
     api_send(&g, &token, reqwest::Method::PATCH, &format!("/repos/{repo}/issues/{n}"), json!({ "state": "closed" })).await?;
     Ok(Json(json!({ "ok": true })))
+}
+
+#[cfg(test)]
+mod clean_repo_tests {
+    use super::clean_repo;
+    #[test]
+    fn acepta_las_formas_comunes() {
+        for s in ["polblancoo/crewhelm", " polblancoo/crewhelm ", "https://github.com/polblancoo/crewhelm.git", "https://www.github.com/polblancoo/crewhelm/", "git@github.com:polblancoo/crewhelm.git", "github.com/polblancoo/crewhelm"] {
+            assert_eq!(clean_repo(s), "polblancoo/crewhelm", "{s}");
+        }
+    }
 }

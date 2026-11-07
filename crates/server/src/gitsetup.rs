@@ -68,7 +68,7 @@ async fn setup(State(st): State<AppState>, user: AuthUser, Path(project): Path<I
         "clone" | "attach" | "new" => {
             let g = gh(&st)?;
             let token = token_of(&st, user.id).await?;
-            let repo = b.repo.trim().trim_start_matches("https://github.com/").trim_end_matches(".git").trim_matches('/').to_string();
+            let repo = crate::github::clean_repo(&b.repo);
             if b.mode != "new" && !valid_repo(&repo) {
                 return Err(AppError::bad("Escribilo como dueño/repositorio, por ejemplo polblancoo/crewhelm"));
             }

@@ -3392,8 +3392,12 @@ function gitBox(pid) {
       draw(r);
     } catch (e) { toast(e.message, true); draw(null, e.message); }
   };
+  let ghi = null; api("GET", "/api/github").then((i) => { ghi = i; }).catch(() => {});
   const draw = (st, err) => {
     const parts = [];
+    if (ghi && ghi.available && !ghi.linked) parts.push(h("div", { class: "gitopt" }, h("b", {}, "🔑 Falta conectar tu cuenta de GitHub"), h("small", { class: "hint" }, "Para traer o crear un repositorio hace falta tu cuenta (se usa solo mientras se hace, no se guarda en la carpeta). «Solo en esta máquina» no la necesita."),
+      h("button", { onclick: () => { document.getElementById("git-setup")?.remove(); linkGithub(); } }, "Conectar mi GitHub")));
+    if (ghi && !ghi.available) parts.push(h("p", { class: "hint" }, "Este servidor no tiene GitHub configurado: solo se puede crear el repositorio local."));
     if (err) parts.push(h("p", { class: "err" }, "⚠ " + err));
     if (st?.steps?.length) parts.push(h("ul", { class: "gitsteps" }, st.steps.map((x) => h("li", {}, "✔ " + x))));
     if (!st) { parts.push(h("button", { class: "ghost", onclick: load }, "↻ Revisar de nuevo")); return body.replaceChildren(...parts); }
