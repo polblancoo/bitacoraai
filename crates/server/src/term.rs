@@ -44,6 +44,8 @@ struct Pending {
     /// quién abre la terminal y si es owner (el agente decide el HOME y si va dentro del sandbox)
     who: String,
     owner: bool,
+    /// nombre del proyecto (la cápsula de las personas lo muestra como /proyectos/<nombre>)
+    project: String,
     /// espacio personal ajeno que un owner mira en solo lectura (auditoría)
     view: Option<String>,
     handoff: Option<AgentEnd>,
@@ -679,7 +681,7 @@ async fn agent_pending(user: crate::auth::AuthUser, Query(q): Query<HashMap<Stri
         .unwrap()
         .iter()
         .filter(|(_, p)| p.agent == user.id && p.handoff.is_some())
-        .map(|(sid, p)| json!({ "sid": sid, "dir": p.dir, "cols": p.cols, "rows": p.rows, "who": p.who, "owner": p.owner, "view": p.view }))
+        .map(|(sid, p)| json!({ "sid": sid, "dir": p.dir, "cols": p.cols, "rows": p.rows, "who": p.who, "owner": p.owner, "view": p.view, "project": p.project }))
         .collect();
     Ok(Json(Value::Array(list)))
 }
@@ -765,7 +767,8 @@ async fn run_agent(sock: &mut WebSocket, st: &AppState, project: Id, task: Optio
     let (to_browser, mut from_agent) = mpsc::channel::<Message>(512);
     let who_name: String = sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(who).fetch_one(&st.db).await.unwrap_or_default();
     let owner = match team_of_project(st, project).await { Ok(t) => routes::require(st, t, who, Role::Owner).await.is_ok(), Err(_) => false };
-    PENDING.lock().unwrap().insert(sid.clone(), Pending { agent, dir, cols, rows, who: who_name, owner, view: view.clone(), handoff: Some(AgentEnd { from_browser, to_browser }) });
+    let project_name: String = sqlx::query_scalar("SELECT name FROM projects WHERE id = ?").bind(project).fetch_one(&st.db).await.unwrap_or_default();
+    PENDING.lock().unwrap().insert(sid.clone(), Pending { agent, dir, cols, rows, who: who_name, owner, project: project_name, view: view.clone(), handoff: Some(AgentEnd { from_browser, to_browser }) });
     // el contexto de la tarea queda escrito en la carpeta del proyecto, para que una IA abierta en esta terminal sepa de qué se trata
     if let Some(t) = task {
         if let Some(body) = task_context(st, t).await {

@@ -137,10 +137,16 @@ async fn session(api: &Api, sid: &str, job: &Value) -> anyhow::Result<()> {
                     anyhow::bail!("terminal de {who} rechazada: falta bwrap");
                 }
                 let tools = crate::iso::person_tools();
-                let proj = (target.is_none() && dir.is_dir()).then_some(dir.as_path());
-                let a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: proj, other_space: target.as_deref(), tools: &tools });
-                let mut a = a;
-                a.extend(["--".into(), "/bin/bash".into(), "-l".into()]);
+                let pname = job["project"].as_str().unwrap_or("proyecto");
+                let proj = (target.is_none() && dir.is_dir()).then_some((dir.as_path(), pname));
+                let mut a = crate::iso::person_args(&crate::iso::PersonPlan { home: &home, project: proj, other_space: target.as_deref(), tools: &tools });
+                // aviso de dónde está parada la persona (el nombre sale de slug(): sin comillas ni símbolos)
+                let hello = match (&view, proj) {
+                    (Some(v), _) => format!("echo 'Espacio de {} (solo lectura) en /espacio. Tu espacio es ~'", crate::iso::slug(v)),
+                    (None, Some(_)) => format!("echo 'Proyecto {0}: sus archivos están en /proyectos/{0} (solo lectura). Tu espacio es ~ (escribible)'", crate::iso::slug(pname)),
+                    _ => "echo 'Tu espacio es ~ (escribible)'".to_string(),
+                };
+                a.extend(["--".into(), "/bin/bash".into(), "-lc".into(), format!("{hello}; exec /bin/bash -l")]);
                 let mut c = CommandBuilder::new("bwrap");
                 c.args(a);
                 c.env_clear();
