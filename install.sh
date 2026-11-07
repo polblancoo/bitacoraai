@@ -1,17 +1,19 @@
 #!/bin/sh
 # Instalador de CrewHelm (tm-server) para Linux: sin sudo, todo dentro de tu usuario.
 #   curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh
-# Opciones (después de «sh -s --»):  --port 7878   --no-service   --no-shell-tools   --shell-tools-only   --with-agent   --with-opencode   --with-claude   --with-gemini   --with-codex   --with-all-ais   --version v0.7.1
+# Opciones (después de «sh -s --»):  --port 7878   --no-service   --no-shell-tools   --shell-tools-only   --client   --server http://IP:7878   --with-agent   --with-opencode   --with-claude   --with-gemini   --with-codex   --with-all-ais   --version v0.7.1
 set -eu
 
 REPO="polblancoo/crewhelm"
-PORT=7878; SERVICE=1; SHELLTOOLS=1; ONLYTOOLS=0; AGENT=0; OPENCODE=0; CLAUDE=0; GEMINI=0; CODEX=0; VERSION="latest"
+PORT=7878; SERVICE=1; SHELLTOOLS=1; ONLYTOOLS=0; CLIENT=0; SERVERURL=""; AGENT=0; OPENCODE=0; CLAUDE=0; GEMINI=0; CODEX=0; VERSION="latest"
 while [ $# -gt 0 ]; do
   case "$1" in
     --port) PORT="$2"; shift 2 ;;
     --no-service) SERVICE=0; shift ;;
     --no-shell-tools) SHELLTOOLS=0; shift ;;  # no instalar zsh, eza, starship, fzf… para las terminales
     --shell-tools-only) ONLYTOOLS=1; shift ;;  # solo las herramientas de terminal (no toca tm-server ni el servicio)
+    --client) CLIENT=1; shift ;;  # solo la app de escritorio para conectarse al servidor de otra persona (no instala servidor ni servicio)
+    --server) SERVERURL="$2"; shift 2 ;;  # dirección del servidor, para mostrarla al final (con --client)
     --with-agent) AGENT=1; shift ;;
     --with-opencode) OPENCODE=1; AGENT=1; shift ;;  # agente para usar OpenRouter (modelos gratis y de pago)
     --with-claude) CLAUDE=1; AGENT=1; shift ;;
@@ -71,14 +73,41 @@ if [ -n "${CREWHELM_BASE_URL:-}" ]; then BASE="$CREWHELM_BASE_URL"  # espejo int
 elif [ "$VERSION" = "latest" ]; then BASE="https://github.com/$REPO/releases/latest/download"; else BASE="https://github.com/$REPO/releases/download/$VERSION"; fi
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-fetch() { # fetch <archivo>: baja y verifica el SHA-256 publicado en el mismo release
+fetch_file() { # fetch_file <archivo>: baja y verifica el SHA-256 publicado en el mismo release
   say "Descargando $1"
   curl -fsSL "$BASE/$1" -o "$TMP/$1" || return 1
-  curl -fsSL "$BASE/SHA256SUMS" -o "$TMP/SHA256SUMS" || return 1
+  [ -s "$TMP/SHA256SUMS" ] || curl -fsSL "$BASE/SHA256SUMS" -o "$TMP/SHA256SUMS" || return 1
   want="$(grep " $1\$" "$TMP/SHA256SUMS" | cut -d' ' -f1)"; got="$(sha256sum "$TMP/$1" | cut -d' ' -f1)"
   [ -n "$want" ] && [ "$want" = "$got" ] || die "la suma de control de $1 no coincide: no lo instalo"
-  tar xzf "$TMP/$1" -C "$TMP"
 }
+fetch() { fetch_file "$1" && tar xzf "$TMP/$1" -C "$TMP"; }
+
+# Modo cliente: solo la app de escritorio (AppImage). Para quien usa el servidor de otra persona: sin servidor, sin servicio, sin herramientas de terminal.
+if [ "$CLIENT" = 1 ]; then
+  curl -fsSL "$BASE/SHA256SUMS" -o "$TMP/SHA256SUMS" || die "no pude bajar la lista de archivos del release ($BASE)"
+  APP="$(grep -o '[^ *]*\.AppImage$' "$TMP/SHA256SUMS" | head -1)"
+  [ -n "$APP" ] || die "este release no trae la app de escritorio para Linux"
+  fetch_file "$APP" || die "no pude descargar $APP"
+  mkdir -p "$DATA" "$HOME/.local/share/applications"
+  install -m 755 "$TMP/$APP" "$DATA/CrewHelm.AppImage"
+  # el lanzador usa la extracción propia del AppImage: anda aunque la máquina no tenga FUSE
+  printf '#!/bin/sh\nexport APPIMAGE_EXTRACT_AND_RUN=1\nexec "%s/CrewHelm.AppImage" "$@"\n' "$DATA" > "$BIN/crewhelm-app"; chmod 755 "$BIN/crewhelm-app"
+  cat > "$HOME/.local/share/applications/crewhelm.desktop" <<DESKEOF
+[Desktop Entry]
+Type=Application
+Name=CrewHelm
+Comment=Tablero de equipos humanos y de IA
+Exec=$BIN/crewhelm-app
+Terminal=false
+Categories=Office;Development;
+DESKEOF
+  say "App instalada: abrila desde el menú de aplicaciones (CrewHelm) o con  crewhelm-app"
+  case ":$PATH:" in *":$BIN:"*) ;; *) echo "   (agregá $BIN a tu PATH para abrirla con  crewhelm-app)" ;; esac
+  printf '\n\033[1;32m¡Listo!\033[0m Al abrirla, en «Servidor» poné la dirección del servidor de tu equipo%s y entrá con tu usuario.\n' "${SERVERURL:+ ($SERVERURL)}"
+  printf 'Sin instalar nada también podés abrir esa dirección en el navegador.\n'
+  exit 0
+fi
+[ "$SERVICE" = 1 ] && say "Esto instala el SERVIDOR de CrewHelm en esta máquina. Si solo vas a usar el servidor de otra persona, no hace falta: abrí su dirección en el navegador, o instalá solo la app con  --client"
 install_one() { # install_one <binario>
   if fetch "$1-linux-$ARCH.tar.gz"; then install -m 755 "$TMP/$1" "$BIN/$1"
   elif command -v cargo >/dev/null 2>&1; then
