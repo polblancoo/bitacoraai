@@ -318,12 +318,20 @@ async fn recover(p: &Value, project_dir: &Path) -> Result<Value, String> {
                 }
             }
             // ramas que ya se enviaron a revisión (están en el proyecto) y no están en la copia
-            let spat = if prefix.is_empty() { "refs/remotes/origin/".to_string() } else { format!("refs/remotes/origin/{prefix}") };
-            let sent_txt = run(Command::new("git").arg("-C").arg(project_dir).args(["for-each-ref", "--sort=-committerdate", "--format=%(refname:lstrip=3)%09%(committerdate:unix)%09%(subject)", &spat]), 20).await.unwrap_or_default();
-            let sent: Vec<Value> = sent_txt.lines().filter_map(|l| {
-                let f: Vec<&str> = l.splitn(3, '\t').collect();
-                (f.len() == 3 && safe_branch(f[0]) && !names.contains(f[0])).then(|| json!({ "name": f[0], "at": f[1].parse::<i64>().unwrap_or(0), "msg": f[2] }))
-            }).take(15).collect();
+            // en el repositorio del proyecto: ramas que llegaron de GitHub (origin) o que se enviaron a revisión sin GitHub
+            let mut sent: Vec<Value> = Vec::new();
+            let mut sseen = std::collections::HashSet::new();
+            for (pat, lstrip) in [(format!("refs/heads/{prefix}"), 2), (format!("refs/remotes/origin/{prefix}"), 3)] {
+                let fmt = format!("--format=%(refname:lstrip={lstrip})%09%(committerdate:unix)%09%(subject)");
+                let txt = run(Command::new("git").arg("-C").arg(project_dir).args(["for-each-ref", "--sort=-committerdate", &fmt, &pat]), 20).await.unwrap_or_default();
+                for l in txt.lines() {
+                    let f: Vec<&str> = l.splitn(3, '\t').collect();
+                    if f.len() == 3 && safe_branch(f[0]) && !names.contains(f[0]) && sseen.insert(f[0].to_string()) {
+                        sent.push(json!({ "name": f[0], "at": f[1].parse::<i64>().unwrap_or(0), "msg": f[2] }));
+                    }
+                }
+            }
+            sent.truncate(15);
             Ok(json!({ "local": local, "deleted": deleted, "sent": sent, "dirty": !rc.g(&["status", "--porcelain"]).await.unwrap_or_default().is_empty() }))
         }
         "branch_restore" => {
@@ -335,8 +343,12 @@ async fn recover(p: &Value, project_dir: &Path) -> Result<Value, String> {
                 return Err("Esa rama ya existe en tu copia".into());
             }
             if p["from"].as_str() == Some("sent") {
-                let src = format!("refs/remotes/origin/{name}");
-                let sha = run(Command::new("git").arg("-C").arg(project_dir).args(["rev-parse", "-q", "--verify", &src]), 20).await.map_err(|_| "Esa rama no está en el proyecto".to_string())?;
+                let mut src = format!("refs/heads/{name}");
+                let mut sha = run(Command::new("git").arg("-C").arg(project_dir).args(["rev-parse", "-q", "--verify", &src]), 20).await.unwrap_or_default();
+                if sha.is_empty() {
+                    src = format!("refs/remotes/origin/{name}");
+                    sha = run(Command::new("git").arg("-C").arg(project_dir).args(["rev-parse", "-q", "--verify", &src]), 20).await.map_err(|_| "Esa rama no está en el proyecto".to_string())?;
+                }
                 let sha = sha.trim().to_string();
                 if !is_sha(&sha) {
                     return Err("Esa rama no está en el proyecto".into());
@@ -370,6 +382,121 @@ async fn recover(p: &Value, project_dir: &Path) -> Result<Value, String> {
     }
 }
 
+// ---------------------------------------------------------------- revisión sin GitHub: ver, juntar y devolver trabajo en la carpeta del proyecto
+
+/// git en la carpeta del proyecto sin hooks (lo que se revisa lo escribió otra persona).
+async fn pgit(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let mut c = Command::new("git");
+    c.arg("-C").arg(dir).args(["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.quotepath=false"]).args(args);
+    run(&mut c, 120).await
+}
+
+/// Rama principal del proyecto: main, master o, si no hay, la que está abierta.
+async fn base_branch(dir: &Path) -> Result<String, String> {
+    for b in ["main", "master"] {
+        if pgit(dir, &["rev-parse", "-q", "--verify", &format!("refs/heads/{b}")]).await.is_ok() {
+            return Ok(b.to_string());
+        }
+    }
+    let cur = pgit(dir, &["branch", "--show-current"]).await.unwrap_or_default();
+    if cur.is_empty() { Err("El proyecto todavía no tiene una rama principal (hace falta al menos un guardado).".into()) } else { Ok(cur) }
+}
+
+async fn review(p: &Value, dir: &Path) -> Result<Value, String> {
+    if !dir.join(".git").exists() {
+        return Err("La carpeta del proyecto todavía no es un repositorio".into());
+    }
+    let base = base_branch(dir).await?;
+    let branch = p["branch"].as_str().unwrap_or("").to_string();
+    let need_branch = || if safe_branch(&branch) { Ok(()) } else { Err("Nombre de rama no válido".to_string()) };
+    match p["action"].as_str().unwrap_or("") {
+        "info" => {
+            let mut out = Vec::new();
+            for b in p["branches"].as_array().into_iter().flatten().filter_map(|b| b.as_str()).filter(|b| safe_branch(b)).take(40) {
+                let exists = pgit(dir, &["rev-parse", "-q", "--verify", &format!("refs/heads/{b}")]).await.is_ok();
+                if !exists {
+                    out.push(json!({ "branch": b, "exists": false }));
+                    continue;
+                }
+                let commits: i64 = pgit(dir, &["rev-list", "--count", &format!("{base}..{b}")]).await.unwrap_or_default().trim().parse().unwrap_or(0);
+                let (mut files, mut add, mut del) = (0, 0i64, 0i64);
+                for l in pgit(dir, &["diff", "--numstat", "--no-renames", &format!("{base}...{b}")]).await.unwrap_or_default().lines() {
+                    let f: Vec<&str> = l.splitn(3, '\t').collect();
+                    if f.len() == 3 {
+                        files += 1;
+                        add += f[0].parse::<i64>().unwrap_or(0);
+                        del += f[1].parse::<i64>().unwrap_or(0);
+                    }
+                }
+                let mergeable = pgit(dir, &["merge-tree", "--write-tree", "--no-messages", &base, b]).await.is_ok();
+                out.push(json!({ "branch": b, "exists": true, "commits": commits, "files": files, "add": add, "del": del, "mergeable": mergeable }));
+            }
+            Ok(json!({ "base": base, "branches": out }))
+        }
+        "files" => {
+            need_branch()?;
+            let range = format!("{base}...{branch}");
+            let num = pgit(dir, &["diff", "--numstat", "--no-renames", "-z", &range]).await?;
+            let st = pgit(dir, &["diff", "--name-status", "--no-renames", "-z", &range]).await?;
+            let mut status = std::collections::HashMap::new();
+            let mut it = st.split('\0');
+            while let (Some(c), Some(f)) = (it.next(), it.next()) {
+                status.insert(f.to_string(), if c.starts_with('A') { "added" } else if c.starts_with('D') { "removed" } else { "modified" });
+            }
+            let mut budget = 150_000usize;
+            let mut files = Vec::new();
+            for e in num.split('\0').filter(|e| !e.is_empty()).take(60) {
+                let f: Vec<&str> = e.splitn(3, '\t').collect();
+                if f.len() != 3 || !safe_rel(f[2]) {
+                    continue;
+                }
+                let binary = f[0] == "-";
+                let patch = if binary { String::new() } else { pgit(dir, &["diff", "--no-renames", "--no-color", &range, "--", f[2]]).await.unwrap_or_default() };
+                let cut: String = patch.chars().take(8000.min(budget)).collect();
+                budget = budget.saturating_sub(cut.len());
+                files.push(json!({ "name": f[2], "status": status.get(f[2]).copied().unwrap_or("modified"), "add": f[0].parse::<i64>().unwrap_or(0), "del": f[1].parse::<i64>().unwrap_or(0), "patch": cut, "cut": cut.len() < patch.len(), "binary": binary }));
+            }
+            Ok(json!({ "files": files }))
+        }
+        "merge" => {
+            need_branch()?;
+            if pgit(dir, &["rev-parse", "-q", "--verify", &format!("refs/heads/{branch}")]).await.is_err() {
+                return Err("La rama ya no está en el proyecto".into());
+            }
+            if pgit(dir, &["branch", "--show-current"]).await.unwrap_or_default() != base {
+                return Err(format!("La carpeta del proyecto no está en la rama principal («{base}»): pasala a «{base}» antes de integrar."));
+            }
+            if !pgit(dir, &["status", "--porcelain", "--untracked-files=no"]).await.unwrap_or_default().is_empty() {
+                return Err("La carpeta del proyecto tiene cambios sin guardar: guardalos antes de integrar.".into());
+            }
+            let who: String = p["who"].as_str().unwrap_or("CrewHelm").chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.')).take(60).collect();
+            let msg: String = format!("Integra «{}» (de {})", p["title"].as_str().unwrap_or(&branch).chars().filter(|c| !c.is_control()).take(150).collect::<String>(), p["author"].as_str().unwrap_or("?").chars().filter(|c| !c.is_control()).take(60).collect::<String>());
+            let id = ["-c", "user.name=CrewHelm", "-c", "user.email=crewhelm@localhost"];
+            let squash = p["squash"].as_bool() == Some(true);
+            let res = if squash {
+                match pgit(dir, &["merge", "--squash", &branch]).await {
+                    Ok(_) => pgit(dir, &[id[0], id[1], id[2], id[3], "commit", "-q", "-m", &format!("{msg} — por {who}")]).await,
+                    Err(e) => Err(e),
+                }
+            } else {
+                pgit(dir, &[id[0], id[1], id[2], id[3], "merge", "--no-ff", "-q", "-m", &format!("{msg} — por {who}"), &branch]).await
+            };
+            if let Err(e) = res {
+                // git cuenta los conflictos por la salida normal, no por el error: se miran los archivos sin resolver
+                let conflict = dir.join(".git/MERGE_HEAD").exists() || !pgit(dir, &["diff", "--name-only", "--diff-filter=U"]).await.unwrap_or_default().is_empty();
+                let _ = pgit(dir, &["merge", "--abort"]).await;
+                let _ = pgit(dir, &["reset", "-q", "--hard", "HEAD"]).await;
+                return Err(if conflict { "Tiene conflictos con la rama principal: la persona tiene que actualizar su copia (cw actualizar) y volver a enviarlo".into() } else { format!("No pude integrar: {e}") });
+            }
+            let sha = pgit(dir, &["rev-parse", "--short", "HEAD"]).await.unwrap_or_default();
+            // la rama de la persona ya no hace falta en el proyecto (queda en su copia)
+            let _ = pgit(dir, &["branch", "-D", &branch]).await;
+            Ok(json!({ "merged": true, "sha": sha }))
+        }
+        _ => Err("Acción no válida".into()),
+    }
+}
+
 async fn run_job(p: &Value) -> Result<Value, String> {
     let dir = crate::iso::expand_home(p["dir"].as_str().unwrap_or(""));
     if !dir.is_absolute() {
@@ -396,6 +523,7 @@ async fn run_job(p: &Value) -> Result<Value, String> {
         }
         "status" => return Ok(status(&dir).await),
         "recover" => return recover(p, &dir).await,
+        "review" => return review(p, &dir).await,
         "mirror" => {
             // «todo en el servidor»: se baja todo lo que el proyecto tiene en GitHub (ramas y etiquetas) y se le quita la subida;
             // al volver a permitir GitHub se la devuelve
@@ -669,6 +797,66 @@ mod tests {
         g(&sola, &["init", "-q"]);
         let r = run_job(&json!({ "mode": "mirror", "dir": sola.to_string_lossy(), "lock": true })).await.unwrap();
         assert_eq!(r["skipped"], true);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[tokio::test]
+    async fn revisar_y_juntar_sin_github() {
+        let d = std::env::temp_dir().join(format!("cw-rev-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let g = |a: &[&str]| {
+            let o = std::process::Command::new("git").arg("-C").arg(&d).args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(a).output().unwrap();
+            assert!(o.status.success(), "{a:?}: {}", String::from_utf8_lossy(&o.stderr));
+        };
+        g(&["init", "-q", "-b", "main"]);
+        std::fs::write(d.join("a.txt"), "uno\n").unwrap();
+        g(&["add", "-A"]);
+        g(&["commit", "-qm", "base"]);
+        // rama limpia
+        g(&["switch", "-qc", "marta/tema"]);
+        std::fs::write(d.join("b.txt"), "nuevo\n").unwrap();
+        g(&["add", "-A"]);
+        g(&["commit", "-qm", "b"]);
+        // rama que choca con main
+        g(&["switch", "-q", "main"]);
+        g(&["switch", "-qc", "juan/choque"]);
+        std::fs::write(d.join("a.txt"), "juan\n").unwrap();
+        g(&["commit", "-qam", "j"]);
+        g(&["switch", "-q", "main"]);
+        std::fs::write(d.join("a.txt"), "main\n").unwrap();
+        g(&["commit", "-qam", "m"]);
+        let q = |extra: Value| {
+            let mut v = json!({ "mode": "review", "dir": d.to_string_lossy() });
+            for (k, x) in extra.as_object().unwrap() { v[k] = x.clone(); }
+            v
+        };
+        let i = run_job(&q(json!({ "action": "info", "branches": ["marta/tema", "juan/choque", "no/existe"] }))).await.unwrap();
+        assert_eq!(i["base"], "main");
+        let b = i["branches"].as_array().unwrap();
+        assert_eq!((b[0]["files"].as_i64(), b[0]["mergeable"].clone()), (Some(1), json!(true)));
+        assert_eq!(b[1]["mergeable"], false);
+        assert_eq!(b[2]["exists"], false);
+        let f = run_job(&q(json!({ "action": "files", "branch": "marta/tema" }))).await.unwrap();
+        assert_eq!(f["files"][0]["name"], "b.txt");
+        assert_eq!(f["files"][0]["status"], "added");
+        assert!(f["files"][0]["patch"].as_str().unwrap().contains("+nuevo"));
+        // con conflicto: se rechaza y la carpeta queda limpia
+        let e = run_job(&q(json!({ "action": "merge", "branch": "juan/choque", "title": "t", "author": "juan", "who": "ana" }))).await.unwrap_err();
+        assert!(e.contains("conflictos"), "{e}");
+        assert!(git(&d, &["status", "--porcelain"]).await.unwrap().is_empty());
+        // limpia: se junta y la rama se borra del proyecto
+        let m = run_job(&q(json!({ "action": "merge", "branch": "marta/tema", "title": "Mi tema", "author": "marta", "who": "ana" }))).await.unwrap();
+        assert_eq!(m["merged"], true);
+        assert!(d.join("b.txt").exists());
+        assert!(!git(&d, &["branch", "--list", "marta/tema"]).await.unwrap().contains("marta"));
+        assert!(git(&d, &["log", "-1", "--format=%s"]).await.unwrap().contains("Integra «Mi tema» (de marta)"));
+        // cambios sin guardar en la carpeta: no se integra encima
+        std::fs::write(d.join("a.txt"), "sucio").unwrap();
+        let e = run_job(&q(json!({ "action": "merge", "branch": "juan/choque", "title": "t", "author": "j", "who": "ana" }))).await.unwrap_err();
+        assert!(e.contains("sin guardar"), "{e}");
+        // nombres peligrosos
+        assert!(run_job(&q(json!({ "action": "files", "branch": "../x" }))).await.is_err());
         let _ = std::fs::remove_dir_all(&d);
     }
 }

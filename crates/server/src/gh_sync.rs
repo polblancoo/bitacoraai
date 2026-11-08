@@ -466,6 +466,9 @@ async fn agent_pr(State(st): State<AppState>, user: AuthUser, Json(b): Json<Agen
     if branch.is_empty() || branch.len() > 120 || !branch.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '/' | '.')) || branch.contains("..") {
         return Err(AppError::bad("Nombre de rama no válido"));
     }
+    if crate::gitmode::internal_for(&st, b.project) {
+        return crate::reviews::create(&st, b.project, team, &b.who, &branch, &b.title, &b.body).await;
+    }
     let g = crate::github::gh_p(&st, b.project)?;
     let repo = repo_of(&st, b.project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene repositorio de GitHub"))?;
     let cfg = load(&st, b.project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene GitHub conectado en CrewHelm"))?;

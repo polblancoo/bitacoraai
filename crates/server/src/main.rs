@@ -28,6 +28,7 @@ mod gitsetup;
 mod mailcfg;
 mod setup;
 mod prs;
+mod reviews;
 mod google;
 mod teampanel;
 mod telegram;

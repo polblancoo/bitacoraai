@@ -652,8 +652,17 @@ const createTeam = guard(async () => {
   const t = await api("POST", "/api/teams", { name: f.name });
   S.teams.push(t); await selectTeam(t);
 });
+// proyectos «todo en el servidor»: ¿la carpeta ya es un repositorio git? (para no mostrar «Sin repositorio» de más)
+function needLocalRepo(pid) {
+  S.localRepo = S.localRepo || {};
+  if (S.gitInternal?.has(pid) && S.localRepo[pid] === undefined) {
+    S.localRepo[pid] = null;
+    api("GET", `/api/projects/${pid}/git/state`).then((r) => { S.localRepo[pid] = !!r.is_repo; render(); }).catch(() => { S.localRepo[pid] = false; });
+  }
+  return false;
+}
 // Integrar: revisar y juntar (o devolver) el trabajo que el equipo manda con «Enviar a revisión» (Pull Requests de GitHub)
-const PR_STATE = { clean: ["✅ Listo para integrar", "ok"], has_hooks: ["✅ Listo para integrar", "ok"], unstable: ["⚠ Las pruebas no pasan", "bad"], dirty: ["⛔ Tiene conflictos: la persona debe actualizar su copia y volver a enviar", "bad"], blocked: ["⛔ GitHub lo bloquea (falta una aprobación o regla)", "bad"], behind: ["Desactualizado respecto de la rama principal", ""], draft: ["Borrador", ""] };
+const PR_STATE = { clean: ["✅ Listo para integrar", "ok"], has_hooks: ["✅ Listo para integrar", "ok"], unstable: ["⚠ Las pruebas no pasan", "bad"], dirty: ["⛔ Tiene conflictos: la persona debe actualizar su copia y volver a enviar", "bad"], blocked: ["⛔ GitHub lo bloquea (falta una aprobación o regla)", "bad"], behind: ["Desactualizado respecto de la rama principal", ""], draft: ["Borrador", ""], gone: ["⛔ La rama ya no está en el proyecto: la persona tiene que volver a enviarla", "bad"], unknown: ["No pude mirar el estado ahora (el agente del proyecto no está conectado)", ""] };
 const diffView = (f) => h("details", { class: "diff" }, h("summary", {}, `${f.name}  `, h("span", { class: "add" }, "+" + f.add), " ", h("span", { class: "del" }, "−" + f.del), f.status === "added" ? " (nuevo)" : f.status === "removed" ? " (borrado)" : ""),
     f.binary ? h("small", { class: "hint" }, "Archivo que no se puede mostrar como texto (imagen, documento…).")
       : h("pre", { class: "patch" }, ...f.patch.split("\n").map((l) => h("div", { class: l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : l.startsWith("@@") ? "hunk" : "" }, l || " ")), f.cut && h("div", { class: "hint" }, "… (se muestra solo el principio; el resto está en GitHub)")));
@@ -692,11 +701,11 @@ async function openIntegrar() {
               if (!f) return;
               await api("POST", `/api/projects/${p.id}/prs/${x.number}/close`, { comment: f.comment || "" }); toast("Devuelto"); load();
             }) }, "↩ Devolver"),
-            h("a", { class: "btnlike", href: x.url, target: "_blank", rel: "noopener", title: "Abrir en GitHub" }, "🐙")),
+            x.url && h("a", { class: "btnlike", href: x.url, target: "_blank", rel: "noopener", title: "Abrir en GitHub" }, "🐙")),
           det);
       });
       body.replaceChildren(
-        h("small", { class: "hint" }, "Repositorio " + r.repo + ". Acá llega lo que las personas mandan con «Enviar a revisión». " + (r.can_merge ? "Revisá los cambios y, si está bien, integralo." : "Solo los owners pueden integrar o devolver.")),
+        h("small", { class: "hint" }, r.internal ? "El código está en este servidor, sin GitHub." : "Repositorio " + r.repo + ".", " ", "Acá llega lo que las personas mandan con «Enviar a revisión».", " ", r.can_merge ? "Revisá los cambios y, si está bien, integralo." : "Solo los owners pueden integrar o devolver."),
         r.can_merge && h("label", { class: "chk", title: "Junta todos los pasos del trabajo en uno solo, más prolijo en el historial  ·  git merge --squash" }, squash, " Juntar en un solo cambio"),
         ...(cards.length ? cards : [h("p", { class: "hint" }, "No hay trabajo esperando revisión. 🎉")]),
         h("div", { class: "actions" }, h("button", { class: "ghost", onclick: load }, "↻ Actualizar"), h("button", { class: "ghost", onclick: close }, "Cerrar")));
@@ -2787,10 +2796,10 @@ function appView() {
             try { await api("POST", `/api/projects/${S.project.id}/open-folder`); toast("Carpeta abierta"); }
             catch (e) { copy(S.project.work_dir, "La carpeta está en la máquina del servidor: no se abre desde acá. Ruta copiada"); }
           } }, "📂 Abrir"), " ", h("button", { class: "ghost", title: "Ver los archivos de la carpeta de trabajo (solo lectura), sin importar desde qué máquina entres", onclick: openFiles }, "🗂 Archivos")),
-        !S.project.repo && can("member") && h("span", { class: "warn", title: "Sin repositorio git conectado, la carpeta del proyecto queda de solo lectura para el equipo: nadie puede editar ni enviar su trabajo a revisión" }, "⚠ Sin repositorio ",
+        needLocalRepo(S.project.id) || !S.project.repo && can("member") && !(S.gitInternal?.has(S.project.id) && S.localRepo?.[S.project.id]) && h("span", { class: "warn", title: "Sin repositorio git conectado, la carpeta del proyecto queda de solo lectura para el equipo: nadie puede editar ni enviar su trabajo a revisión" }, "⚠ Sin repositorio ",
           can("owner") ? h("button", { class: "ghost", onclick: () => openGitSetup(S.project), title: "Abre el asistente: traer un repo de GitHub, crear uno nuevo o dejarlo solo en la máquina" }, "🐙 Crear o conectar")
             : h("button", { class: "ghost", onclick: () => requestRepo(S.project.id), title: "Les avisa a los owners del equipo para que creen el repositorio" }, "🙋 Pedir que lo creen")),
-        S.project.repo && h("button", { class: "ghost", onclick: openIntegrar, title: "Revisar y juntar el trabajo que mandó el equipo (Pull Requests)  ·  git diff / git merge" }, "🔀 Integrar"),
+        (S.project.repo || S.gitInternal?.has(S.project.id)) && h("button", { class: "ghost", onclick: openIntegrar, title: "Revisar y juntar el trabajo que mandó el equipo (Pull Requests)  ·  git diff / git merge" }, "🔀 Integrar"),
         S.project.repo && (repoUrl(S.project.repo)
           ? h("a", { class: "repo-link", href: repoUrl(S.project.repo), target: "_blank", rel: "noopener", title: "Abrir el repositorio en una pestaña nueva" }, "🐙 " + S.project.repo.replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/\.git$/, "") + " ↗")
           : h("span", { title: "Repositorio" }, "🔗 " + S.project.repo))),

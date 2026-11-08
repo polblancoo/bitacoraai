@@ -185,6 +185,32 @@ impl Pedidos {
         }
     }
 
+
+    /// Deja la rama (ya traída a `refs/crewhelm/…`) como rama normal del repositorio del proyecto. Solo se avanza: si la rama ya existía con otros cambios, se rechaza.
+    async fn dejar_en_proyecto(&self, rama: &str, reference: &str) -> Result<(), String> {
+        let git = |args: Vec<String>| {
+            let mut c = tokio::process::Command::new("git");
+            c.arg("-C").arg(&self.project_dir).args(["-c", "core.hooksPath=/dev/null"]).args(args).stdin(std::process::Stdio::null()).kill_on_drop(true);
+            async move { c.output().await }
+        };
+        let ok = |o: std::io::Result<std::process::Output>| o.ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+        let sha = ok(git(vec!["rev-parse".into(), "--verify".into(), format!("{reference}^{{commit}}")]).await).ok_or("No pude leer tu rama.")?;
+        let head = format!("refs/heads/{rama}");
+        if ok(git(vec!["branch".into(), "--show-current".into()]).await).as_deref() == Some(rama) {
+            return Err("Esa rama está abierta en la carpeta del proyecto: creá una rama nueva (cw rama).".into());
+        }
+        if let Some(old) = ok(git(vec!["rev-parse".into(), "-q".into(), "--verify".into(), head.clone()]).await) {
+            // solo se avanza: lo que ya estaba tiene que ser parte de lo nuevo
+            let anc = git(vec!["merge-base".into(), "--is-ancestor".into(), old, sha.clone()]).await.map(|o| o.status.success()).unwrap_or(false);
+            if !anc {
+                return Err("Esa rama ya existe en el proyecto con otros cambios: creá una rama nueva (cw rama).".into());
+            }
+        }
+        ok(git(vec!["update-ref".into(), head, sha]).await).ok_or("No pude dejar la rama en el proyecto.")?;
+        let _ = git(vec!["update-ref".into(), "-d".into(), reference.to_string()]).await;
+        Ok(())
+    }
+
     async fn enviar(&self, out: &Path, rama: &str, titulo: &str, cuerpo: &str) -> bool {
         let say = |s: &str| {
             if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(out) {
@@ -228,28 +254,39 @@ impl Pedidos {
                 return false;
             }
         }
-        say("2/3 Subiendo la rama a GitHub…");
-        let mut p = tokio::process::Command::new("git");
-        p.arg("-C").arg(&self.project_dir).args(["push", "-q", "origin", &format!("{reference}:refs/heads/{rama}")]).env("GIT_TERMINAL_PROMPT", "0").env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=10").kill_on_drop(true);
-        let pushed = tokio::time::timeout(Duration::from_secs(90), p.output()).await;
-        let _ = tokio::process::Command::new("git").arg("-C").arg(&self.project_dir).args(["update-ref", "-d", &reference]).status().await;
-        match pushed {
-            Ok(Ok(o)) if o.status.success() => {}
-            Ok(Ok(o)) => {
-                let e = String::from_utf8_lossy(&o.stderr).to_string();
-                let msg = if e.contains("rejected") || e.contains("non-fast-forward") { "esa rama ya existe en el proyecto con otros cambios: creá una rama nueva (cw rama)".to_string() } else { crate::tail(&e, 200) };
-                say(&format!("\x1b[31mNo pude subir la rama: {msg}\x1b[0m"));
+        // «todo en el servidor»: la rama queda en el repositorio del proyecto y no se sube a ningún lado
+        let internal = self.api.get(&format!("/api/me/allow?project={}", self.pid)).await.ok().and_then(|v| v["no_github"].as_bool()).unwrap_or(false);
+        if internal {
+            say("2/2 Dejando tu rama en el proyecto…");
+            if let Err(m) = self.dejar_en_proyecto(rama, &reference).await {
+                say(&format!("\x1b[31m{m}\x1b[0m"));
                 return false;
             }
-            _ => {
-                say("\x1b[31mNo pude subir la rama (sin conexión con GitHub o tardó demasiado).\x1b[0m");
-                return false;
+        } else {
+            say("2/3 Subiendo la rama a GitHub…");
+            let mut p = tokio::process::Command::new("git");
+            p.arg("-C").arg(&self.project_dir).args(["push", "-q", "origin", &format!("{reference}:refs/heads/{rama}")]).env("GIT_TERMINAL_PROMPT", "0").env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=10").kill_on_drop(true);
+            let pushed = tokio::time::timeout(Duration::from_secs(90), p.output()).await;
+            let _ = tokio::process::Command::new("git").arg("-C").arg(&self.project_dir).args(["update-ref", "-d", &reference]).status().await;
+            match pushed {
+                Ok(Ok(o)) if o.status.success() => {}
+                Ok(Ok(o)) => {
+                    let e = String::from_utf8_lossy(&o.stderr).to_string();
+                    let msg = if e.contains("rejected") || e.contains("non-fast-forward") { "esa rama ya existe en el proyecto con otros cambios: creá una rama nueva (cw rama)".to_string() } else { crate::tail(&e, 200) };
+                    say(&format!("\x1b[31mNo pude subir la rama: {msg}\x1b[0m"));
+                    return false;
+                }
+                _ => {
+                    say("\x1b[31mNo pude subir la rama (sin conexión con GitHub o tardó demasiado).\x1b[0m");
+                    return false;
+                }
             }
         }
-        say("3/3 Pidiendo la revisión (Pull Request)…");
+        say(if internal { "Avisando a quien revisa…" } else { "3/3 Pidiendo la revisión (Pull Request)…" });
         match self.api.call(reqwest::Method::POST, "/api/agent/pr", Some(serde_json::json!({ "project": self.pid, "who": self.who, "branch": rama, "title": titulo, "body": cuerpo }))).await {
             Ok(v) => {
-                say(&format!("\x1b[32m✔ Listo. Quien revisa ya puede verlo: {}\x1b[0m", v["url"].as_str().unwrap_or("")));
+                let url = v["url"].as_str().unwrap_or("");
+                say(&if url.is_empty() { "\x1b[32m✔ Listo. Quien revisa ya puede verlo en «🔀 Integrar» del proyecto.\x1b[0m".to_string() } else { format!("\x1b[32m✔ Listo. Quien revisa ya puede verlo: {url}\x1b[0m") });
                 true
             }
             Err(e) => {
@@ -653,6 +690,48 @@ mod tests {
         assert!(!p.enviar(&d.join("out2"), "otra/cosa", "t", "").await);
         assert!(!p.enviar(&d.join("out3"), "marta/../main", "t", "").await);
         assert!(sh(&gh, &["branch", "--list", "otra/cosa"]).is_empty());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Sin GitHub: la rama de la persona queda como rama del repositorio del proyecto; solo avanza.
+    #[tokio::test]
+    async fn dejar_rama_en_el_proyecto() {
+        let d = std::env::temp_dir().join(format!("tm-int-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let (proj, home) = (d.join("proj"), d.join("home"));
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&proj).unwrap();
+        sh(&proj, &["init", "-q", "-b", "main"]);
+        std::fs::write(proj.join("a.txt"), "hola").unwrap();
+        sh(&proj, &["add", "."]);
+        sh(&proj, &["commit", "-q", "-m", "a"]);
+        let copy = home.join("proj");
+        sh(&home, &["clone", "-q", "--local", proj.to_str().unwrap(), "proj"]);
+        sh(&copy, &["switch", "-q", "-c", "marta/tema"]);
+        std::fs::write(copy.join("b.txt"), "uno").unwrap();
+        sh(&copy, &["add", "."]);
+        sh(&copy, &["commit", "-q", "-m", "b"]);
+        let cfg = crate::Cfg { url: "http://127.0.0.1:1".into(), token: String::new(), cmd: String::new(), poll: 1, timeout: 1, max: 1, fallback_dir: None, once: true };
+        let p = Pedidos { api: Arc::new(Api { http: reqwest::Client::new(), cfg }), home: home.clone(), copy: copy.clone(), project_dir: proj.clone(), pid: 1, who: "Marta".into(), prefix: "marta".into() };
+        let fetch = |branch: &str| sh(&proj, &["fetch", "-q", copy.to_str().unwrap(), &format!("+refs/heads/{branch}:refs/crewhelm/{branch}")]);
+        fetch("marta/tema");
+        p.dejar_en_proyecto("marta/tema", "refs/crewhelm/marta/tema").await.unwrap();
+        assert!(sh(&proj, &["branch", "--list", "marta/tema"]).contains("marta/tema"));
+        assert!(sh(&proj, &["for-each-ref", "refs/crewhelm"]).is_empty());
+        // avanzar está bien
+        std::fs::write(copy.join("c.txt"), "dos").unwrap();
+        sh(&copy, &["add", "."]);
+        sh(&copy, &["commit", "-q", "-m", "c"]);
+        fetch("marta/tema");
+        p.dejar_en_proyecto("marta/tema", "refs/crewhelm/marta/tema").await.unwrap();
+        assert_eq!(sh(&proj, &["rev-parse", "marta/tema"]), sh(&copy, &["rev-parse", "HEAD"]));
+        // otra historia con el mismo nombre se rechaza
+        sh(&copy, &["switch", "-q", "-C", "marta/tema", "main"]);
+        std::fs::write(copy.join("x.txt"), "otra").unwrap();
+        sh(&copy, &["add", "."]);
+        sh(&copy, &["commit", "-q", "-m", "x"]);
+        fetch("marta/tema");
+        assert!(p.dejar_en_proyecto("marta/tema", "refs/crewhelm/marta/tema").await.is_err());
         let _ = std::fs::remove_dir_all(&d);
     }
 

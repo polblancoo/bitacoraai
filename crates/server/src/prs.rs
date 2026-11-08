@@ -52,6 +52,9 @@ fn by(pr: &Value) -> String {
 }
 
 async fn list(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>) -> Result<Json<Value>> {
+    if crate::gitmode::internal_for(&st, project) {
+        return crate::reviews::list(&st, &user, project).await;
+    }
     let (g, token, repo, team) = ctx(&st, project, &user, Role::Viewer).await?;
     let can_merge = routes::require(&st, team, user.id, Role::Owner).await.is_ok();
     let open = api_get(&g, &token, &format!("/repos/{repo}/pulls?state=open&per_page=20&sort=created&direction=desc")).await?;
@@ -69,6 +72,9 @@ async fn list(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id
 }
 
 async fn files(State(st): State<AppState>, user: AuthUser, Path((project, n)): Path<(Id, i64)>) -> Result<Json<Value>> {
+    if crate::gitmode::internal_for(&st, project) {
+        return crate::reviews::files(&st, &user, project, n).await;
+    }
     let (g, token, repo, _) = ctx(&st, project, &user, Role::Viewer).await?;
     Ok(Json(json!({ "files": pr_files(&g, &token, &repo, n).await? })))
 }
@@ -100,6 +106,9 @@ struct MergeBody {
 }
 
 async fn merge(State(st): State<AppState>, user: AuthUser, Path((project, n)): Path<(Id, i64)>, Json(b): Json<MergeBody>) -> Result<Json<Value>> {
+    if crate::gitmode::internal_for(&st, project) {
+        return crate::reviews::merge(&st, &user, project, n, b.squash).await;
+    }
     let (g, token, repo, team) = ctx(&st, project, &user, Role::Owner).await?;
     let pr = api_get(&g, &token, &format!("/repos/{repo}/pulls/{n}")).await?;
     if pr["state"].as_str() != Some("open") {
@@ -139,6 +148,9 @@ struct CloseBody {
 }
 
 async fn close(State(st): State<AppState>, user: AuthUser, Path((project, n)): Path<(Id, i64)>, Json(b): Json<CloseBody>) -> Result<Json<Value>> {
+    if crate::gitmode::internal_for(&st, project) {
+        return crate::reviews::close(&st, &user, project, n, &b.comment).await;
+    }
     let (g, token, repo, team) = ctx(&st, project, &user, Role::Owner).await?;
     let pr = api_get(&g, &token, &format!("/repos/{repo}/pulls/{n}")).await?;
     let me = name_of(&st, user.id).await;

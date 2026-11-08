@@ -488,3 +488,19 @@ CREATE TABLE IF NOT EXISTS recovery_codes (
     used_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_recovery_user ON recovery_codes(user_id);
+
+-- Pedidos de revisión sin GitHub («todo en el servidor»): la rama de la persona queda en el repositorio del proyecto
+CREATE TABLE IF NOT EXISTS reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    branch TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    author TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    decided_by TEXT,
+    decided_at TEXT,
+    note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_reviews_project ON reviews(project_id, status);
