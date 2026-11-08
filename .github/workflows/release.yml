@@ -134,6 +134,14 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+      # El instalador (install.sh) espera un .tar.gz por programa y un SHA256SUMS en el release
+      - name: Paquetes por programa y sumas de control
+        working-directory: artifacts
+        run: |
+          mkdir x && tar xzf tm-linux-x86_64.tar.gz -C x
+          for b in tm-server bitacora tm-agent; do tar czf "$b-linux-x86_64.tar.gz" -C x "$b"; done
+          rm -rf x
+          sha256sum * > SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
