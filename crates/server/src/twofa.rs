@@ -18,6 +18,72 @@ pub fn router() -> Router<AppState> {
         .route("/api/me/2fa/disable", post(disable))
         .route("/api/me/dav-password", post(dav_password))
         .route("/api/admin/users/{id}/2fa/reset", post(admin_reset))
+        .route("/api/admin/2fa-policy", get(policy_read).put(policy_save))
+}
+
+/// Qué grupos tienen que usar 2FA, según lo que decidió el administrador del servidor: (administradores, CTO, resto de las personas).
+/// Es un pedido, no un bloqueo: la app avisa a esas personas y el administrador ve quién falta.
+pub async fn policy(st: &AppState) -> (bool, bool, bool) {
+    let on = |k: &'static str| async move { crate::license::meta_get(&st.db, k).await.is_some_and(|v| v == "1") };
+    (on("req2fa_admin").await, on("req2fa_cto").await, on("req2fa_user").await)
+}
+
+fn applies(p: (bool, bool, bool), role: &str) -> bool {
+    match role { "admin" => p.0, "cto" => p.1, _ => p.2 }
+}
+
+/// ¿El servidor le pide a esta persona que active el 2FA (por su rol) y todavía no lo hizo?
+pub async fn asked(st: &AppState, user: Id) -> bool {
+    let role: Option<String> = sqlx::query_scalar("SELECT server_role FROM users WHERE id = ? AND is_bot = 0").bind(user).fetch_optional(&st.db).await.ok().flatten();
+    let p = policy(st).await;
+    match role {
+        Some(r) => applies(p, &r) && !enabled(st, user).await,
+        None => false,
+    }
+}
+
+async fn policy_read(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+    sysops::need(&st, &user, false).await?;
+    let (a, c, u) = policy(&st).await;
+    let rows = sqlx::query("SELECT server_role, COUNT(*), SUM(totp_enabled) FROM users WHERE is_bot = 0 AND id NOT IN (SELECT user_id FROM api_tokens) GROUP BY server_role").fetch_all(&st.db).await?;
+    let mut counts = serde_json::Map::new();
+    for r in rows {
+        counts.insert(r.get::<String, _>(0), json!({ "total": r.get::<i64, _>(1), "enrolled": r.get::<Option<i64>, _>(2).unwrap_or(0) }));
+    }
+    // quiénes faltan en los grupos a los que se les pide
+    let pend = sqlx::query("SELECT username, server_role FROM users WHERE is_bot = 0 AND totp_enabled = 0 AND id NOT IN (SELECT user_id FROM api_tokens) ORDER BY username").fetch_all(&st.db).await?;
+    let pending: Vec<Value> = pend.iter().filter(|r| applies((a, c, u), &r.get::<String, _>(1))).map(|r| json!(r.get::<String, _>(0))).collect();
+    Ok(Json(json!({ "admin": a, "cto": c, "user": u, "counts": counts, "pending": pending, "can_edit": sysops::need(&st, &user, true).await.is_ok() })))
+}
+
+#[derive(Deserialize)]
+struct Policy {
+    admin: bool,
+    cto: bool,
+    user: bool,
+}
+
+/// Solo el administrador del servidor decide a quiénes se les pide (incluido él, por separado). A quienes pasan a estar incluidos y
+/// todavía no lo activaron les llega un aviso (bandeja, Telegram y correo según lo que tengan conectado).
+async fn policy_save(State(st): State<AppState>, user: AuthUser, Json(b): Json<Policy>) -> Result<Json<Value>> {
+    sysops::need(&st, &user, true).await?;
+    let before = policy(&st).await;
+    for (k, v) in [("req2fa_admin", b.admin), ("req2fa_cto", b.cto), ("req2fa_user", b.user)] {
+        crate::license::meta_set(&st.db, k, if v { "1" } else { "0" }).await?;
+    }
+    let now = (b.admin, b.cto, b.user);
+    if before != now {
+        audit(&st, user.id, user.id, "politica_2fa").await;
+        tracing::info!("2fa: política cambiada por #{}: administradores={} cto={} resto={}", user.id, b.admin, b.cto, b.user);
+        let rows = sqlx::query("SELECT id, server_role FROM users WHERE is_bot = 0 AND totp_enabled = 0 AND id NOT IN (SELECT user_id FROM api_tokens)").fetch_all(&st.db).await?;
+        for r in rows {
+            let (id, role): (Id, String) = (r.get(0), r.get(1));
+            if applies(now, &role) && !applies(before, &role) {
+                crate::notify::notify(&st, id, "security", None, None, "🔐 El administrador pide activar la verificación en dos pasos: Mi perfil → Verificación en dos pasos.".into()).await;
+            }
+        }
+    }
+    policy_read(State(st), user).await
 }
 
 const B32: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -133,7 +199,7 @@ async fn status(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value
     user.human_only()?;
     let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM recovery_codes WHERE user_id = ? AND used_at IS NULL").bind(user.id).fetch_one(&st.db).await?;
     let has_dav: Option<String> = sqlx::query_scalar("SELECT dav_token_hash FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
-    Ok(Json(json!({ "enabled": enabled(&st, user.id).await, "recovery_left": left, "dav_password": has_dav.is_some() })))
+    Ok(Json(json!({ "enabled": enabled(&st, user.id).await, "recovery_left": left, "dav_password": has_dav.is_some(), "asked": asked(&st, user.id).await })))
 }
 
 /// Genera un secreto nuevo (todavía sin activar) y lo muestra como QR para escanear con la app.

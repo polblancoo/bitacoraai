@@ -314,6 +314,7 @@ async function loadInbox(auto) {
   const [inbox, me] = await Promise.all([api("GET", "/api/inbox"), api("GET", "/api/me")]).catch(() => [null, null]);
   if (!inbox) return;
   S.inbox = inbox; S.me = me; S.unread = inbox.unread;
+  if (auto && !S.tfaHint) { S.tfaHint = 1; api("GET", "/api/me/2fa").then((t) => { if (t.asked) setTimeout(() => toast("🔐 El administrador pide activar la verificación en dos pasos: Mi perfil → Verificación en dos pasos."), 2500); }).catch(() => {}); }
   if (auto && me && !me.email_available && ["cto", "admin"].includes(me.server_role) && !S.mailHint) { S.mailHint = 1; setTimeout(() => toast("Este servidor todavía no manda correos. Configuración → «🚀 Primeros pasos» lo deja andando en un minuto."), 1500); }
   if (!auto || inbox.unread > 0) openInbox();
   else render();
@@ -437,6 +438,7 @@ function twofaBox() {
       load();
     });
     box.replaceChildren(h("h4", {}, "🔐 Verificación en dos pasos"),
+      st.asked && h("small", { class: "warn" }, "El administrador del servidor pide que actives esto."),
       h("small", {}, st.enabled ? `Activada: al entrar te pedimos el código de tu app. Te quedan ${st.recovery_left} códigos de recuperación.` : "Suma un código de tu teléfono a la contraseña: aunque alguien la robe, no puede entrar."),
       h("div", { class: "row" }, st.enabled ? h("button", { class: "danger", onclick: off }, "Desactivar") : h("button", { class: "primary", onclick: activate }, "Activar"), h("span", { class: "spacer" }),
         h("button", { class: "ghost", title: st.enabled ? "Con 2FA, la carpeta de red no acepta tu contraseña: usa esta" : "Opcional: una contraseña propia para la carpeta de red", onclick: davPw }, "🔑 Contraseña para la carpeta de red")));
@@ -1413,8 +1415,18 @@ function rolesPanel() {
   const box = h("div", { class: "cfg-item" });
   box.dataset.key = "srvroles";
   const load = async () => {
-    const us = await api("GET", "/api/admin/users");
-    box.replaceChildren(h("p", { class: "hint" }, "Usuario: usa la app. CTO: además ve «Procesos», fija los límites de las terminales y ve el uso por persona. Administrador: todo, incluido cambiar estos roles. No cambia los roles dentro de cada equipo."),
+    const [us, pol] = await Promise.all([api("GET", "/api/admin/users"), api("GET", "/api/admin/2fa-policy").catch(() => null)]);
+    const polBox = pol && h("div", { class: "cfg-item" }, h("b", {}, "🔐 Pedir verificación en dos pasos"),
+      h("small", { class: "hint" }, "Elegí a quién se le pide, por separado. Es un pedido, no un bloqueo: a quienes falten les llega un aviso y se les recuerda al entrar; acá ves quién falta." + (pol.can_edit ? "" : " Solo el administrador del servidor lo cambia.")),
+      ...[["admin", "Administradores (incluido vos)"], ["cto", "CTO"], ["user", "Resto de las personas"]].map(([k, lbl]) => {
+        const c = pol.counts[k] || { total: 0, enrolled: 0 };
+        return h("label", { class: "chk" }, h("input", { type: "checkbox", checked: pol[k], disabled: !pol.can_edit, onchange: guard(async (e) => {
+          const b = { admin: pol.admin, cto: pol.cto, user: pol.user, [k]: e.target.checked };
+          await api("PUT", "/api/admin/2fa-policy", b); toast(e.target.checked ? "Listo: les avisamos a quienes falten" : "Ya no se les pide"); load();
+        }) }), ` ${lbl} · ${c.enrolled} de ${c.total} lo tienen activo`);
+      }),
+      pol.pending.length > 0 && h("small", { class: "warn" }, "Faltan: " + pol.pending.join(", ")));
+    box.replaceChildren(polBox, h("p", { class: "hint" }, "Usuario: usa la app. CTO: además ve «Procesos», fija los límites de las terminales y ve el uso por persona. Administrador: todo, incluido cambiar estos roles. No cambia los roles dentro de cada equipo."),
       ...us.map((u) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, u.username),
         h("select", { onchange: async (e) => { try { await api("PUT", `/api/admin/users/${u.id}/role`, { role: e.target.value }); toast("Rol actualizado"); } catch (x) { toast(x.message, true); } load(); } },
           Object.entries(ROLE_LBL).map(([k, v]) => h("option", { value: k, selected: u.role === k }, v)))

@@ -32,6 +32,7 @@ Solo la última versión publicada recibe correcciones de seguridad. / Only the 
 
 - El aislamiento de las IAs es solo en **Linux** (bubblewrap); en macOS y Windows no hay equivalente.
 - La cuota de disco se mide periódicamente: **no es un tope duro**.
+- El 2FA lo puede pedir el administrador por grupo (administradores, CTO, resto), pero no se impone: es un pedido con avisos.
 - No hay SSO (OIDC/SAML) ni una revisión de seguridad externa todavía.
 - La terminal de texto (`tm`) aún no admite el código de 2FA.
 - Base de datos SQLite de un solo nodo.

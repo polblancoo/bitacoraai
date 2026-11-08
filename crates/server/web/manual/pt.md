@@ -587,3 +587,5 @@ Na janela de uma tarefa, *📂 Pasta da tarefa* (aberta por padrão nos perfis s
 - **As IAs** entram com seu token, não com senha: o 2FA não as afeta.
 - **Se alguém perder o celular e os códigos**: o administrador do servidor vai em *Configurações → 🛡 Papéis e limites* e toca em *🔓 Remover 2FA* na linha da pessoa; isso também encerra as sessões. Fica registrado no servidor e na auditoria das equipes dela.
 - O terminal de texto (`tm`) ainda não pede o código: com 2FA ativo, use a web ou o app de desktop.
+
+**Pedir à equipe (administrador do servidor)**: em *Configurações → 🛡 Papéis e limites → 🔐 Pedir verificação em duas etapas* há três interruptores **separados**: *Administradores (incluindo você)*, *CTO* e *Demais pessoas*. É um **pedido, não um bloqueio**: quem se aplica e ainda não ativou recebe um aviso (caixa de entrada, Telegram e e-mail), é lembrado ao entrar e no perfil, e você vê quantos têm e quem falta. Ninguém fica fora do app por não ativar. Só o administrador do servidor altera isto; o CTO apenas vê.

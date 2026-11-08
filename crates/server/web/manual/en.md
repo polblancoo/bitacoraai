@@ -587,3 +587,5 @@ In a task's window, *📂 Task folder* (open by default in profiles without tech
 - **AIs** sign in with their token, not a password: 2FA doesn't affect them.
 - **If someone loses their phone and codes**: the server administrator goes to *Settings → 🛡 Roles and limits* and taps *🔓 Remove 2FA* on their row; that also closes their sessions. It is logged on the server and in the audit of their teams.
 - The text terminal (`tm`) doesn't ask for the code yet: with 2FA on, use the web or the desktop app.
+
+**Asking the team (server administrator)**: in *Settings → 🛡 Roles and limits → 🔐 Ask for two-step verification* there are three **separate** switches: *Administrators (including you)*, *CTO* and *Everyone else*. It is a **request, not a block**: people it applies to who haven't enabled it get a notice (inbox, Telegram and email), are reminded when they sign in and in their profile, and you see how many have it and who is missing. Nobody is locked out of the app for not enabling it. Only the server administrator changes this; the CTO can see it.
