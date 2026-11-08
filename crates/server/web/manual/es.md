@@ -185,7 +185,7 @@ Una IA puede toparse con algo que no puede hacer sola: un comando bloqueado, un 
 
 Para que la app mande **emails** (códigos de verificación, asignaciones, menciones, recordatorios) el **servidor** necesita una cuenta de correo saliente. Lo configura quien administra el servidor, una sola vez; los usuarios solo verifican su email desde *Configuración → Mi email*.
 
-**Lo más fácil: el asistente.** Entrá como CTO o administrador a *Configuración → 🚀 Primeros pasos → ✉ Correo*: elegí tu proveedor (Gmail, Outlook, Yahoo, Brevo, SendGrid, Mailgun, Amazon SES u otro), escribí usuario y clave, tocá **✉ Probar** (manda un correo de prueba a tu dirección) y después **💾 Guardar y activar**. No hay que editar archivos ni reiniciar: la clave se guarda cifrada y el servidor la usa al instante. Si algo falla, el asistente explica por qué (clave rechazada, puerto bloqueado, seguridad equivocada…).
+**Lo más fácil: el asistente.** Entrá como CTO o administrador a *Configuración → 🖥 Servidor (paso a paso) → ✉ Correo*: elegí tu proveedor (Gmail, Outlook, Yahoo, Brevo, SendGrid, Mailgun, Amazon SES u otro), escribí usuario y clave, tocá **✉ Probar** (manda un correo de prueba a tu dirección) y después **💾 Guardar y activar**. No hay que editar archivos ni reiniciar: la clave se guarda cifrada y el servidor la usa al instante. Si algo falla, el asistente explica por qué (clave rechazada, puerto bloqueado, seguridad equivocada…).
 
 > CrewHelm solo **envía** correo. No lee ninguna casilla, así que **no hace falta POP3 ni IMAP**: alcanza con una cuenta que permita enviar por SMTP.
 
@@ -256,7 +256,7 @@ El botón **💰 Consumo** muestra tokens, costo y horas por IA y por tarea, con
 
 ## 16. Licencia comercial y aviso de instalación
 
-El programa es **AGPL-3.0-only y gratis**. La **licencia comercial** es para quien lo usa en una empresa y no quiere cumplir la AGPL. En **Configuración → 🏢 Licencia** (solo la primera persona registrada del servidor):
+El programa es **AGPL-3.0-only y gratis**. La **licencia comercial** es para quien lo usa en una empresa y no quiere cumplir la AGPL. En **Configuración → 🖥 Servidor (paso a paso) → Licencia** (solo la primera persona registrada del servidor):
 
 1. Elegí si el servidor es **personal** o de **empresa**.
 2. **Comprar una licencia comercial** → elegí el plan, la red (**USDT en Solana o en Ethereum**) y tu email.
@@ -331,9 +331,9 @@ Cada tarea tiene su carpeta de trabajo, con la forma `.crewhelm/<usuario>/<tarea
 - Quien trabaja de forma remota puede subir sus archivos desde ahí.
 
 ## 20. Roles del servidor y Procesos
-Aparte de los roles de cada equipo, hay tres **roles del servidor**: *Usuario*, *CTO* y *Administrador*. La primera persona registrada es administradora. Los cambia un administrador en *Configuración → 🛡 Roles y límites* (siempre tiene que quedar al menos un administrador). El CTO también fija ahí los límites de las terminales y ve el uso por persona (sección 24).
+Aparte de los roles de cada equipo, hay tres **roles del servidor**: *Usuario*, *CTO* y *Administrador*. La primera persona registrada es administradora. Los cambia un administrador en *Configuración → 🖥 Servidor (paso a paso)* (siempre tiene que quedar al menos un administrador). El CTO también fija ahí los límites de las terminales y ve el uso por persona (sección 24).
 
-- **🖥 Procesos** (CTO y administrador): RAM, disco, carga, los procesos de CrewHelm con su CPU y RAM, los contenedores y el uso de la app (base de datos, archivos, personas, IAs, tareas). Se actualiza cada 5 segundos.
+- **🖥 Procesos** (en *Configuración → 🖥 Servidor (paso a paso)*; CTO y administrador): RAM, disco, carga, los procesos de CrewHelm con su CPU y RAM, los contenedores y el uso de la app (base de datos, archivos, personas, IAs, tareas). Se actualiza cada 5 segundos.
 - **Protección contra saturación:** tope de pedidos por IP y por minuto, tope de pedidos simultáneos y límite de tiempo por pedido. Un ataque de red grande se frena afuera (firewall, proxy o CDN). Detrás de un proxy, definí `TM_TRUSTED_PROXY=1`.
 - **Atajos del equipo:** el prefijo en la web es **Alt+K** (el navegador se queda con Ctrl+T).
 
@@ -365,7 +365,7 @@ El botón **🔀 Integrar** (cabecera del proyecto) lista los Pull Requests abie
 - **↩ Devolver** (solo owners): cierra el pedido sin juntarlo y le manda a la persona el motivo.
 - Los owners reciben un aviso cuando alguien envía su trabajo. No se integran borradores ni pedidos con conflictos.
 
-## 24. Límites y cuotas (Configuración → 🛡 Roles y límites)
+## 24. Límites y cuotas (Configuración → 🖥 Servidor (paso a paso))
 El **CTO** y el **administrador** fijan los límites de las terminales de los miembros (los owners no tienen límite); los aplica el agente de cada máquina a las terminales que se abran desde ese momento:
 
 - **💾 Disco por persona** (5120 MB por defecto): lleno, no abre la terminal; al 80 % avisa; al pasar el 125 % la cierra. Se mide cada 90 segundos (no es un tope duro).
@@ -539,7 +539,11 @@ Si el código del proyecto está en la **misma máquina** que `tm-server`, no ha
 
 ## 26. Primeros pasos del servidor
 
-En *Configuración → 🚀 Primeros pasos* (CTO y administrador) hay una lista con lo que le falta al servidor y un asistente por cada pieza. Todos prueban los datos contra el proveedor antes de guardar, guardan los secretos cifrados y se aplican al instante, sin editar archivos ni reiniciar.
+En *Configuración → 🖥 Servidor (paso a paso)* (CTO y administrador) hay una lista con lo que le falta al servidor y un asistente por cada pieza. Todos prueban los datos contra el proveedor antes de guardar, guardan los secretos cifrados y se aplican al instante, sin editar archivos ni reiniciar.
+
+**Todo lo general del servidor está en esta pestaña, en orden:** 1 ✉ Correo · 2 🐙 Código y GitHub · 3 ✈ Telegram · 4 📅 Google Calendar · 🔒 HTTPS · Seguridad (roles y verificación en dos pasos) · Reglas de las IAs (aprobación por riesgo, comandos y límites de las terminales) · Procesos · Licencia. **Tu cuenta** (*Configuración → 👤 Cuenta* y *🔔 Avisos y conexiones*) tiene solo lo tuyo: tu email, tu Telegram, tu GitHub, tu Google, tus avisos y tus sesiones. Lo de cada equipo está en *👥 Equipo y proyecto*.
+
+- **🐙 Código y GitHub — dónde vive el código.** El administrador elige **GitHub permitido** (cada proyecto decide: solo en el servidor, o en el servidor y además GitHub para colaboraciones abiertas) o **Todo en el servidor** (se corta GitHub en todo el servidor; pensado para clínicas, consultorios y estudios jurídicos). El CTO lo ve pero no lo cambia.
 
 - **✉ Correo** (casi imprescindible): sin él nadie verifica su email ni recibe avisos por correo. Ver la sección 12.
 - **✈ Telegram**: creá un bot con @BotFather (`/newbot`), copiá el token y pegalo. Después cada persona se vincula desde *Configuración → Telegram*.
@@ -592,7 +596,7 @@ En la ventana de una tarea, *📂 Carpeta de la tarea* (abierta de entrada en lo
 - **Desactivar** pide la contraseña y un código vigente (la sesión abierta sola no alcanza).
 - **Carpeta de red (sección 29)**: no puede pedir códigos, así que con 2FA activo no acepta tu contraseña normal. Generá una **contraseña de aplicación** en *Mi perfil → 🔑 Contraseña para la carpeta de red* y usala al conectar (se muestra una vez; generar otra anula la anterior).
 - **Las IAs** entran con su token, no con contraseña: el 2FA no las afecta.
-- **Si alguien pierde el teléfono y los códigos**: el administrador del servidor entra a *Configuración → 🛡 Roles y límites* y toca *🔓 Quitar 2FA* en su fila; eso también cierra sus sesiones. Queda anotado en el registro del servidor y en la auditoría de sus equipos.
+- **Si alguien pierde el teléfono y los códigos**: el administrador del servidor entra a *Configuración → 🖥 Servidor (paso a paso)* y toca *🔓 Quitar 2FA* en su fila; eso también cierra sus sesiones. Queda anotado en el registro del servidor y en la auditoría de sus equipos.
 - La terminal de texto (`tm`) todavía no pide el código: con 2FA activo, usá la web o la app de escritorio.
 
-**Pedirlo al equipo (administrador del servidor)**: en *Configuración → 🛡 Roles y límites → 🔐 Pedir verificación en dos pasos* hay tres interruptores **separados**: *Administradores (incluido vos)*, *CTO* y *Resto de las personas*. Es un **pedido, no un bloqueo**: a quienes les toca y todavía no lo activaron les llega un aviso (bandeja, Telegram y correo), se les recuerda al entrar y en su perfil, y vos ves cuántos lo tienen y quiénes faltan. Nadie queda fuera de la app por no activarlo. Solo el administrador del servidor cambia esto; el CTO lo ve.
+**Pedirlo al equipo (administrador del servidor)**: en *Configuración → 🖥 Servidor (paso a paso) → 🔐 Pedir verificación en dos pasos* hay tres interruptores **separados**: *Administradores (incluido vos)*, *CTO* y *Resto de las personas*. Es un **pedido, no un bloqueo**: a quienes les toca y todavía no lo activaron les llega un aviso (bandeja, Telegram y correo), se les recuerda al entrar y en su perfil, y vos ves cuántos lo tienen y quiénes faltan. Nadie queda fuera de la app por no activarlo. Solo el administrador del servidor cambia esto; el CTO lo ve.

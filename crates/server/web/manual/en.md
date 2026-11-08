@@ -185,7 +185,7 @@ An AI may hit something it cannot do alone: a blocked command, a permission, a d
 
 For the app to send **emails** (verification codes, assignments, mentions, reminders) the **server** needs an outgoing mail account. Whoever runs the server sets it up once; users just verify their email from *Settings → My email*.
 
-**Easiest way: the wizard.** Sign in as CTO or administrator and open *Settings → 🚀 First steps → ✉ Email*: pick your provider (Gmail, Outlook, Yahoo, Brevo, SendGrid, Mailgun, Amazon SES or other), enter user and password, press **✉ Test** (sends a test message to your address) and then **💾 Save and activate**. No files to edit and no restart: the password is stored encrypted and the server uses it immediately. If something fails the wizard says why (rejected password, blocked port, wrong security type…).
+**Easiest way: the wizard.** Sign in as CTO or administrator and open *Settings → 🖥 Server (step by step) → ✉ Email*: pick your provider (Gmail, Outlook, Yahoo, Brevo, SendGrid, Mailgun, Amazon SES or other), enter user and password, press **✉ Test** (sends a test message to your address) and then **💾 Save and activate**. No files to edit and no restart: the password is stored encrypted and the server uses it immediately. If something fails the wizard says why (rejected password, blocked port, wrong security type…).
 
 > CrewHelm only **sends** email. It does not read any mailbox, so **POP3 or IMAP are not needed**: any account that can send through SMTP is enough.
 
@@ -256,7 +256,7 @@ Each session leaves a 📝 comment and a `.tm/terminal-tarea-N.md` note in the p
 
 ## 16. Commercial license and install ping
 
-The program is **AGPL-3.0-only and free**. The **commercial license** is for those who use it in a company and don't want to comply with the AGPL. In **Settings → 🏢 License** (first registered person on the server only):
+The program is **AGPL-3.0-only and free**. The **commercial license** is for those who use it in a company and don't want to comply with the AGPL. In **Settings → 🖥 Server (step by step) → License** (first registered person on the server only):
 
 1. Choose whether the server is **personal** or **company**.
 2. **Buy a commercial license** → pick the plan, the network (**USDT on Solana or Ethereum**) and your email.
@@ -331,9 +331,9 @@ Each task has its own working folder shaped like `.crewhelm/<user>/<task>/`: eve
 - Remote workers can upload their files from there.
 
 ## 20. Server roles and Processes
-Besides each team's roles there are three **server roles**: *User*, *CTO* and *Administrator*. The first person to register is the administrator. An administrator changes them in *Settings → 🛡 Roles and limits* (at least one administrator must always remain). The CTO also sets the terminal limits there and sees usage per person (section 24).
+Besides each team's roles there are three **server roles**: *User*, *CTO* and *Administrator*. The first person to register is the administrator. An administrator changes them in *Settings → 🖥 Server (step by step)* (at least one administrator must always remain). The CTO also sets the terminal limits there and sees usage per person (section 24).
 
-- **🖥 Processes** (CTO and administrator): RAM, disk, load, CrewHelm processes with their CPU and RAM, containers and app usage (database, files, people, AIs, tasks). It refreshes every 5 seconds.
+- **🖥 Processes** (in *Settings → 🖥 Server (step by step)*; CTO and administrator): RAM, disk, load, CrewHelm processes with their CPU and RAM, containers and app usage (database, files, people, AIs, tasks). It refreshes every 5 seconds.
 - **Overload protection:** a per-IP per-minute request cap, a cap on simultaneous requests and a per-request time limit. A large network attack is stopped outside (firewall, proxy or CDN). Behind a proxy, set `TM_TRUSTED_PROXY=1`.
 - **Team shortcuts:** the prefix on the web is **Alt+K** (the browser keeps Ctrl+T).
 
@@ -365,7 +365,7 @@ The **🔀 Integrate** button (project header) lists open Pull Requests: who sen
 - **↩ Send back** (owners only): closes the request without merging and sends the person the reason.
 - Owners get a notice when someone sends their work. Drafts and requests with conflicts are not merged.
 
-## 24. Limits and quotas (Settings → 🛡 Roles and limits)
+## 24. Limits and quotas (Settings → 🖥 Server (step by step))
 The **CTO** and the **administrator** set the limits of members' terminals (owners have none); each machine's agent applies them to terminals opened from then on:
 
 - **💾 Disk per person** (5120 MB by default): when full, the terminal won't open; at 80 % it warns; past 125 % it closes. Measured every 90 seconds (not a hard cap).
@@ -532,7 +532,11 @@ When the AI asks, the server also **creates a request task** for a person (the t
 
 ## 26. Server first steps
 
-Under *Settings → 🚀 First steps* (CTO and administrator) there is a checklist of what the server still lacks and a wizard for each piece. All of them test the data against the provider before saving, store secrets encrypted and apply at once, with no file editing or restart.
+Under *Settings → 🖥 Server (step by step)* (CTO and administrator) there is a checklist of what the server still lacks and a wizard for each piece. All of them test the data against the provider before saving, store secrets encrypted and apply at once, with no file editing or restart.
+
+**Everything general about the server is in this tab, in order:** 1 ✉ Email · 2 🐙 Code and GitHub · 3 ✈ Telegram · 4 📅 Google Calendar · 🔒 HTTPS · Security (roles and two-step verification) · AI rules (risk approval, commands and terminal limits) · Processes · License. **Your account** (*Settings → 👤 Account* and *🔔 Alerts and connections*) only has your own things: your email, Telegram, GitHub, Google, alerts and sessions. Each team's settings are in *👥 Team and project*.
+
+- **🐙 Code and GitHub — where the code lives.** The administrator picks **GitHub allowed** (each project decides: server only, or server plus GitHub for open collaboration) or **Everything on the server** (GitHub is cut off on the whole server; meant for clinics, practices and law firms). The CTO sees it but cannot change it.
 
 - **✉ Email** (nearly essential): without it nobody can verify their email or get email notices. See section 12.
 - **✈ Telegram**: create a bot with @BotFather (`/newbot`), copy the token and paste it. Then each person links from *Settings → Telegram*.
@@ -585,7 +589,7 @@ In a task's window, *📂 Task folder* (open by default in profiles without tech
 - **Disabling** asks for the password and a valid code (an open session alone isn't enough).
 - **Network folder (section 29)**: it can't ask for codes, so with 2FA on it doesn't accept your normal password. Generate an **app password** in *My profile → 🔑 Password for the network folder* and use it when connecting (shown once; generating another cancels the previous one).
 - **AIs** sign in with their token, not a password: 2FA doesn't affect them.
-- **If someone loses their phone and codes**: the server administrator goes to *Settings → 🛡 Roles and limits* and taps *🔓 Remove 2FA* on their row; that also closes their sessions. It is logged on the server and in the audit of their teams.
+- **If someone loses their phone and codes**: the server administrator goes to *Settings → 🖥 Server (step by step)* and taps *🔓 Remove 2FA* on their row; that also closes their sessions. It is logged on the server and in the audit of their teams.
 - The text terminal (`tm`) doesn't ask for the code yet: with 2FA on, use the web or the desktop app.
 
-**Asking the team (server administrator)**: in *Settings → 🛡 Roles and limits → 🔐 Ask for two-step verification* there are three **separate** switches: *Administrators (including you)*, *CTO* and *Everyone else*. It is a **request, not a block**: people it applies to who haven't enabled it get a notice (inbox, Telegram and email), are reminded when they sign in and in their profile, and you see how many have it and who is missing. Nobody is locked out of the app for not enabling it. Only the server administrator changes this; the CTO can see it.
+**Asking the team (server administrator)**: in *Settings → 🖥 Server (step by step) → 🔐 Ask for two-step verification* there are three **separate** switches: *Administrators (including you)*, *CTO* and *Everyone else*. It is a **request, not a block**: people it applies to who haven't enabled it get a notice (inbox, Telegram and email), are reminded when they sign in and in their profile, and you see how many have it and who is missing. Nobody is locked out of the app for not enabling it. Only the server administrator changes this; the CTO can see it.

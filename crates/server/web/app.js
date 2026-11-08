@@ -316,7 +316,7 @@ async function loadInbox(auto) {
   if (!inbox) return;
   S.inbox = inbox; S.me = me; S.unread = inbox.unread;
   if (auto && !S.tfaHint) { S.tfaHint = 1; api("GET", "/api/me/2fa").then((t) => { if (t.asked) setTimeout(() => toast("🔐 El administrador pide activar la verificación en dos pasos: Mi perfil → Verificación en dos pasos."), 2500); }).catch(() => {}); }
-  if (auto && me && !me.email_available && ["cto", "admin"].includes(me.server_role) && !S.mailHint) { S.mailHint = 1; setTimeout(() => toast("Este servidor todavía no manda correos. Configuración → «🚀 Primeros pasos» lo deja andando en un minuto."), 1500); }
+  if (auto && me && !me.email_available && ["cto", "admin"].includes(me.server_role) && !S.mailHint) { S.mailHint = 1; setTimeout(() => toast("Este servidor todavía no manda correos. Configuración → «🖥 Servidor (paso a paso)» lo deja andando en un minuto."), 1500); }
   if (!auto || inbox.unread > 0) openInbox();
   else render();
 }
@@ -388,7 +388,7 @@ const openProfile = guard(async () => {
     h("div", { class: "modal" },
       h("h3", {}, `Perfil de ${me.username}`),
       !me.email_available && h("small", { class: "warn" }, "Este servidor no tiene el envío de emails configurado (TM_SMTP_*): vas a ver los avisos solo en la bandeja."),
-      !me.email_available && ["cto", "admin"].includes(me.server_role) && h("small", { class: "hint" }, "Sos administrador o CTO: Configuración → «🚀 Primeros pasos» tiene el asistente para dejarlo andando."),
+      !me.email_available && ["cto", "admin"].includes(me.server_role) && h("small", { class: "hint" }, "Sos administrador o CTO: Configuración → «🖥 Servidor (paso a paso)» tiene el asistente para dejarlo andando."),
       h("label", {}, "Email para recibir avisos de tareas y comentarios", email),
       h("div", { class: "row" },
         me.email && h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/email"); close(); openProfile(); }) }, "Quitar"),
@@ -1427,14 +1427,7 @@ function rolesPanel() {
         }) }), ` ${lbl} · ${c.enrolled} de ${c.total} lo tienen activo`);
       }),
       pol.pending.length > 0 && h("small", { class: "warn" }, "Faltan: " + pol.pending.join(", ")));
-    const gm = await api("GET", "/api/admin/git-mode").catch(() => null);
-    const gitBox = gm && h("div", { class: "cfg-item" }, h("b", {}, "🗄 Dónde vive el código"),
-      h("small", { class: "hint" }, "Para consultorios, clínicas y estudios jurídicos: con «Todo en el servidor» se corta GitHub (cuenta, repositorios, issues, Pull Requests) y las IAs con cápsula ya no llegan a github.com ni gitlab.com. Si querés usar GitHub, dejalo permitido." + (gm.can_edit ? "" : " Solo el administrador del servidor lo cambia.")),
-      h("select", { disabled: !gm.can_edit, onchange: guard(async (e) => {
-        if (e.target.value === "interno" && !(await ask("¿Cortar GitHub en todo el servidor? Los repositorios que ya estaban en GitHub dejan de sincronizarse y nadie podrá subir ahí.", "Cortar GitHub"))) { load(); return; }
-        await api("PUT", "/api/admin/git-mode", { mode: e.target.value }); S.gitMode = e.target.value; toast(e.target.value === "interno" ? "GitHub desactivado: todo queda en el servidor" : "GitHub permitido"); load();
-      }) }, h("option", { value: "github", selected: gm.mode === "github" }, "GitHub permitido"), h("option", { value: "interno", selected: gm.mode === "interno" }, "Todo en el servidor (nada sale a GitHub)")));
-    box.replaceChildren(gitBox, polBox, h("p", { class: "hint" }, "Usuario: usa la app. CTO: además ve «Procesos», fija los límites de las terminales y ve el uso por persona. Administrador: todo, incluido cambiar estos roles. No cambia los roles dentro de cada equipo."),
+    box.replaceChildren(polBox, h("p", { class: "hint" }, "Usuario: usa la app. CTO: además ve «Procesos», fija los límites de las terminales y ve el uso por persona. Administrador: todo, incluido cambiar estos roles. No cambia los roles dentro de cada equipo."),
       ...us.map((u) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, u.username),
         h("select", { onchange: async (e) => { try { await api("PUT", `/api/admin/users/${u.id}/role`, { role: e.target.value }); toast("Rol actualizado"); } catch (x) { toast(x.message, true); } load(); } },
           Object.entries(ROLE_LBL).map(([k, v]) => h("option", { value: k, selected: u.role === k }, v)))
@@ -1508,7 +1501,7 @@ function mailPanel() {
   return box;
 }
 
-// ---------- Primeros pasos del servidor: lista de lo que falta + asistentes (correo, Telegram, GitHub, Google) ----------
+// ---------- Servidor (paso a paso): lista de lo que falta + asistentes (correo, Telegram, GitHub, Google) ----------
 function wizPanel(key, path, cur, steps, fields, o = {}) {
   const box = h("div", { class: "cfg-item" });
   box.dataset.key = key;
@@ -1536,13 +1529,30 @@ function telegramPanel(cur) {
     "BotFather te responde con un token largo (123456789:AAF…). Copialo y pegalo acá.",
   ], [{ k: "token", label: "Token del bot", type: "password", ph: "123456789:AAF…" }], { extra: (c) => (c.bot ? ` — bot @${c.bot}` : ""), clear: "¿Quitar el bot? Dejan de llegar avisos por Telegram a todo el mundo (cada persona tendría que volver a vincularse con otro bot)." });
 }
+// política del servidor sobre dónde vive el código (paso «Código y GitHub»): el administrador edita, el CTO mira
+function gitPolicyPanel() {
+  const box = h("div", { class: "cfg-item gitpol" });
+  const load = async () => {
+    const gm = await api("GET", "/api/admin/git-mode").catch(() => null);
+    const gitBox = gm && h("div", { class: "cfg-item" }, h("b", {}, "🗄 Dónde vive el código"),
+      h("small", { class: "hint" }, "Para consultorios, clínicas y estudios jurídicos: con «Todo en el servidor» se corta GitHub (cuenta, repositorios, issues, Pull Requests) y las IAs con cápsula ya no llegan a github.com ni gitlab.com. Si lo dejás permitido, cada proyecto elige: solo servidor, o servidor + GitHub para colaboraciones abiertas (en el asistente de repositorio del proyecto)." + (gm.can_edit ? "" : " Solo el administrador del servidor lo cambia.")),
+      h("select", { disabled: !gm.can_edit, onchange: guard(async (e) => {
+        if (e.target.value === "interno" && !(await ask("¿Cortar GitHub en todo el servidor? Los repositorios que ya estaban en GitHub dejan de sincronizarse y nadie podrá subir ahí.", "Cortar GitHub"))) { load(); return; }
+        await api("PUT", "/api/admin/git-mode", { mode: e.target.value }); S.gitMode = e.target.value; toast(e.target.value === "interno" ? "GitHub desactivado: todo queda en el servidor" : "GitHub permitido"); load();
+      }) }, h("option", { value: "github", selected: gm.mode === "github" }, "GitHub permitido"), h("option", { value: "interno", selected: gm.mode === "interno" }, "Todo en el servidor (nada sale a GitHub)")));
+    box.replaceChildren(gitBox || h("span", {}));
+  };
+  load().catch(() => {});
+  return box;
+}
 function githubPanel(cur) {
-  return wizPanel("srvgh", "/api/admin/setup/github", cur, [
+  const app = wizPanel("srvgh", "/api/admin/setup/github", cur, [
     h("span", {}, "Entrá a ", extLink("https://github.com/settings/developers"), " → OAuth Apps → New OAuth App."),
     `Nombre: CrewHelm. Homepage URL: ${location.origin}. Authorization callback URL: la misma dirección (no se usa).`,
     "Después de crearla, tildá «Enable Device Flow» y guardá.",
     "Copiá el Client ID (no hace falta el secreto) y pegalo acá. Así cada persona conecta SU cuenta de GitHub, con sus propios permisos.",
   ], [{ k: "client_id", label: "Client ID", ph: "Ov23li…", value: cur.client_id || "" }, { k: "scope", label: "Permisos que se piden (opcional)", ph: "read:user repo", value: cur.scope || "" }], { clear: "¿Quitar GitHub? Nadie puede conectar su cuenta hasta volver a configurarlo." });
+  return h("div", {}, gitPolicyPanel(), app);
 }
 function googlePanel(cur) {
   const red = cur.redirect || location.origin + "/api/google/callback";
@@ -1566,10 +1576,10 @@ function setupPanel() {
   const draw = async () => {
     const [st, mail] = await Promise.all([api("GET", "/api/admin/setup"), api("GET", "/api/admin/mail")]);
     const items = [
-      ["srvmail", "✉ Correo", st.mail, "Sin esto nadie verifica su email ni recibe avisos por correo.", true],
-      ["srvtg", "✈ Telegram", st.telegram, "Avisos al celular y comandos /tareas y /hecho.", false],
-      ["srvgh", "🐙 GitHub", st.github, "Cada persona conecta su cuenta para repositorios, issues y Pull Requests.", false],
-      ["srvgg", "📅 Google Calendar", st.google, "Las tareas con fecha aparecen en el calendario de cada persona.", false],
+      ["srvmail", "1 · ✉ Correo", st.mail, "Sin esto nadie verifica su email ni recibe avisos por correo.", true],
+      ["srvgh", "2 · 🐙 Código y GitHub", st.github, "Dónde vive el código (todo en el servidor o también GitHub) y la app para que cada persona conecte su cuenta.", false],
+      ["srvtg", "3 · ✈ Telegram", st.telegram, "Avisos al celular y comandos /tareas y /hecho.", false],
+      ["srvgg", "4 · 📅 Google Calendar", st.google, "Las tareas con fecha aparecen en el calendario de cada persona.", false],
     ];
     const done = items.filter((i) => i[2].active).length;
     wiz.replaceChildren(
@@ -1591,7 +1601,7 @@ function setupWizards() {
   wrap.dataset.key = "srvwiz";
   api("GET", "/api/admin/setup").then((st) => {
     const d = (id, title, panel) => h("details", { id: "wiz-" + id, class: "wiz-d" }, h("summary", {}, title), panel);
-    wrap.append(d("srvmail", "✉ Correo del servidor", mailPanel()), d("srvtg", "✈ Telegram", telegramPanel(st.telegram)), d("srvgh", "🐙 GitHub", githubPanel(st.github)), d("srvgg", "📅 Google Calendar", googlePanel(st.google)));
+    wrap.append(d("srvmail", "1 · ✉ Correo del servidor", mailPanel()), d("srvgh", "2 · 🐙 Código y GitHub", githubPanel(st.github)), d("srvtg", "3 · ✈ Telegram", telegramPanel(st.telegram)), d("srvgg", "4 · 📅 Google Calendar", googlePanel(st.google)));
   }).catch((e) => wrap.append(h("p", { class: "warn" }, e.message)));
   return wrap;
 }
@@ -2882,9 +2892,12 @@ const CFG_HELP = {
     "Creá una OAuth App en github.com → Settings → Developer settings → OAuth Apps, tildá «Enable Device Flow» y copiá su Client ID (no hace falta el secreto). Arrancá tm-server con TM_GITHUB_CLIENT_ID=<ese id> (por ejemplo en ~/.config/tm-server/github.env). Por defecto se piden los permisos «read:user repo»; TM_GITHUB_SCOPE los cambia."],
   lang: ["Idioma", "Cambia el idioma de la app para vos (español, inglés o portugués). Los demás del equipo siguen con el suyo.", null],
   license: ["Licencia", "La app es software libre (AGPL-3.0): podés usarla gratis cumpliendo esa licencia. Si tu empresa prefiere no cumplirla, existe una licencia comercial anual. Acá ves el estado y, si sos la primera persona registrada, podés comprarla.", null],
+  licenseInfo: ["Licencia", "La app es software libre (AGPL-3.0): podés usarla gratis cumpliendo esa licencia. Si tu empresa prefiere no cumplirla, existe una licencia comercial anual. Acá ves el estado y, si sos la primera persona registrada, podés comprarla.", null],
   guide: ["Guía de inicio", "Un asistente corto con dibujos que te lleva a dejar todo andando: equipo, proyecto e IA. Se abre solo la primera vez y la podés repetir cuando quieras.", null],
   risk: ["Aprobación por riesgo", "Elegí por tipo de acción (borrar, publicar, desplegar, instalar, administrar el sistema) si las IAs la hacen solas, si necesitan que una persona la apruebe o si está prohibida. En «Pedir», la IA se detiene y te avisa; al aprobar con /permitir un comando de esa categoría, queda habilitado para esa tarea (si elegís «siempre», para esa IA). Lo prohibido siempre gana. Rige desde la próxima ejecución, y cada cambio queda en la auditoría.", null],
+  srvrisk: ["Aprobación por riesgo", "Elegí por tipo de acción (borrar, publicar, desplegar, instalar, administrar el sistema) si las IAs la hacen solas, si necesitan que una persona la apruebe o si está prohibida. En «Pedir», la IA se detiene y te avisa; al aprobar con /permitir un comando de esa categoría, queda habilitado para esa tarea (si elegís «siempre», para esa IA). Lo prohibido siempre gana. Rige desde la próxima ejecución, y cada cambio queda en la auditoría.", null],
   cmds: ["Comandos para todas las IAs", "Son los comandos que cualquier IA del servidor puede usar sin pedir permiso (permitidos) y los que nunca puede usar (prohibidos). Se suman a la lista propia de cada IA, que está en su ficha. Lo prohibido siempre gana. Un comando se escribe así: git clone, cargo build o Bash(npm test:*).", "Solo la primera persona registrada edita estas listas. Los archivos whitelist.txt y blacklist.txt del agente son la base; estas listas se suman a ellas."],
+  srvcmds: ["Comandos para todas las IAs", "Son los comandos que cualquier IA del servidor puede usar sin pedir permiso (permitidos) y los que nunca puede usar (prohibidos). Se suman a la lista propia de cada IA, que está en su ficha. Lo prohibido siempre gana. Un comando se escribe así: git clone, cargo build o Bash(npm test:*).", "Solo la primera persona registrada edita estas listas. Los archivos whitelist.txt y blacklist.txt del agente son la base; estas listas se suman a ellas."],
   digest: ["Cómo recibís los avisos", "Resumen: los avisos por Telegram y email llegan juntos en un solo mensaje, una vez por día a la hora que elijas o cada 1, 2, 3, 6 o 12 horas. Uno por uno: cada aviso sale al momento. 🔕 Silencioso: no te llega nada por Telegram ni email (ni siquiera los pedidos 🙋 de las IAs). ⏸ Pausar: silencio por un rato (1 hora a 1 semana) y después vuelve solo a como lo tenías. La bandeja de la app siempre se actualiza al instante. Fuera del silencio, los pedidos de ayuda de una IA (🙋) salen siempre al momento.", null],
   reports: ["Informes automáticos", "Un resumen diario o semanal del equipo: qué terminaron las personas y las IAs, cuánto gastaron las IAs y qué quedó trabado. Te llega a la bandeja y, si querés, por Telegram y email.", null],
   telegram: ["Telegram", "Tocá «Vincular», abrí el bot que se muestra y mandale /start CÓDIGO. Después recibís las novedades en Telegram y podés usar /tareas, /hecho N (marca la tarea N como hecha) y /stop (desvincula).",
@@ -3320,7 +3333,7 @@ const openSettings = guard(async () => {
           ? h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/telegram"); close(); openSettings(); }) }, "Desvincular")
           : h("button", { onclick: () => { close(); linkTelegram(); } }, "Vincular"))),
         line(["Cómo recibís los avisos (Telegram y email)", "digest"], npMode, npEvery, npHour, npPause),
-        (can("admin") || gh.linked) && line([`GitHub: ${!gh.available ? (gh.blocked ? "desactivado por el administrador: todo queda en el servidor" : "el servidor no tiene GitHub configurado") : gh.linked ? "✓ conectado como @" + gh.login : "sin conectar"}`, "github"], gh.available && (gh.linked
+        (gh.available || gh.linked) && line([`GitHub: ${gh.blocked ? "desactivado por el administrador: todo queda en el servidor" : gh.linked ? "✓ conectado como @" + gh.login : "sin conectar"}`, "github"], gh.available && (gh.linked
           ? h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Desconectar tu cuenta de GitHub?"))) return; await api("DELETE", "/api/github"); close(); openSettings(); }) }, "Desconectar")
           : h("button", { onclick: () => { close(); linkGithub(); } }, "Conectar"))),
         (gc.available || gc.linked) && line([`Google Calendar: ${gcState}`, "google"], gc.available && (gc.linked
@@ -3398,24 +3411,6 @@ const openSettings = guard(async () => {
                 toast("Equipo de ejemplo creado. Para volver al tuyo: Configuración → Equipo y proyecto → «Volver a mi equipo»");
               }) }, "Crear ejemplo")];
             })())),
-      sec("Licencia",
-        ["admin", "cto"].includes(S.me?.server_role) && line(["Aprobación por riesgo: qué pueden hacer las IAs solas y qué necesita tu visto bueno", "risk"], h("button", { onclick: guard(async () => {
-          const r = await api("GET", "/api/admin/risk");
-          const f = await form("Aprobación por riesgo", r.cats.map((c) => ({ name: c.key, label: `${c.name} (${c.what})`, type: "select", value: c.mode,
-            options: [["libre", "Libre: la IA lo hace sola"], ["pedir", "Pedir: una persona lo aprueba con /permitir"], ["prohibido", "Prohibido: nunca"]] })), "Guardar");
-          if (!f) return;
-          await api("PUT", "/api/admin/risk", { modes: Object.fromEntries(r.cats.map((c) => [c.key, f[c.key]])) }); toast("Política de riesgo guardada: rige desde la próxima ejecución de cada IA");
-        }) }, "Configurar")),
-        S.me?.server_role === "admin" && line(["Comandos permitidos y prohibidos para todas las IAs", "cmds"], h("button", { onclick: guard(async () => {
-          const g = await api("GET", "/api/commands");
-          if (!g.can_edit) { toast("Solo la primera persona registrada edita las listas generales. Cada IA tiene la suya en su ficha."); return; }
-          const f = await form("Comandos de todas las IAs", [
-            { name: "allow", label: "✅ Permitidos para todas (uno por línea, ej. git clone · cargo build · Bash(npm test:*))", type: "textarea", value: g.allow, max: 4000 },
-            { name: "deny", label: "🚫 Prohibidos para todas (uno por línea, ej. Bash(rm:*)). Lo prohibido siempre gana.", type: "textarea", value: g.deny, max: 4000 },
-            { name: "net_allow", label: "🌐 Destinos de red para las IAs con sandbox, además de los de fábrica (Anthropic, OpenAI, GitHub, crates.io, npm, PyPI…). Uno por línea, solo dominios (ej. api.miempresa.com)", type: "textarea", value: g.net_allow, max: 4000 }], "Guardar"); if (!f) return;
-          await api("PUT", "/api/commands", { allow: f.allow, deny: f.deny, net_allow: f.net_allow }); toast("Listas guardadas");
-        }) }, "Editar")),
-        line(["Uso gratis (AGPL-3.0) o licencia comercial para empresas", "license"], h("button", { onclick: go(openLicense) }, "🏢 Licencia")),),
       sec("Preferencias",
         line(["Idioma / Language", "lang"], h("select", { onchange: (e) => tr.set(e.target.value) },
           Object.entries(tr.langs).map(([k, n]) => h("option", { value: k, selected: tr.lang === k }, n)))),
@@ -3452,10 +3447,30 @@ const openSettings = guard(async () => {
             S.server = url; store.set("server", url); toast("Servidor guardado: volvé a iniciar sesión"); close(); logout();
           }) }, "Guardar servidor y reiniciar sesión"))),
       can("admin") && S.team && sec("Integraciones", line(["Videollamada y otras herramientas del equipo", "integrations"], h("button", { onclick: go(integAdmin) }, "Administrar"))),
+      ["cto", "admin"].includes(S.me?.server_role) && sec("Servidor", setupPanel(), setupWizards()),
+      S.me?.server_role === "admin" && sec("Seguridad", rolesPanel()),
+      ["cto", "admin"].includes(S.me?.server_role) && sec("Reglas de las IAs",
+        ["admin", "cto"].includes(S.me?.server_role) && line(["Aprobación por riesgo: qué pueden hacer las IAs solas y qué necesita tu visto bueno", "srvrisk"], h("button", { onclick: guard(async () => {
+          const r = await api("GET", "/api/admin/risk");
+          const f = await form("Aprobación por riesgo", r.cats.map((c) => ({ name: c.key, label: `${c.name} (${c.what})`, type: "select", value: c.mode,
+            options: [["libre", "Libre: la IA lo hace sola"], ["pedir", "Pedir: una persona lo aprueba con /permitir"], ["prohibido", "Prohibido: nunca"]] })), "Guardar");
+          if (!f) return;
+          await api("PUT", "/api/admin/risk", { modes: Object.fromEntries(r.cats.map((c) => [c.key, f[c.key]])) }); toast("Política de riesgo guardada: rige desde la próxima ejecución de cada IA");
+        }) }, "Configurar")),
+        S.me?.server_role === "admin" && line(["Comandos permitidos y prohibidos para todas las IAs", "srvcmds"], h("button", { onclick: guard(async () => {
+          const g = await api("GET", "/api/commands");
+          if (!g.can_edit) { toast("Solo la primera persona registrada edita las listas generales. Cada IA tiene la suya en su ficha."); return; }
+          const f = await form("Comandos de todas las IAs", [
+            { name: "allow", label: "✅ Permitidos para todas (uno por línea, ej. git clone · cargo build · Bash(npm test:*))", type: "textarea", value: g.allow, max: 4000 },
+            { name: "deny", label: "🚫 Prohibidos para todas (uno por línea, ej. Bash(rm:*)). Lo prohibido siempre gana.", type: "textarea", value: g.deny, max: 4000 },
+            { name: "net_allow", label: "🌐 Destinos de red para las IAs con sandbox, además de los de fábrica (Anthropic, OpenAI, GitHub, crates.io, npm, PyPI…). Uno por línea, solo dominios (ej. api.miempresa.com)", type: "textarea", value: g.net_allow, max: 4000 }], "Guardar"); if (!f) return;
+          await api("PUT", "/api/commands", { allow: f.allow, deny: f.deny, net_allow: f.net_allow }); toast("Listas guardadas");
+        }) }, "Editar")),
+        limitsPanel()),
       ["cto", "admin"].includes(S.me?.server_role) && sec("Procesos", procPanel()),
-      ["cto", "admin"].includes(S.me?.server_role) && sec("Primeros pasos del servidor", setupPanel(), setupWizards()),
-      ["cto", "admin"].includes(S.me?.server_role) && sec("Roles y límites del servidor", S.me?.server_role === "admin" && rolesPanel(), limitsPanel()),
+      ["cto", "admin"].includes(S.me?.server_role) && sec("Licencia", line(["Uso gratis (AGPL-3.0) o licencia comercial para empresas", "license"], h("button", { onclick: go(openLicense) }, "🏢 Licencia"))),
       sec("Ayuda", line(["Manual con buscador e índice por temas", "manual"], h("button", { onclick: go(() => openManual()) }, "Abrir el manual")),
+        line(["Licencia del programa (AGPL-3.0)", "licenseInfo"], h("button", { onclick: go(openLicense) }, "🏢 Licencia")),
         line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos")),
         line(["Guía de inicio paso a paso", "guide"], h("button", { onclick: go(openWizard) }, "🧭 Guía de inicio"))),
   ].flat(Infinity).filter(Boolean);
@@ -3464,13 +3479,10 @@ const openSettings = guard(async () => {
     ["cuenta", "👤 Cuenta", ["user", "inbox", "logout", "logoutAll"]],
     ["conexiones", "🔔 Avisos y conexiones", ["email", "telegram", "digest", "github", "google", "reports"]],
     ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export", "dav", "audit"]],
-    ["ias", "🤖 IAs", ["agents", "cmds", "risk"]],
+    ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["integraciones", "🔌 Integraciones", ["integrations"]],
-    ["procesos", "🖥 Procesos", ["procesos"]],
-    ["srvstart", "🚀 Primeros pasos", ["srvstart", "srvwiz", "srvmail", "srvtg", "srvgh", "srvgg"]],
-    ["srvroles", "🛡 Roles y límites", ["srvroles", "srvlimits"]],
-    ["licencia", "🏢 Licencia", ["license"]],
-    ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "bars", "herdr", "server", "manual", "shortcuts", "guide"]],
+    ["srvstart", "🖥 Servidor (paso a paso)", ["srvstart", "srvwiz", "srvroles", "srvrisk", "srvcmds", "srvlimits", "procesos", "license"]],
+    ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "bars", "herdr", "server", "manual", "licenseInfo", "shortcuts", "guide"]],
   ];
   const tabOf = new Map(TABS.flatMap(([id, , keys]) => keys.map((k) => [k, id])));
   const groups = Object.fromEntries(TABS.map(([id]) => [id, []]));
@@ -3821,33 +3833,39 @@ function gitBox(pid) {
   let ghi = null; api("GET", "/api/github").then((i) => { ghi = i; }).catch(() => {});
   const draw = (st, err) => {
     const parts = [];
-    if (ghi && ghi.available && !ghi.linked) parts.push(h("div", { class: "gitopt" }, h("b", {}, "🔑 Falta conectar tu cuenta de GitHub"), h("small", { class: "hint" }, "Para traer o crear un repositorio hace falta tu cuenta (se usa solo mientras se hace, no se guarda en la carpeta). «Solo en esta máquina» no la necesita."),
+    const gOk = !!(ghi && ghi.available && ghi.linked), gOff = !!(ghi && ghi.blocked);
+    parts.push(h("p", { class: "hint" }, "🗄 El código siempre vive en tu servidor. 🐙 GitHub es opcional y por proyecto: sirve para colaboraciones abiertas, sin dejar de tener tu copia propia." + (gOff ? " El administrador lo desactivó: solo servidor." : "")));
+    if (ghi && ghi.available && !ghi.linked && !gOff) parts.push(h("div", { class: "gitopt" }, h("b", {}, "🔑 Falta conectar tu cuenta de GitHub"), h("small", { class: "hint" }, "Para traer o crear un repositorio hace falta tu cuenta (se usa solo mientras se hace, no se guarda en la carpeta). «Solo en esta máquina» no la necesita."),
       h("button", { onclick: () => { document.getElementById("git-setup")?.remove(); linkGithub(); } }, "Conectar mi GitHub")));
-    if (ghi && !ghi.available) parts.push(h("p", { class: "hint" }, "Este servidor no tiene GitHub configurado: solo se puede crear el repositorio local."));
+    if (ghi && !ghi.available && !gOff) parts.push(h("p", { class: "hint" }, "Este servidor no tiene GitHub configurado: el proyecto puede vivir solo en el servidor."));
     if (err) parts.push(h("p", { class: "err" }, "⚠ " + err));
     if (st?.steps?.length) parts.push(h("ul", { class: "gitsteps" }, st.steps.map((x) => h("li", {}, "✔ " + x))));
     if (!st) { parts.push(h("button", { class: "ghost", onclick: load }, "↻ Revisar de nuevo")); return body.replaceChildren(...parts); }
     const repoIn = h("input", { placeholder: "usuario/repositorio", title: "Por ejemplo polblancoo/crewhelm" });
     const nameIn = h("input", { placeholder: "nombre del repositorio nuevo", value: "", title: "Letras, números, guiones y puntos" });
     const priv = h("input", { type: "checkbox", checked: true });
-    const newBlock = h("div", { class: "gitopt" }, h("b", {}, "✨ Crear un repositorio nuevo en GitHub"),
+    const newBlock0 = h("div", { class: "gitopt" }, h("b", {}, "✨ Crear un repositorio nuevo en GitHub"),
       h("small", { class: "hint" }, "Sube lo que haya en la carpeta (menos claves y carpetas pesadas, que se dejan afuera con un .gitignore)."),
       nameIn, h("label", { class: "chk", title: "Privado: solo lo ven las personas que invites en GitHub. Público: lo puede ver cualquiera (escribir siempre requiere permiso)." }, priv, " Privado"),
       h("button", { title: "Crea el repositorio en tu cuenta de GitHub, sube la carpeta y deja lista la clave para subir cambios", onclick: () => nameIn.value.trim() ? run("new", { name: nameIn.value.trim(), private: priv.checked }, "Creando el repositorio") : toast("Escribí un nombre", true) }, "✨ Crear y subir"));
+    const newBlock = gOk ? newBlock0 : h("span", {});
     if (st.is_repo && st.origin) {
       const r = repoOf(st.origin);
       parts.push(h("p", {}, "✔ Conectado a ", h("b", {}, r || st.origin), st.branch ? " · rama " + st.branch : "", st.dirty ? " · hay cambios sin guardar" : ""));
-      parts.push(h("button", { class: "ghost", title: "Vuelve a registrar la clave con la que este servidor sube cambios a GitHub (si dejó de funcionar)", onclick: () => run("attach", { repo: r }, "Renovando la clave de subida") }, "🔑 Renovar la clave de subida"));
+      if (gOk) parts.push(h("button", { class: "ghost", title: "Vuelve a registrar la clave con la que este servidor sube cambios a GitHub (si dejó de funcionar)", onclick: () => run("attach", { repo: r }, "Renovando la clave de subida") }, "🔑 Renovar la clave de subida"));
+      parts.push(h("button", { class: "ghost", title: "El proyecto sigue en tu servidor; la app deja de traer issues y Pull Requests de GitHub", onclick: guard(async () => { if (!(await ask("¿Dejar de usar GitHub en este proyecto? Tu copia en el servidor no se toca.", "Dejar GitHub"))) return; await api("PUT", `/api/projects/${pid}/github`, { repo: "" }); if (S.project?.id === pid) { S.project.repo = ""; render(); } toast("Listo: el proyecto queda solo en el servidor"); load(); }) }, "⏏ Dejar de usar GitHub aquí"));
     } else if (st.is_repo) {
       parts.push(h("p", {}, "La carpeta ya es un repositorio git, pero no está conectada con GitHub."));
-      parts.push(h("div", { class: "gitopt" }, h("b", {}, "🔗 Conectar con un repositorio que ya existe"), repoIn,
-        h("button", { title: "Registra una clave para subir cambios y apunta la carpeta a ese repositorio", onclick: () => repoIn.value.trim() ? run("attach", { repo: repoIn.value.trim() }, "Conectando con GitHub") : toast("Escribí usuario/repositorio", true) }, "🔗 Conectar")), newBlock);
+      parts.push(h("p", { class: "hint" }, "✔ En el servidor (repositorio propio)."));
+      if (gOk) parts.push(h("div", { class: "gitopt" }, h("b", {}, "🔗 Sumar GitHub para colaboraciones abiertas"), repoIn,
+        h("button", { title: "Registra una clave para subir cambios y apunta la carpeta a ese repositorio", onclick: () => repoIn.value.trim() ? run("attach", { repo: repoIn.value.trim() }, "Conectando con GitHub") : toast("Escribí usuario/repositorio", true) }, "🔗 Conectar")));
+      parts.push(newBlock);
     } else {
       parts.push(h("p", {}, st.exists ? (st.empty ? "La carpeta del proyecto está vacía." : "La carpeta del proyecto tiene archivos pero todavía no es un repositorio.") : "La carpeta del proyecto todavía no existe."));
-      if (!st.exists || st.empty) parts.push(h("div", { class: "gitopt" }, h("b", {}, "⬇ Traer un repositorio de GitHub"), repoIn,
+      if (gOk && (!st.exists || st.empty)) parts.push(h("div", { class: "gitopt" }, h("b", {}, "⬇ Traer un repositorio de GitHub"), repoIn,
         h("button", { title: "Descarga el repositorio a la carpeta del proyecto y deja lista la clave para subir cambios", onclick: () => repoIn.value.trim() ? run("clone", { repo: repoIn.value.trim() }, "Trayendo el repositorio") : toast("Escribí usuario/repositorio", true) }, "⬇ Traer")));
       parts.push(newBlock);
-      parts.push(h("div", { class: "gitopt" }, h("b", {}, "💻 Solo en esta máquina"), h("small", { class: "hint" }, "Crea el repositorio git sin GitHub. Se puede conectar más tarde."),
+      parts.push(h("div", { class: "gitopt" }, h("b", {}, "🗄 En tu servidor (sin GitHub)"), h("small", { class: "hint" }, "Crea el repositorio git en la carpeta del proyecto, sin subir nada a internet. Se puede sumar GitHub más tarde, solo para este proyecto."),
         h("button", { class: "ghost", title: "git init + primer commit, sin subir nada a internet", onclick: () => run("local", {}, "Creando el repositorio") }, "💻 Crear solo local")));
     }
     body.replaceChildren(...parts);
@@ -3855,9 +3873,7 @@ function gitBox(pid) {
   const load = async () => {
     body.replaceChildren(h("p", { class: "hint" }, "⏳ Mirando la carpeta del proyecto…"));
     try {
-      const gh = await api("GET", "/api/github").catch(() => ({}));
-      if (!gh.available) return body.replaceChildren(h("p", { class: "hint" }, "GitHub no está configurado en este servidor (lo activa quien administra el servidor)."));
-      if (!gh.linked) return body.replaceChildren(h("p", { class: "hint" }, "Primero conectá tu cuenta de GitHub en Configuración → Avisos y conexiones."));
+      ghi = await api("GET", "/api/github").catch(() => ghi);
       draw(await api("POST", `/api/projects/${pid}/git/setup`, { mode: "status" }));
     } catch (e) { body.replaceChildren(h("p", { class: "hint" }, "No pude revisar la carpeta: " + e.message)); }
   };
