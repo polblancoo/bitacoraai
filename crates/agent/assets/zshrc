@@ -1,5 +1,5 @@
 # crewhelm-default v2
-# Configuración por defecto de CrewHelm. Para personalizarla, borrá la primera línea (así CrewHelm ya no la reemplaza).
+# Configuración por defecto de BitacoraAI. Para personalizarla, borrá la primera línea (así BitacoraAI ya no la reemplaza).
 
 export LANG="${LANG:-C.UTF-8}"
 export COLORTERM=truecolor
@@ -48,8 +48,8 @@ alias h='history 1' c='clear'
 alias git='noglob git'
 
 # herdr: una sesión por proyecto, así siempre abre en la carpeta del proyecto (y no en lo último que se usó)
-if [ -n "$CREWHELM_PROJECT" ]; then
-  herdr() { if [ $# -eq 0 ]; then command herdr --session "$CREWHELM_PROJECT"; else command herdr "$@"; fi; }
+if [ -n "$BITACORA_PROJECT" ]; then
+  herdr() { if [ $# -eq 0 ]; then command herdr --session "$BITACORA_PROJECT"; else command herdr "$@"; fi; }
 fi
 
 # búsqueda con fzf (Ctrl+R historial, Ctrl+T archivos, Alt+C carpetas), si está instalado
@@ -63,7 +63,7 @@ ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=244'
 if command -v starship >/dev/null; then
   eval "$(starship init zsh)"
 else
-  PROMPT='%F{cyan}%n@crewhelm%f %F{yellow}%~%f %(?.%F{green}.%F{red})%#%f '
+  PROMPT='%F{cyan}%n@bitacora%f %F{yellow}%~%f %(?.%F{green}.%F{red})%#%f '
 fi
 
 [ -r /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh

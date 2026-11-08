@@ -1,6 +1,6 @@
-# FODA de CrewHelm actualizado y tabla de diferencias (2026-11-07)
+# FODA de BitacoraAI actualizado y tabla de diferencias (2026-11-07)
 
-> Parte del informe del 2026-11-06 (`analisis-crewhelm-competencia-FODA.md`, tarea #105). La competencia no se volvió a investigar en la web: sus datos siguen con la misma salvedad (precios y funciones de terceros sin confirmar en páginas oficiales). Lo que cambió es **CrewHelm**: se cerraron varias brechas que ese informe marcaba.
+> Parte del informe del 2026-11-06 (`analisis-bitacora-competencia-FODA.md`, tarea #105). La competencia no se volvió a investigar en la web: sus datos siguen con la misma salvedad (precios y funciones de terceros sin confirmar en páginas oficiales). Lo que cambió es **BitacoraAI**: se cerraron varias brechas que ese informe marcaba.
 
 ## 1. Qué cambió desde el informe anterior
 
@@ -15,7 +15,7 @@
 | Auditoría exportable, corte duro de presupuesto y alertas al 80 % | **Cerradas (2026-11-08)**: CSV/JSON del equipo, corte antes de cada ejecución y aviso al 80 % |
 | `tm-mcp`, SSO, Postgres | Sin hacer |
 
-## 2. FODA de CrewHelm (hoy)
+## 2. FODA de BitacoraAI (hoy)
 
 **Fortalezas**
 - Gobierno de IAs: permisos por comando, aislamiento real (bwrap), cuotas de disco/memoria/CPU, costos y cuotas de gasto, todo en un tablero de equipo.
@@ -51,7 +51,7 @@
 | # | Función | Hoy | Quién la tiene | Por qué agregarla | Prioridad |
 |---|---|---|---|---|---|
 | 1 | ✅ **Auditoría exportable** (quién/qué IA ejecutó qué, aprobaciones, costo; CSV/JSON) | Hecha | Devin y Copilot (empresa) | Es el argumento de venta ante regulación; convierte «gobierno» en algo demostrable | Alta |
-| 2 | **`tm-mcp` terminado y publicado** | En desarrollo | Vibe Kanban, Plane, OpenHands | Canal de descubrimiento más barato; deja que otras IAs usen CrewHelm | Alta |
+| 2 | **`tm-mcp` terminado y publicado** | En desarrollo | Vibe Kanban, Plane, OpenHands | Canal de descubrimiento más barato; deja que otras IAs usen BitacoraAI | Alta |
 | 3 | ✅ **Presupuesto con corte duro y alertas al 80 %** | Hecho | Ninguno lo junta con tablero | Evita sorpresas de gasto; refuerza «costos por IA» | Alta |
 | 4 | **Seguridad: 2FA, `SECURITY.md`, revisión externa** | Pendiente | Todos los SaaS serios | Sin esto no se puede vender a empresas; un incidente sería fatal para un proyecto joven | Alta |
 | 5 | **Diffs dentro de la tarea** (hoy solo en 🔀 Integrar) | A nivel proyecto | Vibe Kanban, Devin | La IA entrega por tarea; revisar donde se trabaja ahorra pasos | Media |

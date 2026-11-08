@@ -111,7 +111,7 @@ async fn invite_email(State(st): State<AppState>, user: AuthUser, headers: Heade
         "{who} te invita a una videollamada del equipo «{tname}»{}.\n\nEntrá desde acá, no hace falta cuenta ni instalar nada:\n{origin}/j/{code}\n\nEl enlace vale hasta {exp} (hora del servidor) y se puede usar desde el navegador, con cámara y micrófono.",
         if label.is_empty() { String::new() } else { format!(" ({label})") }
     );
-    mailer.send(&to, &format!("[CrewHelm] Invitación a una videollamada de {who}"), text).await.map_err(|e| AppError::bad(&format!("no se pudo enviar: {e}")))?;
+    mailer.send(&to, &format!("[BitacoraAI] Invitación a una videollamada de {who}"), text).await.map_err(|e| AppError::bad(&format!("no se pudo enviar: {e}")))?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -130,7 +130,7 @@ async fn invite_join(State(st): State<AppState>, ConnectInfo(peer): ConnectInfo<
     let Ok(Some(url)) = sqlx::query_scalar::<_, String>("SELECT url FROM integrations WHERE team_id = ? AND url LIKE '%{sala}%' ORDER BY position, id LIMIT 1").bind(team).fetch_optional(&st.db).await else { return gone() };
     let _ = sqlx::query("UPDATE call_invites SET uses = uses + 1 WHERE code = ?").bind(&code).execute(&st.db).await;
     let enc = |s: &str| s.bytes().map(|b| if b.is_ascii_alphanumeric() || b == b'-' { (b as char).to_string() } else { format!("%{b:02X}") }).collect::<String>();
-    let target = url.replace("{sala}", &format!("crewhelm-{room}")).replace("{equipo}", &enc(&tname.replace(' ', "-"))).replace("{usuario}", "Invitado");
+    let target = url.replace("{sala}", &format!("bitacora-{room}")).replace("{equipo}", &enc(&tname.replace(' ', "-"))).replace("{usuario}", "Invitado");
     (StatusCode::FOUND, [(header::LOCATION, target), (header::REFERRER_POLICY, "no-referrer".to_string())]).into_response()
 }
 

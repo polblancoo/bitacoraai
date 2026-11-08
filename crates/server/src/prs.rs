@@ -47,7 +47,7 @@ async fn name_of(st: &AppState, id: Id) -> String {
 
 fn by(pr: &Value) -> String {
     let body = pr["body"].as_str().unwrap_or("");
-    body.rsplit("— Pedido desde CrewHelm por ").next().filter(|_| body.contains("— Pedido desde CrewHelm por ")).map(|s| s.lines().next().unwrap_or("").trim().to_string())
+    body.rsplit("— Pedido desde BitacoraAI por ").next().filter(|_| body.contains("— Pedido desde BitacoraAI por ")).map(|s| s.lines().next().unwrap_or("").trim().to_string())
         .filter(|s| !s.is_empty()).unwrap_or_else(|| pr["user"]["login"].as_str().unwrap_or("").to_string())
 }
 

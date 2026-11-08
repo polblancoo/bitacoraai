@@ -1,11 +1,11 @@
 [package]
-name = "crewhelm-core"
+name = "bitacora-core"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Modelos y contratos de API compartidos por CrewHelm (servidor, TUI y cliente Tauri)"
+description = "Modelos y contratos de API compartidos por BitacoraAI (servidor, TUI y cliente Tauri)"
 readme = "../../README.md"
 keywords = ["project-management", "tasks", "ai-agents", "collaboration", "self-hosted"]
 categories = ["command-line-utilities"]

@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="icon" href="logo/logo.svg" type="image/svg+xml">
-<title>Descargar CrewHelm</title>
-<meta name="description" content="Descargá CrewHelm: el tablero donde tus IAs de código trabajan en equipo, con permisos, presupuesto y auditoría, en tu propio servidor.">
+<title>Descargar BitacoraAI</title>
+<meta name="description" content="Descargá BitacoraAI: el tablero donde tus IAs de código trabajan en equipo, con permisos, presupuesto y auditoría, en tu propio servidor.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=JetBrains+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap">
 <style>
-/* Concepto: sala de máquinas náutica (CrewHelm = timón). Fondo azul-gris frío, tinta marina, acento verde azulado,
+/* Concepto: sala de máquinas náutica (BitacoraAI = timón). Fondo azul-gris frío, tinta marina, acento verde azulado,
    terminal oscura como pieza central. Una sola columna de lectura, tarjetas solo donde hay una acción. */
 :root{
   --bg:#EEF3F6; --surface:#FFFFFF; --ink:#0C2233; --muted:#47606F; --line:#D3DEE5;
@@ -128,15 +128,15 @@ footer .sp{margin-left:auto}
 
 <div class="wrap">
   <header class="top">
-    <a class="brand" href="#top" aria-label="CrewHelm">
-      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="16" cy="16" r="5.2"/><circle cx="16" cy="16" r="11.2"/><path d="M16 2.5v6M16 23.5v6M2.5 16h6M23.5 16h6M6.5 6.5l4.2 4.2M21.3 21.3l4.2 4.2M25.5 6.5l-4.2 4.2M10.7 21.3l-4.2 4.2" stroke-width="2"/></svg>
-      CrewHelm
+    <a class="brand" href="#top" aria-label="BitacoraAI">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3.5" width="18" height="25" rx="3.5"/><path d="M10 11.5h8M10 16.5h6"/><path d="M24 17c0 4-2.5 6.5-6.5 6.5 4 0 6.5 2.5 6.5 6.5 0-4 2.5-6.5 6.5-6.5-4 0-6.5-2.5-6.5-6.5z" fill="currentColor" stroke="none"/></svg>
+      BitacoraAI
     </a>
     <nav class="links" aria-label="Secciones">
       <a href="#instalar" data-i="nav_install">Instalar</a>
       <a href="#descargas" data-i="nav_dl">Descargas</a>
       <a href="#verificar" data-i="nav_verify">Verificar</a>
-      <a href="https://github.com/polblancoo/crewhelm" data-i="nav_gh">GitHub</a>
+      <a href="https://github.com/polblancoo/bitacoraai" data-i="nav_gh">GitHub</a>
     </nav>
     <div class="lang" role="group" aria-label="Idioma">
       <button type="button" data-lang="es" aria-pressed="true">ES</button>
@@ -149,19 +149,19 @@ footer .sp{margin-left:auto}
     <section class="hero" id="instalar">
       <div class="eyebrow"><b id="ver">v0.7.1</b><span data-i="eyebrow">Código abierto · AGPL-3.0 · autoalojado</span></div>
       <h1 data-i="h1">Tus IAs de código, con permisos, en tu servidor.</h1>
-      <p class="lead" data-i="lead">CrewHelm es el tablero donde personas e IAs trabajan juntas, con permisos por comando, cápsula aislada, presupuesto por proyecto y auditoría de todo. Un binario y SQLite: se instala en un minuto y se respalda copiando un archivo.</p>
+      <p class="lead" data-i="lead">BitacoraAI es el tablero donde personas e IAs trabajan juntas, con permisos por comando, cápsula aislada, presupuesto por proyecto y auditoría de todo. Un binario y SQLite: se instala en un minuto y se respalda copiando un archivo.</p>
 
       <div class="term" role="group" aria-label="Instalador de una línea">
         <div class="bar"><i></i><i></i><i></i><span data-i="term_title">Instalación en una línea · Linux x86_64 · sin sudo</span></div>
         <div class="cmd">
-          <pre id="cmd"><span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh</pre>
+          <pre id="cmd"><span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/polblancoo/bitacoraai/main/install.sh | sh</pre>
           <button class="copy" type="button" id="copy1" data-i="copy">Copiar</button>
         </div>
         <div class="foot" data-i="term_foot">Verifica el SHA-256 de cada archivo antes de instalar. Al terminar, abrí http://localhost:7878.</div>
       </div>
       <div class="cta">
         <a class="btn primary" href="#descargas" data-i="cta_all">Ver todas las descargas</a>
-        <a class="btn" href="https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.md" data-i="cta_guide">Leer la guía paso a paso</a>
+        <a class="btn" href="https://github.com/polblancoo/bitacoraai/blob/main/docs/GUIA.md" data-i="cta_guide">Leer la guía paso a paso</a>
       </div>
     </section>
 
@@ -175,29 +175,29 @@ footer .sp{margin-left:auto}
           <header><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><h3>Linux</h3><span class="tag" hidden data-i="you">Tu sistema</span></header>
           <p class="sub" data-i="linux_sub">Servidor, terminal y agente. Es el camino recomendado.</p>
           <div class="files">
-            <a class="file" data-kind="cli-linux" href="https://github.com/polblancoo/crewhelm/releases/latest/download/tm-linux-x86_64.tar.gz"><span><strong data-i="f_server">Servidor y herramientas</strong><small>tm-linux-x86_64.tar.gz</small></span><em data-i="get">Descargar</em></a>
-            <a class="file" data-kind="deb" href="https://github.com/polblancoo/crewhelm/releases/latest"><span><strong data-i="f_desk">App de escritorio</strong><small>.deb</small></span><em data-i="get">Descargar</em></a>
-            <a class="file" data-kind="appimage" href="https://github.com/polblancoo/crewhelm/releases/latest"><span><strong data-i="f_desk">App de escritorio</strong><small>.AppImage</small></span><em data-i="get">Descargar</em></a>
+            <a class="file" data-kind="cli-linux" href="https://github.com/polblancoo/bitacoraai/releases/latest/download/tm-linux-x86_64.tar.gz"><span><strong data-i="f_server">Servidor y herramientas</strong><small>tm-linux-x86_64.tar.gz</small></span><em data-i="get">Descargar</em></a>
+            <a class="file" data-kind="deb" href="https://github.com/polblancoo/bitacoraai/releases/latest"><span><strong data-i="f_desk">App de escritorio</strong><small>.deb</small></span><em data-i="get">Descargar</em></a>
+            <a class="file" data-kind="appimage" href="https://github.com/polblancoo/bitacoraai/releases/latest"><span><strong data-i="f_desk">App de escritorio</strong><small>.AppImage</small></span><em data-i="get">Descargar</em></a>
           </div>
         </article>
         <article class="os" data-os="windows">
           <header><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5l7-1v7H3zM12 4.3l9-1.3v8.5h-9zM3 13h7v7l-7-1zM12 13h9v8.2l-9-1.3z"/></svg><h3>Windows</h3><span class="tag" hidden data-i="you">Tu sistema</span></header>
           <p class="sub" data-i="win_sub">Solo cliente: la app de escritorio se conecta a un servidor Linux. El servidor y el agente aún no están probados en Windows.</p>
           <div class="files">
-            <a class="file" data-kind="msi" href="https://github.com/polblancoo/crewhelm/releases/latest"><span><strong data-i="f_desk">App de escritorio</strong><small>.msi</small></span><em data-i="get">Descargar</em></a>
+            <a class="file" data-kind="msi" href="https://github.com/polblancoo/bitacoraai/releases/latest"><span><strong data-i="f_desk">App de escritorio</strong><small>.msi</small></span><em data-i="get">Descargar</em></a>
           </div>
         </article>
         <article class="os" data-os="mac">
           <header><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20M9 16v4M15 16v4"/></svg><h3>macOS</h3><span class="tag" hidden data-i="you">Tu sistema</span></header>
           <p class="sub" data-i="mac_sub">Solo cliente: la app de escritorio se conecta a un servidor Linux (Apple Silicon e Intel). El servidor y el agente aún no están probados en macOS.</p>
           <div class="files">
-            <a class="file" data-kind="dmg-arm" href="https://github.com/polblancoo/crewhelm/releases/latest"><span><strong data-i="f_desk">App de escritorio</strong><small>.dmg · Apple Silicon</small></span><em data-i="get">Descargar</em></a>
-            <a class="file" data-kind="dmg-intel" href="https://github.com/polblancoo/crewhelm/releases/latest"><span><strong data-i="f_desk">App de escritorio</strong><small>.dmg · Intel</small></span><em data-i="get">Descargar</em></a>
+            <a class="file" data-kind="dmg-arm" href="https://github.com/polblancoo/bitacoraai/releases/latest"><span><strong data-i="f_desk">App de escritorio</strong><small>.dmg · Apple Silicon</small></span><em data-i="get">Descargar</em></a>
+            <a class="file" data-kind="dmg-intel" href="https://github.com/polblancoo/bitacoraai/releases/latest"><span><strong data-i="f_desk">App de escritorio</strong><small>.dmg · Intel</small></span><em data-i="get">Descargar</em></a>
           </div>
         </article>
       </div>
       <p class="note"><b data-i="honest_b">Estado, sin vueltas:</b> <span data-i="honest">el servidor y el agente solo están probados en Linux x86_64. En Windows y macOS ofrecemos únicamente la app cliente de escritorio, para conectarte a un servidor Linux. Versión 0.7, un solo mantenedor.</span></p>
-      <p class="note"><a id="relnotes" href="https://github.com/polblancoo/crewhelm/releases" data-i="notes">Todas las versiones y novedades</a></p>
+      <p class="note"><a id="relnotes" href="https://github.com/polblancoo/bitacoraai/releases" data-i="notes">Todas las versiones y novedades</a></p>
     </section>
 
     <section>
@@ -213,7 +213,7 @@ footer .sp{margin-left:auto}
       <div class="sec-head"><h2 data-i="inc_h">Qué trae el paquete</h2></div>
       <div class="inc">
         <div><h3>tm-server</h3><p data-i="inc1">El tablero web y la API, con SQLite. Un solo binario.</p></div>
-        <div><h3>crewhelm</h3><p data-i="inc2">El cliente de terminal (TUI) para trabajar sin salir de la consola.</p></div>
+        <div><h3>bitacora</h3><p data-i="inc2">El cliente de terminal (TUI) para trabajar sin salir de la consola.</p></div>
         <div><h3>tm-agent</h3><p data-i="inc3">Lanza a tus IAs (Claude Code, Gemini CLI, Codex o un modelo propio) dentro de la carpeta del proyecto.</p></div>
         <div><h3 data-i="inc4_h">App de escritorio</h3><p data-i="inc4">La misma interfaz en una ventana propia, para conectarte a cualquier servidor.</p></div>
       </div>
@@ -246,10 +246,10 @@ footer .sp{margin-left:auto}
   </main>
 
   <footer>
-    <span>© CrewHelm · AGPL-3.0</span>
-    <a href="https://github.com/polblancoo/crewhelm" data-i="nav_gh">GitHub</a>
-    <a href="https://github.com/polblancoo/crewhelm/blob/main/SECURITY.md" data-i="f_sec">Seguridad</a>
-    <a href="https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.md" data-i="f_doc">Documentación</a>
+    <span>© BitacoraAI · AGPL-3.0</span>
+    <a href="https://github.com/polblancoo/bitacoraai" data-i="nav_gh">GitHub</a>
+    <a href="https://github.com/polblancoo/bitacoraai/blob/main/SECURITY.md" data-i="f_sec">Seguridad</a>
+    <a href="https://github.com/polblancoo/bitacoraai/blob/main/docs/GUIA.md" data-i="f_doc">Documentación</a>
     <span class="sp" data-i="f_priv">Tu código y tus claves quedan en tu servidor.</span>
   </footer>
 </div>
@@ -259,7 +259,7 @@ footer .sp{margin-left:auto}
   var T={
     es:{nav_install:"Instalar",nav_dl:"Descargas",nav_verify:"Verificar",nav_gh:"GitHub",eyebrow:"Código abierto · AGPL-3.0 · autoalojado",
       h1:"Tus IAs de código, con permisos, en tu servidor.",
-      lead:"CrewHelm es el tablero donde personas e IAs trabajan juntas, con permisos por comando, cápsula aislada, presupuesto por proyecto y auditoría de todo. Un binario y SQLite: se instala en un minuto y se respalda copiando un archivo.",
+      lead:"BitacoraAI es el tablero donde personas e IAs trabajan juntas, con permisos por comando, cápsula aislada, presupuesto por proyecto y auditoría de todo. Un binario y SQLite: se instala en un minuto y se respalda copiando un archivo.",
       term_title:"Instalación en una línea · Linux x86_64 · sin sudo",copy:"Copiar",copied:"Copiado",
       term_foot:"Verifica el SHA-256 de cada archivo antes de instalar. Al terminar, abrí http://localhost:7878.",
       cta_all:"Ver todas las descargas",cta_guide:"Leer la guía paso a paso",dl_h:"Descargas",
@@ -276,7 +276,7 @@ footer .sp{margin-left:auto}
       lic3:"Sin cobro por asiento: se licencia el servidor.",lic_c:"Consultas, licencias y soporte:",f_sec:"Seguridad",f_doc:"Documentación",f_priv:"Tu código y tus claves quedan en tu servidor."},
     en:{nav_install:"Install",nav_dl:"Downloads",nav_verify:"Verify",nav_gh:"GitHub",eyebrow:"Open source · AGPL-3.0 · self-hosted",
       h1:"Your coding AIs, with permissions, on your server.",
-      lead:"CrewHelm is the board where people and AIs work together, with per-command permissions, an isolated sandbox, a budget per project and an audit trail of everything. One binary and SQLite: it installs in a minute and backs up by copying one file.",
+      lead:"BitacoraAI is the board where people and AIs work together, with per-command permissions, an isolated sandbox, a budget per project and an audit trail of everything. One binary and SQLite: it installs in a minute and backs up by copying one file.",
       term_title:"One-line install · Linux x86_64 · no sudo",copy:"Copy",copied:"Copied",
       term_foot:"It verifies each file's SHA-256 before installing. When it finishes, open http://localhost:7878.",
       cta_all:"See all downloads",cta_guide:"Read the step-by-step guide",dl_h:"Downloads",
@@ -293,7 +293,7 @@ footer .sp{margin-left:auto}
       lic3:"No per-seat charge: the server is what gets licensed.",lic_c:"Questions, licenses and support:",f_sec:"Security",f_doc:"Documentation",f_priv:"Your code and your keys stay on your server."},
     pt:{nav_install:"Instalar",nav_dl:"Downloads",nav_verify:"Verificar",nav_gh:"GitHub",eyebrow:"Código aberto · AGPL-3.0 · auto-hospedado",
       h1:"Suas IAs de código, com permissões, no seu servidor.",
-      lead:"O CrewHelm é o quadro onde pessoas e IAs trabalham juntas, com permissões por comando, sandbox isolado, orçamento por projeto e auditoria de tudo. Um binário e SQLite: instala em um minuto e o backup é copiar um arquivo.",
+      lead:"O BitacoraAI é o quadro onde pessoas e IAs trabalham juntas, com permissões por comando, sandbox isolado, orçamento por projeto e auditoria de tudo. Um binário e SQLite: instala em um minuto e o backup é copiar um arquivo.",
       term_title:"Instalação em uma linha · Linux x86_64 · sem sudo",copy:"Copiar",copied:"Copiado",
       term_foot:"Verifica o SHA-256 de cada arquivo antes de instalar. Ao terminar, abra http://localhost:7878.",
       cta_all:"Ver todos os downloads",cta_guide:"Ler o guia passo a passo",dl_h:"Downloads",
@@ -339,7 +339,7 @@ footer .sp{margin-left:auto}
 
   // si la página se sirve desde GitHub Pages, completa versión y enlaces exactos con la API pública de GitHub
   try{
-    fetch("https://api.github.com/repos/polblancoo/crewhelm/releases/latest",{headers:{Accept:"application/vnd.github+json"}})
+    fetch("https://api.github.com/repos/polblancoo/bitacoraai/releases/latest",{headers:{Accept:"application/vnd.github+json"}})
       .then(function(r){return r.ok?r.json():null}).then(function(rel){
         if(!rel||!rel.assets)return;
         document.getElementById("ver").textContent=rel.tag_name;

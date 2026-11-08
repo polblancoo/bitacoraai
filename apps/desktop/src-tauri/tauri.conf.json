@@ -1,15 +1,15 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Rust TUI Manager",
+  "productName": "BitacoraAI",
   "version": "0.7.1",
-  "identifier": "com.polblancoo.crewhelm",
+  "identifier": "com.polblancoo.bitacoraai",
   "build": {
     "frontendDist": "../../../crates/server/web"
   },
   "app": {
     "windows": [
       {
-        "title": "Rust TUI Manager",
+        "title": "BitacoraAI",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
@@ -31,7 +31,7 @@
     ],
     "category": "Productivity",
     "shortDescription": "Gestor de tareas colaborativo",
-    "longDescription": "Cliente gráfico del gestor de tareas colaborativo Rust TUI Manager: tablero kanban, calendario, equipos, roles e invitaciones.",
+    "longDescription": "Cliente gráfico del gestor de tareas colaborativo BitacoraAI: tablero kanban, calendario, equipos, roles e invitaciones.",
     "publisher": "polblancoo"
   }
 }

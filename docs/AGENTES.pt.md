@@ -1,4 +1,4 @@
-<p align="center"><a href="https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTS.md">English</a> · <a href="https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.md">Español</a> · <b>Português</b></p>
+<p align="center"><a href="https://github.com/polblancoo/bitacoraai/blob/main/docs/AGENTS.md">English</a> · <a href="https://github.com/polblancoo/bitacoraai/blob/main/docs/AGENTES.md">Español</a> · <b>Português</b></p>
 
 # Guia: fazer uma IA trabalhar sozinha com o `tm-agent`
 
@@ -17,13 +17,13 @@ Tudo aparece ao vivo no quadro. Este guia é para **quem instala** e para **quem
 
 O mesmo guia está **dentro do app**: *Configurações → Agentes de IA → Ver guia*, e ao criar uma IA aparece o comando pronto com o token dela.
 
-![Guia do tm-agent dentro do app](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-10-agentes.png)
+![Guia do tm-agent dentro do app](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-10-agentes.png)
 
 ## O que você precisa
 
 - O servidor rodando e uma conta de **admin ou dono** da equipe.
 - Uma máquina com a **pasta do projeto** e com o agente que quer usar instalado e com sessão iniciada (por exemplo `claude`).
-- Rust (`cargo`) para instalar o `tm-agent`. Instaladores prontos: veja o [ROADMAP](https://github.com/polblancoo/crewhelm/blob/main/ROADMAP.md).
+- Rust (`cargo`) para instalar o `tm-agent`. Instaladores prontos: veja o [ROADMAP](https://github.com/polblancoo/bitacoraai/blob/main/ROADMAP.md).
 
 ## Passo a passo
 
@@ -40,7 +40,7 @@ Com **⚙ Projeto** preencha **Pasta de trabalho** (por exemplo `/home/ana/proje
 Na máquina do projeto:
 
 ```bash
-cargo install crewhelm-agent
+cargo install bitacora-agent
 ```
 
 ### 4. Escolher o comando do agente
@@ -113,9 +113,9 @@ O comando também recebe `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_URL
 
 **Perguntar a uma pessoa.** Dentro de uma tarefa a IA pode executar `tm-agent ask "pergunta"`: levanta um alarme 🙋 para os donos e admins da equipe (no app e por Telegram) e espera a resposta como comentário.
 
-Quando a IA pergunta, o servidor também **cria uma tarefa de pedido** para uma pessoa (quem criou a tarefa, se tiver a permissão **Executor**; senão o executor com menos tarefas abertas; sem executores, um admin). O comentário diz qual tarefa e que você pode responder ali mesmo; os comandos do pedido aparecem com um botão **📋 Copiar**. Veja o [guia, capítulo 10](https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.pt.md#10-quando-uma-ia-precisa-que-você-faça-algo).
+Quando a IA pergunta, o servidor também **cria uma tarefa de pedido** para uma pessoa (quem criou a tarefa, se tiver a permissão **Executor**; senão o executor com menos tarefas abertas; sem executores, um admin). O comentário diz qual tarefa e que você pode responder ali mesmo; os comandos do pedido aparecem com um botão **📋 Copiar**. Veja o [guia, capítulo 10](https://github.com/polblancoo/bitacoraai/blob/main/docs/GUIA.pt.md#10-quando-uma-ia-precisa-que-você-faça-algo).
 
-**Exemplo pronto para usar.** Em [`examples/`](https://github.com/polblancoo/crewhelm/tree/main/examples) há um `run-claude.sh` com listas de comandos permitidos e proibidos (`whitelist.txt`, `blacklist.txt`) para usar como `TM_AGENT_CMD`.
+**Exemplo pronto para usar.** Em [`examples/`](https://github.com/polblancoo/bitacoraai/tree/main/examples) há um `run-claude.sh` com listas de comandos permitidos e proibidos (`whitelist.txt`, `blacklist.txt`) para usar como `TM_AGENT_CMD`.
 
 ## Como se comporta
 

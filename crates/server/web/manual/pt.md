@@ -1,6 +1,6 @@
 # Guia passo a passo: seu primeiro projeto no painel de comando
 
-O Rust TUI Manager é um **painel de comando**: um lugar onde você vê e dirige vários projetos ao mesmo tempo, com pessoas e IAs como recursos. Este guia é para quem vai **dirigir o trabalho de uma equipe de pessoas e IAs**: um CTO, uma líder de operações, uma dona de agência… O projeto pode ser um **app**, uma **planilha de orçamento**, um **processo de onboarding**, uma campanha, uma auditoria: o Rust TUI Manager não entende de apps, entende de **tarefas, responsáveis e andamento**. Em 10 minutos você tem o primeiro montado.
+O BitacoraAI é um **painel de comando**: um lugar onde você vê e dirige vários projetos ao mesmo tempo, com pessoas e IAs como recursos. Este guia é para quem vai **dirigir o trabalho de uma equipe de pessoas e IAs**: um CTO, uma líder de operações, uma dona de agência… O projeto pode ser um **app**, uma **planilha de orçamento**, um **processo de onboarding**, uma campanha, uma auditoria: o BitacoraAI não entende de apps, entende de **tarefas, responsáveis e andamento**. Em 10 minutos você tem o primeiro montado.
 
 > As capturas de tela são de uma empresa de exemplo («Mi empresa») com três projetos bem diferentes.
 
@@ -29,13 +29,13 @@ O Rust TUI Manager é um **painel de comando**: um lugar onde você vê e dirige
 
 O servidor guarda tudo (equipes, tarefas, usuários) e serve a web. Instala-se uma vez.
 
-1. Baixe `tm-server-linux-x86_64.tar.gz` da [última versão](https://github.com/polblancoo/crewhelm/releases/latest) (ou `cargo install crewhelm-server`).
+1. Baixe `tm-server-linux-x86_64.tar.gz` da [última versão](https://github.com/polblancoo/bitacoraai/releases/latest) (ou `cargo install bitacora-server`).
 2. Descompacte e execute `./tm-server`.
 3. Abra `http://localhost:7878` no navegador.
 
-Para que outras pessoas entrem de outras máquinas, coloque o servidor num endereço que elas alcancem (idealmente com HTTPS: veja a [configuração do servidor](https://github.com/polblancoo/crewhelm/blob/main/README.pt.md)). Se for só para testar, `localhost` basta.
+Para que outras pessoas entrem de outras máquinas, coloque o servidor num endereço que elas alcancem (idealmente com HTTPS: veja a [configuração do servidor](https://github.com/polblancoo/bitacoraai/blob/main/README.pt.md)). Se for só para testar, `localhost` basta.
 
-**Instalação de uma linha (Linux x86_64, sem sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh`. Baixa o servidor do release, **verifica o SHA256** (se não bater, não instala), deixa em `~/.local/bin` e cria um serviço de usuário que inicia sozinho. Opções: `--port N`, `--no-service`, `--with-agent`, `--with-claude`, `--with-gemini`, `--with-codex`, `--with-opencode` (install that AI's program; `--with-all-ais` all four), `--version X`. Na primeira vez que você entra, um **guia de início** com desenhos leva você por equipe, projeto e IA (repita em Configurações → Preferências → 🧭 Guia de início).
+**Instalação de uma linha (Linux x86_64, sem sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/bitacoraai/main/install.sh | sh`. Baixa o servidor do release, **verifica o SHA256** (se não bater, não instala), deixa em `~/.local/bin` e cria um serviço de usuário que inicia sozinho. Opções: `--port N`, `--no-service`, `--with-agent`, `--with-claude`, `--with-gemini`, `--with-codex`, `--with-opencode` (install that AI's program; `--with-all-ais` all four), `--version X`. Na primeira vez que você entra, um **guia de início** com desenhos leva você por equipe, projeto e IA (repita em Configurações → Preferências → 🧭 Guia de início).
 
 Se preferir terminal ou janela própria, também há um cliente de terminal e um app de desktop na mesma página de downloads.
 
@@ -50,15 +50,15 @@ Uma **equipe** é o grupo de pessoas e IAs que compartilham projetos. Você pode
 
 Em **Projetos → «+»** crie um para cada coisa que queira levar adiante. No exemplo: um app, uma planilha e um processo, cada um com sua cor.
 
-![Quadro do projeto «App móvel de reservas»](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-01-tablero.png)
+![Quadro do projeto «App móvel de reservas»](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-01-tablero.png)
 
 Cada projeto tem seu **quadro** (A fazer · Em andamento · Concluído). Com **+ Nova tarefa** você carrega o trabalho: título, descrição, prioridade, datas e responsável. Os mesmos dados aparecem também em **calendário**, **Gantt** e **lousa**.
 
-![Outro projeto: uma planilha de orçamento, com responsáveis humanos e de IA](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-08-otro-proyecto.png)
+![Outro projeto: uma planilha de orçamento, com responsáveis humanos e de IA](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-08-otro-proyecto.png)
 
 Cada projeto guarda **onde vive o seu trabalho**: com **⚙ Projeto** (admin ou dono) você define a pasta de trabalho e o repositório, e eles aparecem acima do quadro.
 
-![Editar o projeto: nome, pasta de trabalho e repositório](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-09-proyecto.png)
+![Editar o projeto: nome, pasta de trabalho e repositório](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-09-proyecto.png)
 
 > 💡 Dica: não precisa ser software. Uma planilha, um processo de onboarding ou uma auditoria se tocam do mesmo jeito: tarefas com responsável e data.
 
@@ -69,7 +69,7 @@ Botão **👥 Equipe** (canto superior direito) → **➕ Adicionar / convidar**
 - **Já tem conta**: digite parte do nome, escolha o papel e **Adicionar**.
 - **Ainda não tem conta**: escolha um papel e **Gerar código**. Use **Copiar convite** (texto pronto para WhatsApp ou e-mail com link de download, servidor e código) ou **Enviar por e-mail**.
 
-![Convidar com um código](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-07-invitar.png)
+![Convidar com um código](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-07-invitar.png)
 
 | Papel | O que pode fazer |
 |---|---|
@@ -80,7 +80,7 @@ Botão **👥 Equipe** (canto superior direito) → **➕ Adicionar / convidar**
 
 O painel da equipe mostra cada integrante com seu papel, desde quando está, quem o adicionou e quantas tarefas abertas tem:
 
-![Painel da equipe com pessoas e IAs](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-06-panel-equipo.png)
+![Painel da equipe com pessoas e IAs](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-06-panel-equipo.png)
 
 ## 5. Adicionar IAs
 
@@ -89,15 +89,15 @@ As IAs (Claude Code, Cursor, Windsurf, Zed, Gemini ou outro cliente compatível 
 1. Na barra lateral, **🤖 IAs → «+»**.
 2. Coloque um nome que diga o que ela é (`claude-backend`, `gemini-dados`) e o papel: **Membro** (cria e edita as suas tarefas) ou **Leitor** (só olha).
 
-   ![Nova IA na equipe](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-02-nueva-ia.png)
+   ![Nova IA na equipe](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-02-nueva-ia.png)
 
 3. Mostra-se **o token uma única vez**, com a configuração MCP pronta para copiar. É a «chave» dessa IA.
 
-   ![Token da IA e configuração MCP](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-03-token.png)
+   ![Token da IA e configuração MCP](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-03-token.png)
 
 4. Se perder ou quiser cortar: clique na IA → **Novo token** (o anterior deixa de valer) ou **Revogar**.
 
-   ![Ficha de uma IA](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-03-ia.png)
+   ![Ficha de uma IA](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-03-ia.png)
 
 **O que uma IA pode e não pode fazer**
 
@@ -105,7 +105,7 @@ As IAs (Claude Code, Cursor, Windsurf, Zed, Gemini ou outro cliente compatível 
 - ❌ Criar ou apagar equipes, convidar pessoas, mudar papéis, ou mexer em tarefas alheias (exceto comentar).
 - Tudo o que faz fica **em seu nome** na atividade, e aparece com 🤖 no painel.
 
-> 🚧 **Estado**: as contas de IA e seus tokens já funcionam contra a API do servidor. O binário `tm-mcp` e o *skill* que as conectam direto à sua plataforma de código estão em desenvolvimento (veja o [ROADMAP](https://github.com/polblancoo/crewhelm/blob/main/ROADMAP.md)). Enquanto isso, o **`tm-agent`** já permite que uma IA pegue sozinha as tarefas atribuídas: veja o [guia de agentes](https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.pt.md).
+> 🚧 **Estado**: as contas de IA e seus tokens já funcionam contra a API do servidor. O binário `tm-mcp` e o *skill* que as conectam direto à sua plataforma de código estão em desenvolvimento (veja o [ROADMAP](https://github.com/polblancoo/bitacoraai/blob/main/ROADMAP.md)). Enquanto isso, o **`tm-agent`** já permite que uma IA pegue sozinha as tarefas atribuídas: veja o [guia de agentes](https://github.com/polblancoo/bitacoraai/blob/main/docs/AGENTES.pt.md).
 
 ## 6. Montar e atribuir tarefas
 
@@ -126,9 +126,9 @@ Tudo se atualiza **ao vivo**: não precisa recarregar.
 | **Calendário** | O que vence a cada dia. |
 | **🔔 Caixa de entrada** | Novidades: atribuições, menções, mensagens. Também por e-mail e Telegram. |
 
-![Gantt do projeto, com tarefas de pessoas e de IAs](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-04-gantt.png)
+![Gantt do projeto, com tarefas de pessoas e de IAs](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-04-gantt.png)
 
-![Atividade: o histórico do projeto, com as ações das IAs em seu nome](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-05-actividad.png)
+![Atividade: o histórico do projeto, com as ações das IAs em seu nome](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-05-actividad.png)
 
 Além disso, o **Google Calendar** (suas tarefas com data aparecem na sua agenda) é conectado em **Configurações**.
 
@@ -136,7 +136,7 @@ Além disso, o **Google Calendar** (suas tarefas com data aparecem na sua agenda
 
 Hoje, para delegar um projeto: adicione a pessoa com o papel **Admin** (pode atribuir tarefas, adicionar gente e gerar convites) e atribua a ela as tarefas principais. Ela monta a sua parte e traz a sua gente.
 
-> 🚧 **Em breve**: **líder por projeto** (com alcance só nesse projeto), **escopo configurável por IA** (em quais projetos mexe, se pode convidar outras IAs) e **relatórios de andamento** com gráficos. Veja o [roteiro](https://github.com/polblancoo/crewhelm/blob/main/ROADMAP.md).
+> 🚧 **Em breve**: **líder por projeto** (com alcance só nesse projeto), **escopo configurável por IA** (em quais projetos mexe, se pode convidar outras IAs) e **relatórios de andamento** com gráficos. Veja o [roteiro](https://github.com/polblancoo/bitacoraai/blob/main/ROADMAP.md).
 
 ## 9. Dirigir vários projetos ao mesmo tempo
 
@@ -147,7 +147,7 @@ Hoje, para delegar um projeto: adicione a pessoa com o papel **Admin** (pode atr
 - **Estado**: 🟢 em dia · 🔴 com tarefas atrasadas · 🟡 sem movimento há 7 dias · ✅ concluído · ⚪ sem tarefas.
 - **Embaixo**: o que as IAs fizeram por último. Um clique no cartão abre o projeto, e tudo se atualiza ao vivo.
 
-![Portfólio com todos os projetos](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-11-portafolio.png)
+![Portfólio com todos os projetos](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-11-portafolio.png)
 
 **Tarefas numeradas.** Cada tarefa mostra seu número (`#12`) no cartão e no detalhe, para citá-la sem ambiguidade em mensagens e comentários.
 
@@ -163,7 +163,7 @@ Uma IA pode esbarrar em algo que não faz sozinha: um comando bloqueado, uma per
 4. Se o pedido é uma **decisão ou permissão** («posso apagar X?»), use **✅ Autorizar** ou **❌ Rejeitar** (com o motivo na caixa). Para um comando que a IA tem bloqueado, «autorizar» não basta: execute você e envie a saída.
 5. A IA lê na próxima consulta (a cada 10 s) e segue. Ao enviar, o pedido passa sozinho para Concluída.
 
-![Pedido de uma IA: tarefa criada, comando para copiar](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-12-pedido.png)
+![Pedido de uma IA: tarefa criada, comando para copiar](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-12-pedido.png)
 
 **Para quem vai?** Para os membros com a permissão **Executor** (janela da equipe → caixa *Executor* ao lado de cada pessoa; só um admin altera, e as IAs não podem ser executoras):
 
@@ -179,7 +179,7 @@ Uma IA pode esbarrar em algo que não faz sozinha: um comando bloqueado, uma per
 - **Tooltips**: passe o cursor sobre um botão para ver o que faz.
 - **Este manual** fica dentro do app: botão **📖 Manual** (embaixo à esquerda, ou *Configurações → Ajuda*). Tem busca e um índice por temas com links.
 
-![O manual dentro do app, com busca](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-13-manual.png)
+![O manual dentro do app, com busca](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-13-manual.png)
 
 ## 12. Configurar o email do servidor
 
@@ -187,7 +187,7 @@ Para o app enviar **emails** (códigos de verificação, atribuições, mençõe
 
 **O jeito mais fácil: o assistente.** Entre como CTO ou administrador em *Configurações → 🖥 Servidor (passo a passo) → ✉ E-mail*: escolha o provedor (Gmail, Outlook, Yahoo, Brevo, SendGrid, Mailgun, Amazon SES ou outro), digite usuário e senha, toque em **✉ Testar** (envia um e-mail de teste ao seu endereço) e depois **💾 Salvar e ativar**. Sem editar arquivos nem reiniciar: a senha é guardada criptografada e o servidor a usa na hora. Se algo falhar, o assistente explica o motivo (senha recusada, porta bloqueada, segurança errada…).
 
-> O CrewHelm só **envia** e-mail. Não lê nenhuma caixa, então **POP3 ou IMAP não são necessários**: basta uma conta que envie por SMTP.
+> O BitacoraAI só **envia** e-mail. Não lê nenhuma caixa, então **POP3 ou IMAP não são necessários**: basta uma conta que envie por SMTP.
 
 **Alternativa por arquivo** (servidores sem tela ou instalações por script). O que for salvo no assistente substitui estas variáveis.
 
@@ -234,7 +234,7 @@ Depois: `systemctl --user daemon-reload && systemctl --user restart tm-server`. 
 
 Quando uma IA pede um comando, abra a tarefa de pedido e toque em **✅ Permitir comando…**. A caixa mostra o comando, **explica o que ele faz** (aviso vermelho se for perigoso) e deixa escolher **uma vez** ou **sempre**. Também dá para escrever `/permitir cmd` (uma vez) ou `/permitir siempre cmd` (só owners e admins) num comentário. A IA recebe as permissões em `TM_ALLOW` e retoma a tarefa.
 
-![Permitir comando](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-16-permitir.png)
+![Permitir comando](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-16-permitir.png)
 
 ## 14. Terminal no navegador
 
@@ -245,14 +245,14 @@ Para **owners** (os membros usam o próprio espaço, veja a seção 21). O botã
 
 Cada sessão deixa um comentário 📝 e uma nota `.tm/terminal-tarea-N.md` na pasta do projeto, que a IA lê ao retomar. No menu, **🖥️ Terminais** mostra até 8 painéis e o estado de cada IA (🙋 precisa de você · ⚙️ trabalhando · ⏳ na fila · ✅ terminou).
 
-![Vista Terminais](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-14-terminales.png)
+![Vista Terminais](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-14-terminales.png)
 
 ## 15. Consumo e cotas
 
 **💰 Consumo** mostra tokens, custo e horas por IA e por tarefa, com barras de **cota** da equipe, do projeto e da tarefa. Numa tarefa, **🪙 Tokens a gastar** define um teto e **🧮 Estimar** sugere um valor pelo histórico. A cota é verificada **antes** de cada execução: se faltar, a IA não começa e avisa num comentário. Para cortar em dólares use `TM_AGENT_MAX_USD` no agente (1 USD ou mais). O Portfólio soma o consumo do mês.
 
-![Consumo](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-15-consumo.png)
-![Teto de tokens](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-17-tokens.png)
+![Consumo](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-15-consumo.png)
+![Teto de tokens](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-17-tokens.png)
 
 ## 16. Licença comercial e aviso de instalação
 
@@ -283,11 +283,11 @@ O **aviso** no topo aparece com mais de 3 pessoas ou 2 IAs, ou se você declarar
 
 ---
 
-**Algo não ficou claro?** Cada opção de **Configurações** tem um «?» com ajuda. E se encontrar um problema, abra uma [issue](https://github.com/polblancoo/crewhelm/issues).
+**Algo não ficou claro?** Cada opção de **Configurações** tem um «?» com ajuda. E se encontrar um problema, abra uma [issue](https://github.com/polblancoo/bitacoraai/issues).
 
 ## 17. Novidades da interface (0.7.1)
 
-- **CrewHelm.** O app agora se chama **CrewHelm** (interface, e-mails e manifesto). Programas e serviços mantêm seus nomes por enquanto.
+- **BitacoraAI.** O app agora se chama **BitacoraAI** (interface, e-mails e manifesto). Programas e serviços mantêm seus nomes por enquanto.
 - **Guia de início.** Um assistente de 5 passos com ilustrações: boas-vindas, equipe, projeto, IA (opcional) e tarefa de exemplo. Abre sozinho se você não tem equipes; em um servidor vazio, a tela de entrada oferece direto **Criar conta**.
 - **Pedidos de uma IA, mais rápidos.** Os comandos que a IA pede aparecem juntos em uma lista: **📋** copia, **✕** tira os que você não quer e **✅ Permitir os N comandos sempre** adiciona todos à lista da IA, avisa e marca o pedido como Feito. **⚙ Lista da IA** abre a lista de permitidos para apagar ou editar linhas (salva na hora). Um comando pode ter até 1000 caracteres.
 - **Tarefa mais cômoda.** **💾 Salvar** e **🗑 Apagar** também ficam no alto, em um cabeçalho fixo, e a barra de baixo fica grudada no fundo. **⤢ Maximizar** deixa os comentários maiores.
@@ -300,7 +300,7 @@ O **aviso** no topo aparece com mais de 3 pessoas ou 2 IAs, ou se você declarar
 
 ### Perfil de uso (Configurações → Equipe e projeto)
 
-Escolha para que a equipe usa o CrewHelm e a interface se prepara sozinha: *Desenvolvimento de software* (A fazer / Em andamento / Feito, com terminais e pasta do código), *Conteúdo e redes* (Rascunho / Em produção / Publicado, calendário como visão inicial e sem partes técnicas), *Fábrica de apps* (Backlog / Em construção / Entregue, vários projetos em paralelo), *Escritório e consultorias* (administração, contabilidade, advocacia: Pendente / Em andamento / Fechado, com o calendário de vencimentos) ou *Outros / equipe geral*. «Criar exemplo» monta uma **equipe de exemplo separada** («Ejemplo · …») com projetos e tarefas de amostra: sua equipe real não é tocada, você volta a ela com «Volver a mi equipo» e «Eliminar ejemplo» apaga a equipe de exemplo inteira. Só muda nomes e o que é mostrado: seus dados não mudam e você pode trocar de perfil quando quiser. Também se escolhe no guia de início.
+Escolha para que a equipe usa o BitacoraAI e a interface se prepara sozinha: *Desenvolvimento de software* (A fazer / Em andamento / Feito, com terminais e pasta do código), *Conteúdo e redes* (Rascunho / Em produção / Publicado, calendário como visão inicial e sem partes técnicas), *Fábrica de apps* (Backlog / Em construção / Entregue, vários projetos em paralelo), *Escritório e consultorias* (administração, contabilidade, advocacia: Pendente / Em andamento / Fechado, com o calendário de vencimentos) ou *Outros / equipe geral*. «Criar exemplo» monta uma **equipe de exemplo separada** («Ejemplo · …») com projetos e tarefas de amostra: sua equipe real não é tocada, você volta a ela com «Volver a mi equipo» e «Eliminar ejemplo» apaga a equipe de exemplo inteira. Só muda nomes e o que é mostrado: seus dados não mudam e você pode trocar de perfil quando quiser. Também se escolhe no guia de início.
 
 Se a equipe lida com informação confidencial (por exemplo, um escritório de advocacia), ative a **revisão humana** do projeto, não carregue dados que não quer que uma IA veja e lembre que o texto das tarefas chega ao modelo que você usar; para dados muito sensíveis, use um modelo próprio da empresa.
 
@@ -333,7 +333,7 @@ Cada tarefa tem sua pasta de trabalho no formato `.crewhelm/<usuário>/<tarefa>/
 ## 20. Papéis do servidor e Processos
 Além dos papéis de cada equipe, há três **papéis do servidor**: *Usuário*, *CTO* e *Administrador*. A primeira pessoa registrada é administradora. Um administrador os altera em *Configurações → 🖥 Servidor (passo a passo)* (sempre deve restar ao menos um administrador). O CTO também define ali os limites dos terminais e vê o uso por pessoa (seção 24).
 
-- **🖥 Processos** (em *Configurações → 🖥 Servidor (passo a passo)*; CTO e administrador): RAM, disco, carga, processos do CrewHelm com CPU e RAM, contêineres e uso do app (banco, arquivos, pessoas, IAs, tarefas). Atualiza a cada 5 segundos.
+- **🖥 Processos** (em *Configurações → 🖥 Servidor (passo a passo)*; CTO e administrador): RAM, disco, carga, processos do BitacoraAI com CPU e RAM, contêineres e uso do app (banco, arquivos, pessoas, IAs, tarefas). Atualiza a cada 5 segundos.
 - **Proteção contra saturação:** limite de pedidos por IP por minuto, limite de pedidos simultâneos e tempo máximo por pedido. Um ataque de rede grande se barra fora (firewall, proxy ou CDN). Atrás de um proxy, defina `TM_TRUSTED_PROXY=1`.
 - **Atalhos da equipe:** o prefixo na web é **Alt+K** (o navegador fica com Ctrl+T).
 
@@ -377,7 +377,7 @@ O **CTO** e o **administrador** definem os limites dos terminais dos membros (os
 ## 25. Convidar e instalar na máquina de outra pessoa
 Em **👥 Equipe → Convidar com um código**, **Copiar convite** monta uma mensagem pronta para colar num chat: o endereço do servidor (com o IP da rede local se você entrou por `localhost`), o código e os passos. O mais fácil é **abrir o endereço no navegador**, sem instalar nada.
 
-Para o app de desktop no Linux, sem servidor: `curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh -s -- --client --server http://IP:7878`. Instala só o app (o serviço e as ferramentas de terminal ficam de fora); ao abrir, informe o endereço em «Servidor». Em Configurações cada pessoa vê só o que lhe cabe: GitHub pessoal só para admins (ou se já vinculou), Google só se o servidor o tem, e a lista de comandos das IAs só para o administrador.
+Para o app de desktop no Linux, sem servidor: `curl -fsSL https://raw.githubusercontent.com/polblancoo/bitacoraai/main/install.sh | sh -s -- --client --server http://IP:7878`. Instala só o app (o serviço e as ferramentas de terminal ficam de fora); ao abrir, informe o endereço em «Servidor». Em Configurações cada pessoa vê só o que lhe cabe: GitHub pessoal só para admins (ou se já vinculou), Google só se o servidor o tem, e a lista de comandos das IAs só para o administrador.
 
 ---
 
@@ -398,13 +398,13 @@ Tudo aparece ao vivo no quadro. Este guia é para **quem instala** e para **quem
 
 O mesmo guia está **dentro do app**: *Configurações → Agentes de IA → Ver guia*, e ao criar uma IA aparece o comando pronto com o token dela.
 
-![Guia do tm-agent dentro do app](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-10-agentes.png)
+![Guia do tm-agent dentro do app](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-10-agentes.png)
 
 ## O que você precisa
 
 - O servidor rodando e uma conta de **admin ou dono** da equipe.
 - Uma máquina com a **pasta do projeto** e com o agente que quer usar instalado e com sessão iniciada (por exemplo `claude`).
-- Rust (`cargo`) para instalar o `tm-agent`. Instaladores prontos: veja o [ROADMAP](https://github.com/polblancoo/crewhelm/blob/main/ROADMAP.md).
+- Rust (`cargo`) para instalar o `tm-agent`. Instaladores prontos: veja o [ROADMAP](https://github.com/polblancoo/bitacoraai/blob/main/ROADMAP.md).
 
 ## Passo a passo
 
@@ -421,7 +421,7 @@ Com **⚙ Projeto** preencha **Pasta de trabalho** (por exemplo `/home/ana/proje
 Na máquina do projeto:
 
 ```bash
-cargo install crewhelm-agent
+cargo install bitacora-agent
 ```
 
 ### 4. Escolher o comando do agente
@@ -494,9 +494,9 @@ O comando também recebe `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_URL
 
 **Perguntar a uma pessoa.** Dentro de uma tarefa a IA pode executar `tm-agent ask "pergunta"`: levanta um alarme 🙋 para os donos e admins da equipe (no app e por Telegram) e espera a resposta como comentário.
 
-Quando a IA pergunta, o servidor também **cria uma tarefa de pedido** para uma pessoa (quem criou a tarefa, se tiver a permissão **Executor**; senão o executor com menos tarefas abertas; sem executores, um admin). O comentário diz qual tarefa e que você pode responder ali mesmo; os comandos do pedido aparecem com um botão **📋 Copiar**. Veja o [guia, capítulo 10](https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.pt.md#10-quando-uma-ia-precisa-que-você-faça-algo).
+Quando a IA pergunta, o servidor também **cria uma tarefa de pedido** para uma pessoa (quem criou a tarefa, se tiver a permissão **Executor**; senão o executor com menos tarefas abertas; sem executores, um admin). O comentário diz qual tarefa e que você pode responder ali mesmo; os comandos do pedido aparecem com um botão **📋 Copiar**. Veja o [guia, capítulo 10](https://github.com/polblancoo/bitacoraai/blob/main/docs/GUIA.pt.md#10-quando-uma-ia-precisa-que-você-faça-algo).
 
-**Exemplo pronto para usar.** Em [`examples/`](https://github.com/polblancoo/crewhelm/tree/main/examples) há um `run-claude.sh` com listas de comandos permitidos e proibidos (`whitelist.txt`, `blacklist.txt`) para usar como `TM_AGENT_CMD`.
+**Exemplo pronto para usar.** Em [`examples/`](https://github.com/polblancoo/bitacoraai/tree/main/examples) há um `run-claude.sh` com listas de comandos permitidos e proibidos (`whitelist.txt`, `blacklist.txt`) para usar como `TM_AGENT_CMD`.
 
 ## Como se comporta
 
@@ -561,10 +561,10 @@ O que for salvo no assistente substitui as variáveis de ambiente (`TM_TELEGRAM_
 
 ## 29. Pasta de rede: salvar dos seus próprios programas
 
-*Configurações → Equipe e projeto → Pasta de rede → Como conectar* mostra o endereço do projeto (`/dav/<número>/`) e os passos para montá-la como unidade no **Windows** (Mapear unidade de rede), **macOS** (Ir → Conectar ao Servidor) ou **Linux** (Arquivos → Conectar ao servidor). Você entra com seu usuário e senha do CrewHelm e salva do Photoshop, Premiere, Word, DaVinci ou o que usar: o arquivo chega à pasta do projeto no servidor, sem passar pelo navegador e sem o limite de 25 MB (até 8 GB por arquivo).
+*Configurações → Equipe e projeto → Pasta de rede → Como conectar* mostra o endereço do projeto (`/dav/<número>/`) e os passos para montá-la como unidade no **Windows** (Mapear unidade de rede), **macOS** (Ir → Conectar ao Servidor) ou **Linux** (Arquivos → Conectar ao servidor). Você entra com seu usuário e senha do BitacoraAI e salva do Photoshop, Premiere, Word, DaVinci ou o que usar: o arquivo chega à pasta do projeto no servidor, sem passar pelo navegador e sem o limite de 25 MB (até 8 GB por arquivo).
 
 - **Quem escreve onde**: dentro da pasta com seu nome (`<seu usuário>/…`). A equipe toda lê tudo; `_tareas/<n>/final/` é somente leitura. Leitores não escrevem.
-- **Versões**: se você salvar por cima de um arquivo, movê-lo ou apagá-lo, o CrewHelm guarda antes a versão anterior (as últimas 20 por arquivo, em `.crewhelm/.versions/`).
+- **Versões**: se você salvar por cima de um arquivo, movê-lo ou apagá-lo, o BitacoraAI guarda antes a versão anterior (as últimas 20 por arquivo, em `.crewhelm/.versions/`).
 - **Programas executáveis não são enviados** (`.exe`, `.bat`, instaladores, etc.).
 - **O Windows exige HTTPS**: use o «Endereço seguro» e instale o certificado próprio do servidor (link na mesma ajuda); com um certificado real (Let's Encrypt ou o da empresa) não é preciso. O endereço HTTP serve no macOS e Linux numa rede confiável.
 - Cada envio, movimento ou exclusão fica na auditoria (`carpeta_de_red`).

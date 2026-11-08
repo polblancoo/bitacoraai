@@ -1,10 +1,10 @@
 #!/bin/sh
-# Instalador de CrewHelm (tm-server) para Linux: sin sudo, todo dentro de tu usuario.
-#   curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh
+# Instalador de BitacoraAI (tm-server) para Linux: sin sudo, todo dentro de tu usuario.
+#   curl -fsSL https://raw.githubusercontent.com/polblancoo/bitacoraai/main/install.sh | sh
 # Opciones (después de «sh -s --»):  --port 7878   --no-service   --no-shell-tools   --shell-tools-only   --client   --server http://IP:7878   --with-agent   --with-opencode   --with-claude   --with-gemini   --with-codex   --with-all-ais   --version v0.7.1
 set -eu
 
-REPO="polblancoo/crewhelm"
+REPO="polblancoo/bitacoraai"
 PORT=7878; SERVICE=1; SHELLTOOLS=1; ONLYTOOLS=0; CLIENT=0; SERVERURL=""; AGENT=0; OPENCODE=0; CLAUDE=0; GEMINI=0; CODEX=0; VERSION="latest"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -30,7 +30,7 @@ say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [ "$(uname -s)" = "Linux" ] || die "este instalador es para Linux (Windows y macOS: próximamente)"
-case "$(uname -m)" in x86_64|amd64) ARCH=x86_64 ;; *) die "arquitectura $(uname -m) no soportada todavía (probá: cargo install crewhelm-server)" ;; esac
+case "$(uname -m)" in x86_64|amd64) ARCH=x86_64 ;; *) die "arquitectura $(uname -m) no soportada todavía (probá: cargo install bitacora-server)" ;; esac
 command -v curl >/dev/null 2>&1 || die "falta curl"
 
 # Herramientas de terminal para las personas del equipo (zsh con colores, eza, fzf, starship…): se instalan solo las que faltan.
@@ -67,9 +67,9 @@ shell_tools() {
 if [ "$ONLYTOOLS" = 1 ]; then shell_tools; exit 0; fi
 command -v sha256sum >/dev/null 2>&1 || die "falta sha256sum"
 
-BIN="$HOME/.local/bin"; DATA="$HOME/.local/share/crewhelm"
+BIN="$HOME/.local/bin"; DATA="$HOME/.local/share/bitacora"
 mkdir -p "$BIN" "$DATA"
-if [ -n "${CREWHELM_BASE_URL:-}" ]; then BASE="$CREWHELM_BASE_URL"  # espejo interno o pruebas
+if [ -n "${BITACORA_BASE_URL:-}" ]; then BASE="$BITACORA_BASE_URL"  # espejo interno o pruebas
 elif [ "$VERSION" = "latest" ]; then BASE="https://github.com/$REPO/releases/latest/download"; else BASE="https://github.com/$REPO/releases/download/$VERSION"; fi
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
@@ -89,30 +89,30 @@ if [ "$CLIENT" = 1 ]; then
   [ -n "$APP" ] || die "este release no trae la app de escritorio para Linux"
   fetch_file "$APP" || die "no pude descargar $APP"
   mkdir -p "$DATA" "$HOME/.local/share/applications"
-  install -m 755 "$TMP/$APP" "$DATA/CrewHelm.AppImage"
+  install -m 755 "$TMP/$APP" "$DATA/BitacoraAI.AppImage"
   # el lanzador usa la extracción propia del AppImage: anda aunque la máquina no tenga FUSE
-  printf '#!/bin/sh\nexport APPIMAGE_EXTRACT_AND_RUN=1\nexec "%s/CrewHelm.AppImage" "$@"\n' "$DATA" > "$BIN/crewhelm-app"; chmod 755 "$BIN/crewhelm-app"
-  cat > "$HOME/.local/share/applications/crewhelm.desktop" <<DESKEOF
+  printf '#!/bin/sh\nexport APPIMAGE_EXTRACT_AND_RUN=1\nexec "%s/BitacoraAI.AppImage" "$@"\n' "$DATA" > "$BIN/bitacora-app"; chmod 755 "$BIN/bitacora-app"
+  cat > "$HOME/.local/share/applications/bitacora.desktop" <<DESKEOF
 [Desktop Entry]
 Type=Application
-Name=CrewHelm
+Name=BitacoraAI
 Comment=Tablero de equipos humanos y de IA
-Exec=$BIN/crewhelm-app
+Exec=$BIN/bitacora-app
 Terminal=false
 Categories=Office;Development;
 DESKEOF
-  say "App instalada: abrila desde el menú de aplicaciones (CrewHelm) o con  crewhelm-app"
-  case ":$PATH:" in *":$BIN:"*) ;; *) echo "   (agregá $BIN a tu PATH para abrirla con  crewhelm-app)" ;; esac
+  say "App instalada: abrila desde el menú de aplicaciones (BitacoraAI) o con  bitacora-app"
+  case ":$PATH:" in *":$BIN:"*) ;; *) echo "   (agregá $BIN a tu PATH para abrirla con  bitacora-app)" ;; esac
   printf '\n\033[1;32m¡Listo!\033[0m Al abrirla, en «Servidor» poné la dirección del servidor de tu equipo%s y entrá con tu usuario.\n' "${SERVERURL:+ ($SERVERURL)}"
   printf 'Sin instalar nada también podés abrir esa dirección en el navegador.\n'
   exit 0
 fi
-[ "$SERVICE" = 1 ] && say "Esto instala el SERVIDOR de CrewHelm en esta máquina. Si solo vas a usar el servidor de otra persona, no hace falta: abrí su dirección en el navegador, o instalá solo la app con  --client"
+[ "$SERVICE" = 1 ] && say "Esto instala el SERVIDOR de BitacoraAI en esta máquina. Si solo vas a usar el servidor de otra persona, no hace falta: abrí su dirección en el navegador, o instalá solo la app con  --client"
 install_one() { # install_one <binario>
   if fetch "$1-linux-$ARCH.tar.gz"; then install -m 755 "$TMP/$1" "$BIN/$1"
   elif command -v cargo >/dev/null 2>&1; then
     say "No pude bajar el binario; lo compilo con cargo (tarda unos minutos)"
-    case "$1" in tm-server) crate=crewhelm-server ;; *) crate=crewhelm-agent ;; esac
+    case "$1" in tm-server) crate=bitacora-server ;; *) crate=bitacora-agent ;; esac
     cargo install "$crate" --root "$HOME/.local"
   else die "no pude descargar $1 y cargo no está instalado"; fi
 }
@@ -136,7 +136,7 @@ if [ "$SERVICE" = 1 ] && command -v systemctl >/dev/null 2>&1 && systemctl --use
   UNIT="$HOME/.config/systemd/user"; mkdir -p "$UNIT"
   cat > "$UNIT/tm-server.service" <<UNITEOF
 [Unit]
-Description=CrewHelm (tm-server): tablero de equipos humanos y de IA
+Description=BitacoraAI (tm-server): tablero de equipos humanos y de IA
 After=network.target
 
 [Service]

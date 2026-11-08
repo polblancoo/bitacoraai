@@ -76,7 +76,7 @@ async fn snapshot() -> Vec<(u32, String, u64, u64)> {
         let stat = read(&format!("/proc/{pid}/stat")).await;
         let (Some(a), Some(b)) = (stat.find('('), stat.rfind(')')) else { continue };
         let name = &stat[a + 1..b];
-        if !(name.starts_with("tm-") || name.starts_with("crewhelm")) {
+        if !(name.starts_with("tm-") || name.starts_with("bitacora") || name.starts_with("crewhelm")) {
             continue;
         }
         let f: Vec<&str> = stat[b + 2..].split_whitespace().collect();
@@ -125,7 +125,7 @@ async fn procesos(State(st): State<AppState>, user: AuthUser) -> Result<Json<Val
     let one = |q: &'static str| { let db = st.db.clone(); async move { sqlx::query_scalar::<_, i64>(q).fetch_one(&db).await.unwrap_or(0) } };
     let docker: Vec<Value> = cmd("docker", &["ps", "--format", "{{.Names}}|{{.Status}}|{{.Image}}"]).await.lines().filter_map(|l| {
         let p: Vec<&str> = l.split('|').collect();
-        (p.len() == 3 && p[0].starts_with("crewhelm")).then(|| json!({ "name": p[0], "status": p[1], "image": p[2] }))
+        (p.len() == 3 && (p[0].starts_with("bitacora") || p[0].starts_with("crewhelm"))).then(|| json!({ "name": p[0], "status": p[1], "image": p[2] }))
     }).collect();
     Ok(Json(json!({
         "procs": procs, "cpus": cpus, "load": load, "uptime_s": up as u64,

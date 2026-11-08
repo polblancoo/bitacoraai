@@ -33,8 +33,8 @@ fn plain(code: StatusCode, msg: &str) -> Response {
 }
 
 fn unauthorized() -> Response {
-    let mut r = plain(StatusCode::UNAUTHORIZED, "Hace falta usuario y contraseña de CrewHelm");
-    r.headers_mut().insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Basic realm=\"CrewHelm\", charset=\"UTF-8\""));
+    let mut r = plain(StatusCode::UNAUTHORIZED, "Hace falta usuario y contraseña de BitacoraAI");
+    r.headers_mut().insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Basic realm=\"BitacoraAI\", charset=\"UTF-8\""));
     r
 }
 

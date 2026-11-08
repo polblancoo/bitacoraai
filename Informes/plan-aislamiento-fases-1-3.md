@@ -1,7 +1,7 @@
 # Plan de aislamiento de las IAs (fases 1 a 3)
 
-> Origen: punto 6 de `analisis-crewhelm-competencia-FODA.md` (la mayor debilidad: las listas de comandos no son un sandbox).
-> Decisiones tomadas con Pol (2026-11-06): servidor Linux, un solo usuario de servicio sin root, usuarios **internos** de CrewHelm,
+> Origen: punto 6 de `analisis-bitacora-competencia-FODA.md` (la mayor debilidad: las listas de comandos no son un sandbox).
+> Decisiones tomadas con Pol (2026-11-06): servidor Linux, un solo usuario de servicio sin root, usuarios **internos** de BitacoraAI,
 > aislamiento por ejecución con `bwrap` (no Docker, no una cuenta de Linux por persona o IA), git como motor invisible.
 
 ## Estructura en disco (modo servidor, `TM_WORKSPACE=/home/crewhelm`)
@@ -38,7 +38,7 @@ Se activa por IA en su ficha («Aislamiento»), o para todas con `TM_SANDBOX=bwr
 La cápsula no tiene red propia (`--unshare-net`). Sale solo por dos puentes hacia sockets Unix del `tm-agent` (fuera de la cápsula):
 - **proxy HTTPS filtrado**: solo `CONNECT` a destinos de la lista (API del modelo, GitHub, registros de paquetes + lo que agregue un admin);
   no permite direcciones privadas; lo bloqueado queda en un registro y se informa en la tarea;
-- **puente al servidor CrewHelm** para `tm-agent ask` y `verdict`.
+- **puente al servidor BitacoraAI** para `tm-agent ask` y `verdict`.
 Si una herramienta ignora el proxy, falla sin red (falla cerrado).
 
 ## Qué garantiza y qué no

@@ -74,7 +74,7 @@ Puntos a tener en cuenta:
 
 1. **Un solo «app registrada» por plataforma**: como el producto es self-hosted, hay dos caminos:
    - *Cada instalación registra su propia app* (como hoy `TM_GOOGLE_CLIENT_ID`): sin dependencia nuestra, pero mucho trabajo para el cliente (sobre todo Meta).
-   - *CrewHelm Cloud con una app central aprobada*: la mejor experiencia, pero hay que pasar la revisión de cada plataforma una vez y mantenerla. Encaja con la línea «CrewHelm Cloud» del ROADMAP.
+   - *BitacoraAI Cloud con una app central aprobada*: la mejor experiencia, pero hay que pasar la revisión de cada plataforma una vez y mantenerla. Encaja con la línea «BitacoraAI Cloud» del ROADMAP.
 2. **Alternativa pragmática**: integrar un agregador que ya resolvió las aprobaciones (tipo Buffer, Postiz —open source, self-hostable—, Ayrshare, Late u otros). Se pierde algo de control y se suma un costo, pero se llega a muchas redes en semanas en vez de meses. Evaluar precios y licencias vigentes antes de decidir.
 3. **Tokens que vencen**: hay que renovarlos y avisar cuando una cuenta se desconecta (se puede apoyar en `notify.rs`).
 4. **Límites de tasa y colas**: publicar con reintentos y registro de errores; no publicar dos veces si falla a mitad (idempotencia con `posts.id_externo`).
@@ -123,7 +123,7 @@ Las estimaciones son gruesas; las fases 3–4 dependen sobre todo del tiempo de 
 
 ## Qué necesito que decidas
 
-1. ¿Self-hosted con claves propias de cada cliente, o apostar a **CrewHelm Cloud** con app central?
+1. ¿Self-hosted con claves propias de cada cliente, o apostar a **BitacoraAI Cloud** con app central?
 2. ¿Construir los conectores a mano o apoyarnos en un **agregador** (p. ej. Postiz, que es open source) para llegar rápido a más redes?
 3. ¿Qué redes son prioridad para el primer cliente real (influencers vs. agencias de marketing)?
 4. ¿Va como función `pro` (de pago) o dentro del núcleo?

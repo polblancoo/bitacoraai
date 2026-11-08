@@ -83,7 +83,7 @@ impl Google {
 
     /// Canjea un código inventado: «invalid_grant» significa que Google aceptó el ID y el secreto; «invalid_client», que no.
     pub async fn check(&self) -> std::result::Result<(), String> {
-        match self.token(&[("grant_type", "authorization_code"), ("code", "crewhelm-prueba"), ("redirect_uri", &self.redirect)]).await {
+        match self.token(&[("grant_type", "authorization_code"), ("code", "bitacora-prueba"), ("redirect_uri", &self.redirect)]).await {
             Ok(_) => Ok(()),
             Err(e) if e == "invalid_grant" || e == "redirect_uri_mismatch" => Ok(()),
             Err(e) if e == "invalid_client" => Err("Google no acepta ese ID de cliente o su secreto: copiá ambos de nuevo desde la consola de Google".into()),
@@ -161,7 +161,7 @@ struct CallbackParams {
 
 fn page(ok: bool, msg: &str) -> Response {
     let icon = if ok { "✅" } else { "⚠️" };
-    let body = format!("<!doctype html><meta charset=utf-8><title>Google Calendar</title><body style=\"font-family:sans-serif;text-align:center;margin-top:20vh\"><h2>{icon} {msg}</h2><p>Podés cerrar esta pestaña y volver a Rust TUI Manager.</p>");
+    let body = format!("<!doctype html><meta charset=utf-8><title>Google Calendar</title><body style=\"font-family:sans-serif;text-align:center;margin-top:20vh\"><h2>{icon} {msg}</h2><p>Podés cerrar esta pestaña y volver a BitacoraAI.</p>");
     (if ok { StatusCode::OK } else { StatusCode::BAD_REQUEST }, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], body).into_response()
 }
 

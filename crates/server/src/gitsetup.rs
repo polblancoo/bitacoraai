@@ -71,7 +71,7 @@ async fn setup(State(st): State<AppState>, user: AuthUser, Path(project): Path<I
             let token = token_of(&st, user.id).await?;
             let repo = crate::github::clean_repo(&b.repo);
             if b.mode != "new" && !valid_repo(&repo) {
-                return Err(AppError::bad("Escribilo como dueño/repositorio, por ejemplo polblancoo/crewhelm"));
+                return Err(AppError::bad("Escribilo como dueño/repositorio, por ejemplo polblancoo/bitacoraai"));
             }
             if b.mode == "new" && !valid_name(b.name.trim()) {
                 return Err(AppError::bad("El nombre del repositorio puede tener letras, números, guiones y puntos"));

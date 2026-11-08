@@ -117,7 +117,7 @@ pub fn router() -> axum::Router<crate::AppState> {
 async fn cert() -> Response {
     use axum::response::IntoResponse;
     match std::fs::read(dir().join("auto-cert.pem")) {
-        Ok(b) => ([(axum::http::header::CONTENT_TYPE, "application/x-x509-ca-cert"), (axum::http::header::CONTENT_DISPOSITION, "attachment; filename=\"crewhelm.crt\"")], b).into_response(),
+        Ok(b) => ([(axum::http::header::CONTENT_TYPE, "application/x-x509-ca-cert"), (axum::http::header::CONTENT_DISPOSITION, "attachment; filename=\"bitacora.crt\"")], b).into_response(),
         Err(_) => (axum::http::StatusCode::NOT_FOUND, "Este servidor no usa el certificado propio (tiene uno suyo o el HTTPS está apagado)").into_response(),
     }
 }

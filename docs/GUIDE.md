@@ -1,8 +1,8 @@
-<p align="center"><b>English</b> · <a href="https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.md">Español</a> · <a href="https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.pt.md">Português</a></p>
+<p align="center"><b>English</b> · <a href="https://github.com/polblancoo/bitacoraai/blob/main/docs/GUIA.md">Español</a> · <a href="https://github.com/polblancoo/bitacoraai/blob/main/docs/GUIA.pt.md">Português</a></p>
 
 # Step-by-step guide: your first project on the command board
 
-Rust TUI Manager is a **command board**: one place where you see and direct several projects at once, with people and AIs as resources. This guide is for whoever will **direct work with a team of people and AIs**: a CTO, an operations lead, an agency owner… The project can be an **app**, a **budget spreadsheet**, an **onboarding process**, a campaign, an audit: Rust TUI Manager knows nothing about apps, it knows about **tasks, owners and progress**. In 10 minutes you will have the first one set up.
+BitacoraAI is a **command board**: one place where you see and direct several projects at once, with people and AIs as resources. This guide is for whoever will **direct work with a team of people and AIs**: a CTO, an operations lead, an agency owner… The project can be an **app**, a **budget spreadsheet**, an **onboarding process**, a campaign, an audit: BitacoraAI knows nothing about apps, it knows about **tasks, owners and progress**. In 10 minutes you will have the first one set up.
 
 > The screenshots are from a sample company («Mi empresa») with three very different projects.
 
@@ -31,13 +31,13 @@ Rust TUI Manager is a **command board**: one place where you see and direct seve
 
 The server stores everything (teams, tasks, users) and serves the web app. You install it once.
 
-1. Download `tm-server-linux-x86_64.tar.gz` from the [latest release](https://github.com/polblancoo/crewhelm/releases/latest) (or `cargo install crewhelm-server`).
+1. Download `tm-server-linux-x86_64.tar.gz` from the [latest release](https://github.com/polblancoo/bitacoraai/releases/latest) (or `cargo install bitacora-server`).
 2. Unpack it and run `./tm-server`.
 3. Open `http://localhost:7878` in your browser.
 
-For other people to join from other machines, put the server at an address they can reach (ideally with HTTPS: see the [server configuration](https://github.com/polblancoo/crewhelm#readme)). If you are only trying it out, `localhost` is enough.
+For other people to join from other machines, put the server at an address they can reach (ideally with HTTPS: see the [server configuration](https://github.com/polblancoo/bitacoraai#readme)). If you are only trying it out, `localhost` is enough.
 
-**One-line install (Linux x86_64, no sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh`. It downloads the server from the release, **verifies its SHA256** (no match, no install), puts it in `~/.local/bin` and creates a user service that starts by itself. Options: `--port N`, `--no-service`, `--with-agent`, `--with-claude`, `--with-gemini`, `--with-codex`, `--with-opencode` (install that AI's program; `--with-all-ais` all four), `--version X`. The first time you sign in, a **start guide** with drawings walks you through team, project and AI (repeat it from Settings → Preferences → 🧭 Start guide).
+**One-line install (Linux x86_64, no sudo):** `curl -fsSL https://raw.githubusercontent.com/polblancoo/bitacoraai/main/install.sh | sh`. It downloads the server from the release, **verifies its SHA256** (no match, no install), puts it in `~/.local/bin` and creates a user service that starts by itself. Options: `--port N`, `--no-service`, `--with-agent`, `--with-claude`, `--with-gemini`, `--with-codex`, `--with-opencode` (install that AI's program; `--with-all-ais` all four), `--version X`. The first time you sign in, a **start guide** with drawings walks you through team, project and AI (repeat it from Settings → Preferences → 🧭 Start guide).
 
 If you prefer a terminal or a window of its own, there is also a terminal client and a desktop app on the same downloads page.
 
@@ -52,15 +52,15 @@ A **team** is the group of people and AIs who share projects. You can have sever
 
 In **Projects → «+»** create one for each thing you want to move forward. In the example: an app, a spreadsheet and a process, each with its own color.
 
-![Board of the project «Reservations mobile app»](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-01-tablero.png)
+![Board of the project «Reservations mobile app»](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-01-tablero.png)
 
 Each project has its own **board** (To do · Doing · Done). With **+ New task** you load the work: title, description, priority, dates and owner. The same data also shows up in **calendar**, **Gantt** and **whiteboard** views.
 
-![Another project: a budget spreadsheet, with human and AI owners](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-08-otro-proyecto.png)
+![Another project: a budget spreadsheet, with human and AI owners](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-08-otro-proyecto.png)
 
 Each project keeps **where its work lives**: with **⚙ Project** (admin or owner) you set the work folder and the repository, and they are shown above the board.
 
-![Edit the project: name, work folder and repository](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-09-proyecto.png)
+![Edit the project: name, work folder and repository](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-09-proyecto.png)
 
 > 💡 Tip: it does not have to be software. A spreadsheet, an onboarding process or an audit are handled the same way: tasks with an owner and a date.
 
@@ -71,7 +71,7 @@ Each project keeps **where its work lives**: with **⚙ Project** (admin or owne
 - **Already has an account**: type part of their name, choose the role and **Add**.
 - **Does not have an account yet**: choose a role and **Generate code**. Use **Copy invitation** (text ready for WhatsApp or email with the download link, server and code) or **Send by email**.
 
-![Invite with a code](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-07-invitar.png)
+![Invite with a code](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-07-invitar.png)
 
 | Role | What they can do |
 |---|---|
@@ -82,7 +82,7 @@ Each project keeps **where its work lives**: with **⚙ Project** (admin or owne
 
 The team panel shows each member with their role, since when they have been in, who added them and how many open tasks they have:
 
-![Team panel with people and AIs](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-06-panel-equipo.png)
+![Team panel with people and AIs](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-06-panel-equipo.png)
 
 ## 5. Add AIs
 
@@ -91,15 +91,15 @@ AIs (Claude Code, Cursor, Windsurf, Zed, Gemini or any other client compatible w
 1. In the sidebar, **🤖 AIs → «+»**.
 2. Enter a name that tells you what it is (`claude-backend`, `gemini-data`) and its role: **Member** (creates and edits its own tasks) or **Viewer** (only looks).
 
-   ![New AI in the team](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-02-nueva-ia.png)
+   ![New AI in the team](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-02-nueva-ia.png)
 
 3. **Its token is shown only once**, with the MCP configuration ready to copy. It is that AI's «key».
 
-   ![AI token and MCP configuration](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-03-token.png)
+   ![AI token and MCP configuration](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-03-token.png)
 
 4. If you lose it or want to cut it off: click the AI → **New token** (the old one stops working) or **Revoke**.
 
-   ![An AI's card](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-03-ia.png)
+   ![An AI's card](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-03-ia.png)
 
 **What an AI can and cannot do**
 
@@ -107,7 +107,7 @@ AIs (Claude Code, Cursor, Windsurf, Zed, Gemini or any other client compatible w
 - ❌ Create or delete teams, invite people, change roles, or touch other people's tasks (except commenting).
 - Everything it does is recorded **under its name** in the activity feed, and it is shown with 🤖 in the panel.
 
-> 🚧 **Status**: AI accounts and their tokens already work against the server API. The `tm-mcp` binary and the *skill* that connect them directly to your coding platform are in development (see the [ROADMAP](https://github.com/polblancoo/crewhelm/blob/main/ROADMAP.md)). Meanwhile, **`tm-agent`** already lets an AI pick up its assigned tasks on its own: see the [agents guide](https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTS.md).
+> 🚧 **Status**: AI accounts and their tokens already work against the server API. The `tm-mcp` binary and the *skill* that connect them directly to your coding platform are in development (see the [ROADMAP](https://github.com/polblancoo/bitacoraai/blob/main/ROADMAP.md)). Meanwhile, **`tm-agent`** already lets an AI pick up its assigned tasks on its own: see the [agents guide](https://github.com/polblancoo/bitacoraai/blob/main/docs/AGENTS.md).
 
 ## 6. Build and assign tasks
 
@@ -128,9 +128,9 @@ Everything updates **live**: no need to reload.
 | **Calendar** | What is due each day. |
 | **🔔 Inbox** | News: assignments, mentions, messages. Also by email and Telegram. |
 
-![Project Gantt, with tasks from people and AIs](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-04-gantt.png)
+![Project Gantt, with tasks from people and AIs](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-04-gantt.png)
 
-![Activity: the project history, with the AIs' actions under their own names](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-05-actividad.png)
+![Activity: the project history, with the AIs' actions under their own names](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-05-actividad.png)
 
 In addition, **Google Calendar** (your tasks with a date appear in your calendar) is connected from **Settings**.
 
@@ -138,7 +138,7 @@ In addition, **Google Calendar** (your tasks with a date appear in your calendar
 
 Today, to delegate a project: add the person with the **Admin** role (they can assign tasks, add people and generate invitations) and assign them the main tasks. They build their part and bring in their people.
 
-> 🚧 **Coming soon**: **lead per project** (scoped to that project only), **configurable scope per AI** (which projects it touches, whether it may invite other AIs) and **progress reports** with charts. See the [roadmap](https://github.com/polblancoo/crewhelm/blob/main/ROADMAP.md).
+> 🚧 **Coming soon**: **lead per project** (scoped to that project only), **configurable scope per AI** (which projects it touches, whether it may invite other AIs) and **progress reports** with charts. See the [roadmap](https://github.com/polblancoo/bitacoraai/blob/main/ROADMAP.md).
 
 ## 9. Run several projects at once
 
@@ -149,7 +149,7 @@ Today, to delegate a project: add the person with the **Admin** role (they can a
 - **Status**: 🟢 on track · 🔴 overdue tasks · 🟡 no movement for 7 days · ✅ finished · ⚪ no tasks.
 - **Bottom**: the latest things the AIs did. Click a card to open the project; everything updates live.
 
-![Portfolio with all projects](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-11-portafolio.png)
+![Portfolio with all projects](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-11-portafolio.png)
 
 **Numbered tasks.** Every task shows its number (`#12`) on the card and in the detail, so you can refer to it unambiguously in messages and comments.
 
@@ -165,7 +165,7 @@ An AI may hit something it cannot do alone: a blocked command, a permission, a d
 4. If the request is a **decision or a permission** («may I delete X?»), use **✅ Authorize** or **❌ Reject** (with the reason in the box). For a command the AI has blocked, «authorize» is not enough: run it yourself and send the output.
 5. The AI reads it on its next poll (every 10 s) and carries on. Sending marks the request as Done.
 
-![An AI's request: task created, command to copy](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-12-pedido.png)
+![An AI's request: task created, command to copy](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-12-pedido.png)
 
 **Who gets it?** Members with the **Executor** permission (team window → *Executor* checkbox next to each person; only an admin changes it, and AIs cannot be executors):
 
@@ -181,7 +181,7 @@ An AI may hit something it cannot do alone: a blocked command, a permission, a d
 - **Tooltips**: hover over a button to see what it does.
 - **This manual** lives inside the app: **📖 Manual** button (bottom left, or *Settings → Help*). It has search and a topic index with links.
 
-![The manual inside the app, with search](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-13-manual.png)
+![The manual inside the app, with search](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-13-manual.png)
 
 ## 12. Set up the server's email
 
@@ -230,7 +230,7 @@ Then: `systemctl --user daemon-reload && systemctl --user restart tm-server`. If
 
 When an AI asks for a command, open the request task and press **✅ Allow command…**. The dialog shows the command, **explains what it does** (red warning if dangerous) and lets you pick **once** or **always**. You can also write `/permitir cmd` (once) or `/permitir siempre cmd` (owners and admins only) in a comment. The AI receives the permissions in `TM_ALLOW` and resumes the task.
 
-![Allow command](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-16-permitir.png)
+![Allow command](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-16-permitir.png)
 
 ## 14. Terminal in the browser
 
@@ -241,14 +241,14 @@ Owners only. The task's **💻 Terminal** button opens a console in the project 
 
 Each session leaves a 📝 comment and a `.tm/terminal-tarea-N.md` note in the project folder, which the AI reads when it resumes. In the menu, **🖥️ Terminals** shows up to 8 panes and each AI's state (🙋 needs you · ⚙️ working · ⏳ queued · ✅ done).
 
-![Terminals view](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-14-terminales.png)
+![Terminals view](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-14-terminales.png)
 
 ## 15. Usage and quotas
 
 **💰 Usage** shows tokens, cost and hours per AI and task, with **quota** bars for team, project and task. On a task, **🪙 Tokens to spend** sets a cap and **🧮 Estimate** suggests a value from history. The quota is checked **before** each run: if it is short, the AI does not start and says so in a comment. To cut off in dollars use `TM_AGENT_MAX_USD` on the agent (1 USD or more). The Portfolio adds up the month's usage.
 
-![Usage](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-15-consumo.png)
-![Token cap](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-17-tokens.png)
+![Usage](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-15-consumo.png)
+![Token cap](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-17-tokens.png)
 
 ## 16. Commercial license and install ping
 
@@ -279,11 +279,11 @@ The **bar** on top appears with more than 3 people or 2 AIs, or if you declare i
 
 ---
 
-**Something not clear?** Every option in **Settings** has a «?» with help. And if you find a problem, open an [issue](https://github.com/polblancoo/crewhelm/issues).
+**Something not clear?** Every option in **Settings** has a «?» with help. And if you find a problem, open an [issue](https://github.com/polblancoo/bitacoraai/issues).
 
 ## 17. Interface news (0.7.1)
 
-- **CrewHelm.** The app is now called **CrewHelm** (interface, emails and manifest). Programs and services keep their names for now.
+- **BitacoraAI.** The app is now called **BitacoraAI** (interface, emails and manifest). Programs and services keep their names for now.
 - **Start guide.** A 5-step assistant with illustrations: welcome, team, project, AI (optional) and a sample task. It opens by itself if you have no teams; on an empty server the sign-in screen offers **Create account** directly.
 - **AI requests, faster.** The commands the AI asks for appear together in one list: **📋** copies, **✕** removes the ones you don't want and **✅ Allow all N commands always** adds them all to the AI's list, tells it and marks the request Done. **⚙ AI list** opens the allowed list so you can delete or edit lines (saved instantly). A command can be up to 1000 characters long.
 - **A friendlier task window.** **💾 Save** and **🗑 Delete** are also at the top, in a sticky header, and the bottom bar stays pinned. **⤢ Maximize** gives you bigger comments.
@@ -296,7 +296,7 @@ The **bar** on top appears with more than 3 people or 2 AIs, or if you declare i
 
 ### Usage profile (Settings → Team and project)
 
-Pick what your team uses CrewHelm for and the interface sets itself up: *Software development* (To do / In progress / Done, with terminals and code folder), *Content and social* (Draft / In production / Published, calendar as the starting view, no technical parts), *App factory* (Backlog / Building / Delivered, several projects in parallel), *Office and professional practices* (administration, accounting, law: Pending / In process / Closed, with the deadlines calendar) or *Other / general team*. «Create example» builds a **separate example team** («Ejemplo · …») with sample projects and tasks: your real team is untouched, you return to it with «Volver a mi equipo» and «Eliminar ejemplo» deletes the whole example team. It only changes names and what is shown: your data is untouched and you can switch profile any time. It can also be chosen in the start guide.
+Pick what your team uses BitacoraAI for and the interface sets itself up: *Software development* (To do / In progress / Done, with terminals and code folder), *Content and social* (Draft / In production / Published, calendar as the starting view, no technical parts), *App factory* (Backlog / Building / Delivered, several projects in parallel), *Office and professional practices* (administration, accounting, law: Pending / In process / Closed, with the deadlines calendar) or *Other / general team*. «Create example» builds a **separate example team** («Ejemplo · …») with sample projects and tasks: your real team is untouched, you return to it with «Volver a mi equipo» and «Eliminar ejemplo» deletes the whole example team. It only changes names and what is shown: your data is untouched and you can switch profile any time. It can also be chosen in the start guide.
 
 If the team handles confidential information (for example a law firm), turn on the project's **human review**, don't load data you don't want an AI to see, and remember that task text reaches whichever model you use; for very sensitive data, use a company-owned model.
 

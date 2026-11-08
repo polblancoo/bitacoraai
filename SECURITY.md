@@ -17,7 +17,7 @@ We aim to reply within **5 business days** and to ship a fix within **90 days**,
 
 Solo la última versión publicada recibe correcciones de seguridad. / Only the latest release gets security fixes.
 
-## Qué protege hoy CrewHelm / What CrewHelm does today
+## Qué protege hoy BitacoraAI / What BitacoraAI does today
 
 - Contraseñas con Argon2; sesiones firmadas que se invalidan al cerrar sesión en todos los dispositivos; límite de intentos por IP y por cuenta.
 - **Verificación en dos pasos (TOTP)** por persona, con códigos de recuperación de un solo uso y sin reuso de códigos.

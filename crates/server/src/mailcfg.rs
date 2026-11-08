@@ -125,8 +125,8 @@ async fn test(State(st): State<AppState>, user: AuthUser, Json(b): Json<In>) -> 
         return Ok(Json(json!({ "ok": false, "msg": friendly(&e) })));
     }
     if !b.to.trim().is_empty() {
-        let body = "Este es un correo de prueba de CrewHelm.\n\nSi lo estás leyendo, el envío de correo del servidor quedó bien configurado.".to_string();
-        if let Err(e) = m.send(b.to.trim(), "[CrewHelm] Prueba de correo", body).await {
+        let body = "Este es un correo de prueba de BitacoraAI.\n\nSi lo estás leyendo, el envío de correo del servidor quedó bien configurado.".to_string();
+        if let Err(e) = m.send(b.to.trim(), "[BitacoraAI] Prueba de correo", body).await {
             return Ok(Json(json!({ "ok": false, "msg": friendly(&e) })));
         }
         return Ok(Json(json!({ "ok": true, "msg": format!("Listo: el servidor aceptó la cuenta y mandó un correo de prueba a {}. Revisá la bandeja (y el spam).", b.to.trim()) })));

@@ -106,7 +106,7 @@ fn draw_login(f: &mut Frame, app: &App) {
     if !app.status.is_empty() {
         lines.push(Line::from(Span::styled(app.status.clone(), Style::default().fg(RED))));
     }
-    f.render_widget(Paragraph::new(lines).block(block("CrewHelm", true)).alignment(Alignment::Left), area);
+    f.render_widget(Paragraph::new(lines).block(block("BitacoraAI", true)).alignment(Alignment::Left), area);
 }
 
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {

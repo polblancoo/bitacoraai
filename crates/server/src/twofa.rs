@@ -213,7 +213,7 @@ async fn setup(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>
     let secret = b32_encode(&raw);
     sqlx::query("UPDATE users SET totp_secret = ?, totp_enabled = 0, totp_last = 0 WHERE id = ?").bind(st.cred.seal(&secret)).bind(user.id).execute(&st.db).await?;
     let name = sqlx::query_scalar::<_, String>("SELECT username FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
-    let uri = format!("otpauth://totp/CrewHelm:{}?secret={secret}&issuer=CrewHelm&algorithm=SHA1&digits=6&period=30", name.replace(['/', ':', '?', '&', '#', '%', ' '], "_"));
+    let uri = format!("otpauth://totp/BitacoraAI:{}?secret={secret}&issuer=BitacoraAI&algorithm=SHA1&digits=6&period=30", name.replace(['/', ':', '?', '&', '#', '%', ' '], "_"));
     let qr = qrcode::QrCode::new(uri.as_bytes()).ok().map(|c| c.render::<qrcode::render::svg::Color>().min_dimensions(200, 200).build());
     Ok(Json(json!({ "secret": secret, "uri": uri, "qr_svg": qr })))
 }

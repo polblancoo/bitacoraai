@@ -54,7 +54,7 @@ async fn status(dir: &Path) -> Value {
     v
 }
 
-const IGNORE: &str = "# creado por CrewHelm: lo que no conviene subir nunca\ntarget/\nnode_modules/\n.env\n.env.*\n*.pem\n*.key\nid_rsa*\nid_ed25519*\n.tm/\n.DS_Store\n";
+const IGNORE: &str = "# creado por BitacoraAI: lo que no conviene subir nunca\ntarget/\nnode_modules/\n.env\n.env.*\n*.pem\n*.key\nid_rsa*\nid_ed25519*\n.tm/\n.DS_Store\n";
 
 /// `git init` + `.gitignore` básico (si no hay) + primer commit si todavía no hay ninguno.
 async fn init_local(dir: &Path, steps: &mut Vec<String>) -> Result<(), String> {
@@ -70,7 +70,7 @@ async fn init_local(dir: &Path, steps: &mut Vec<String>) -> Result<(), String> {
             steps.push("Se agregó un .gitignore para no subir claves ni carpetas pesadas (target/, node_modules/, .env…)".into());
         }
         git(dir, &["add", "-A"]).await?;
-        git(dir, &["-c", "user.name=CrewHelm", "-c", "user.email=crewhelm@localhost", "commit", "-q", "--allow-empty", "-m", "Primer commit"]).await?;
+        git(dir, &["-c", "user.name=BitacoraAI", "-c", "user.email=bitacora@localhost", "commit", "-q", "--allow-empty", "-m", "Primer commit"]).await?;
         steps.push("Primer commit hecho".into());
     }
     Ok(())
@@ -97,7 +97,7 @@ async fn deploy_key(p: &Value, repo: &str, steps: &mut Vec<String>) -> Result<St
         return Err("la carpeta personal tiene espacios o comillas: no puedo guardar la clave ahí".into());
     }
     if !key.exists() {
-        run(Command::new("ssh-keygen").args(["-q", "-t", "ed25519", "-N", "", "-C", &format!("crewhelm {repo}"), "-f", &keys]), 30).await.map_err(|e| format!("ssh-keygen: {e}"))?;
+        run(Command::new("ssh-keygen").args(["-q", "-t", "ed25519", "-N", "", "-C", &format!("bitacora {repo}"), "-f", &keys]), 30).await.map_err(|e| format!("ssh-keygen: {e}"))?;
         steps.push("Clave de subida creada en esta máquina".into());
     }
     let public = std::fs::read_to_string(format!("{keys}.pub")).map_err(|e| e.to_string())?.trim().to_string();
@@ -107,8 +107,8 @@ async fn deploy_key(p: &Value, repo: &str, steps: &mut Vec<String>) -> Result<St
         .post(format!("{api}/repos/{repo}/keys"))
         .bearer_auth(token)
         .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "crewhelm-agent")
-        .json(&json!({ "title": format!("CrewHelm ({host})"), "key": public, "read_only": false }))
+        .header("User-Agent", "bitacora-agent")
+        .json(&json!({ "title": format!("BitacoraAI ({host})"), "key": public, "read_only": false }))
         .send()
         .await
         .map_err(|_| "no pude hablar con GitHub".to_string())?;
@@ -469,9 +469,9 @@ async fn review(p: &Value, dir: &Path) -> Result<Value, String> {
             if !pgit(dir, &["status", "--porcelain", "--untracked-files=no"]).await.unwrap_or_default().is_empty() {
                 return Err("La carpeta del proyecto tiene cambios sin guardar: guardalos antes de integrar.".into());
             }
-            let who: String = p["who"].as_str().unwrap_or("CrewHelm").chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.')).take(60).collect();
+            let who: String = p["who"].as_str().unwrap_or("BitacoraAI").chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.')).take(60).collect();
             let msg: String = format!("Integra «{}» (de {})", p["title"].as_str().unwrap_or(&branch).chars().filter(|c| !c.is_control()).take(150).collect::<String>(), p["author"].as_str().unwrap_or("?").chars().filter(|c| !c.is_control()).take(60).collect::<String>());
-            let id = ["-c", "user.name=CrewHelm", "-c", "user.email=crewhelm@localhost"];
+            let id = ["-c", "user.name=BitacoraAI", "-c", "user.email=bitacora@localhost"];
             let squash = p["squash"].as_bool() == Some(true);
             let res = if squash {
                 match pgit(dir, &["merge", "--squash", &branch]).await {
@@ -617,8 +617,8 @@ async fn run_job(p: &Value) -> Result<Value, String> {
                 .post(format!("{api}/user/repos"))
                 .bearer_auth(token)
                 .header("Accept", "application/vnd.github+json")
-                .header("User-Agent", "crewhelm-agent")
-                .json(&json!({ "name": name, "private": private, "description": "Creado desde CrewHelm" }))
+                .header("User-Agent", "bitacora-agent")
+                .json(&json!({ "name": name, "private": private, "description": "Creado desde BitacoraAI" }))
                 .send()
                 .await
                 .map_err(|_| "no pude hablar con GitHub".to_string())?;

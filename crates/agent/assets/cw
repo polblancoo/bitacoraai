@@ -1,7 +1,7 @@
 #!/bin/bash
-# cw — las acciones de git de siempre, con palabras simples. Lo instala CrewHelm en tu espacio (se actualiza solo).
+# cw — las acciones de git de siempre, con palabras simples. Lo instala BitacoraAI en tu espacio (se actualiza solo).
 # Corre dentro de tu espacio: lo único que sale de acá es «cw enviar», que lo hace el servidor por vos.
-P="${CREWHELM_PROJECT:-}"
+P="${BITACORA_PROJECT:-}"
 WHO="${CW_WHO:-persona}"
 SH="${CW_SHARED:-/proyectos/$P}"
 W="$HOME/$P"
@@ -148,7 +148,7 @@ cmd_traer() {
         amar "Tenés cambios sin guardar: guardalos primero (cw guardar)."
         return 1
     fi
-    if git -c user.name="$WHO" -c user.email="$WHO@crewhelm.local" merge -q --no-edit "refs/remotes/base/$b" 2>/dev/null; then
+    if git -c user.name="$WHO" -c user.email="$WHO@bitacora.local" merge -q --no-edit "refs/remotes/base/$b" 2>/dev/null; then
         verde "✔ Listo: tu rama tiene las novedades del proyecto."
     else
         git merge --abort 2>/dev/null
@@ -214,12 +214,12 @@ cmd_guardar() {
     if [ -n "$pesados" ]; then
         amar "Estos archivos pesan más de $lim MB:"
         printf '%b' "$pesados"
-        dim "Los videos, planos y fotos grandes conviene subirlos a la carpeta de la tarea o a la carpeta de red de CrewHelm: ahí quedan con sus versiones y quien revisa los ve. En git quedan para siempre en el historial."
+        dim "Los videos, planos y fotos grandes conviene subirlos a la carpeta de la tarea o a la carpeta de red de BitacoraAI: ahí quedan con sus versiones y quien revisa los ve. En git quedan para siempre en el historial."
         local r
         read -r -p "¿Guardarlos igual en tu rama? [s/N] " r
         case "$r" in s|S) ;; *) git reset -q; rojo "No guardé nada. Sacá esos archivos de tu copia (o subilos a la carpeta de la tarea) y volvé a probar."; return 1 ;; esac
     fi
-    if git -c user.name="$WHO" -c user.email="$WHO@crewhelm.local" commit -q -m "$m"; then
+    if git -c user.name="$WHO" -c user.email="$WHO@bitacora.local" commit -q -m "$m"; then
         verde "✔ Guardado: $m"
         dim "→ Cuando termines:  cw enviar"
     else

@@ -83,7 +83,13 @@ pub(crate) fn workspace() -> Option<PathBuf> {
     if let Some(w) = std::env::var("TM_WORKSPACE").ok().filter(|w| !w.trim().is_empty()) {
         return Some(crate::iso::expand_home(w.trim()));
     }
-    PEOPLE.load(Ordering::Relaxed).then(|| std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join("crewhelm"))
+    PEOPLE.load(Ordering::Relaxed).then(|| {
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+        // Instalaciones anteriores al cambio de nombre guardan los espacios en ~/crewhelm: se siguen usando mientras exista y no haya uno nuevo.
+        let viejo = home.join("crewhelm");
+        let nuevo = home.join("bitacora");
+        if viejo.is_dir() && !nuevo.exists() { viejo } else { nuevo }
+    })
 }
 
 /// Espacio personal de una persona: su HOME en la terminal (herdr, shell, preferencias e intermedios persisten acá).
@@ -110,14 +116,14 @@ fn personal_home(ws: &Path, who: &str) -> std::io::Result<PathBuf> {
     Ok(home)
 }
 
-/// Escribe `content` si el archivo no existe, o si es un archivo de CrewHelm (primera línea `# crewhelm-default vN`, o el `.bashrc` de la
+/// Escribe `content` si el archivo no existe, o si es un archivo de BitacoraAI (primera línea `# crewhelm-default vN`, o el `.bashrc` de la
 /// primera versión) de una versión anterior. Si la persona borró esa primera línea, el archivo es suyo y no se toca.
 fn install_rc(path: &Path, content: &str) -> std::io::Result<()> {
     let version = |t: &str| t.lines().next().and_then(|l| l.strip_prefix("# crewhelm-default v")).and_then(|v| v.trim().parse::<u32>().ok());
     let new_v = version(content).unwrap_or(1);
     let replace = match std::fs::read_to_string(path) {
         Err(_) => true,
-        Ok(cur) => version(&cur).is_some_and(|v| v < new_v) || cur.starts_with("# Espacio personal de CrewHelm"),
+        Ok(cur) => version(&cur).is_some_and(|v| v < new_v) || cur.starts_with("# Espacio personal de BitacoraAI"),
     };
     if replace {
         std::fs::write(path, content)?;
@@ -364,7 +370,7 @@ async fn session(api: &Arc<Api>, sid: &str, job: &Value) -> anyhow::Result<()> {
                 c.env("CARGO_HOME", real_home.join(".cargo"));
                 c.env("RUSTUP_HOME", real_home.join(".rustup"));
                 if let Some(n) = job["project"].as_str().filter(|n| !n.is_empty()) {
-                    c.env("CREWHELM_PROJECT", crate::iso::slug(n));
+                    c.env("BITACORA_PROJECT", crate::iso::slug(n));
                 }
                 log(&format!("terminal de {who} (owner): HOME = {}", home.display()));
                 c
@@ -531,6 +537,7 @@ fn save_note(dir: &Path, rel: &str, body: &str, replace: bool) -> std::io::Resul
 
 // ---------- entrada por SSH al usuario de servicio (TM_SSH_KEYS=1): cada persona con su clave y su espacio ----------
 
+// El marcador conserva el nombre anterior a propósito: así se reconoce y se reemplaza el bloque que ya escribieron instalaciones previas en authorized_keys.
 const KEYS_BEGIN: &str = "# BEGIN crewhelm (lo escribe tm-agent: no edites este bloque)";
 const KEYS_END: &str = "# END crewhelm";
 
@@ -615,7 +622,7 @@ pub async fn ssh_session(who: &str, level: &str, root: &str) -> anyhow::Result<(
     let real_home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/root"));
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "bash".into());
     let term = std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".into());
-    println!("CrewHelm · {who} · tu espacio: {} (se conserva entre sesiones)", home.display());
+    println!("BitacoraAI · {who} · tu espacio: {} (se conserva entre sesiones)", home.display());
     let err = if level == "owner" {
         let path = std::env::var("PATH").unwrap_or_default();
         std::process::Command::new(&shell)

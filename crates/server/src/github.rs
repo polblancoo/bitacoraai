@@ -335,7 +335,7 @@ async fn set_project_repo(State(st): State<AppState>, user: AuthUser, Path(proje
         return Ok(Json(json!({ "repo": null })));
     }
     if !valid_repo(&repo) {
-        return Err(AppError::bad("Escribilo como dueño/repositorio, por ejemplo polblancoo/crewhelm"));
+        return Err(AppError::bad("Escribilo como dueño/repositorio, por ejemplo polblancoo/bitacoraai"));
     }
     sqlx::query("INSERT INTO project_github (project_id, repo) VALUES (?, ?) ON CONFLICT(project_id) DO UPDATE SET repo = excluded.repo")
         .bind(project)
@@ -490,8 +490,8 @@ mod clean_repo_tests {
     use super::clean_repo;
     #[test]
     fn acepta_las_formas_comunes() {
-        for s in ["polblancoo/crewhelm", " polblancoo/crewhelm ", "https://github.com/polblancoo/crewhelm.git", "https://www.github.com/polblancoo/crewhelm/", "git@github.com:polblancoo/crewhelm.git", "github.com/polblancoo/crewhelm"] {
-            assert_eq!(clean_repo(s), "polblancoo/crewhelm", "{s}");
+        for s in ["polblancoo/bitacoraai", " polblancoo/bitacoraai ", "https://github.com/polblancoo/bitacoraai.git", "https://www.github.com/polblancoo/bitacoraai/", "git@github.com:polblancoo/bitacoraai.git", "github.com/polblancoo/bitacoraai"] {
+            assert_eq!(clean_repo(s), "polblancoo/bitacoraai", "{s}");
         }
     }
 }

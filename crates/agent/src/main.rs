@@ -16,7 +16,7 @@ mod gitsetup;
 mod iso;
 mod term;
 
-const HELP: &str = "tm-agent: pone a trabajar a una IA cuando le asignan una tarea en CrewHelm.
+const HELP: &str = "tm-agent: pone a trabajar a una IA cuando le asignan una tarea en BitacoraAI.
 
 Variables de entorno:
   TM_TOKEN          token de la IA (obligatorio; se crea en la web: 🤖 IAs → «+»)
@@ -679,7 +679,7 @@ async fn main() -> Result<()> {
         let mut it = std::env::args().skip(2);
         let (who, level, root) = (it.next().unwrap_or_default(), it.next().unwrap_or_default(), it.next().unwrap_or_default());
         if let Err(e) = term::ssh_session(&who, &level, &root).await {
-            eprintln!("CrewHelm: {e}");
+            eprintln!("BitacoraAI: {e}");
             std::process::exit(1);
         }
         return Ok(());

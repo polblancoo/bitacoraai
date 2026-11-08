@@ -1,6 +1,6 @@
-<p align="center"><a href="https://github.com/polblancoo/crewhelm/blob/main/crates/agent/README.md">English</a> · <a href="https://github.com/polblancoo/crewhelm/blob/main/crates/agent/README.es.md">Español</a> · <b>Português</b></p>
+<p align="center"><a href="https://github.com/polblancoo/bitacoraai/blob/main/crates/agent/README.md">English</a> · <a href="https://github.com/polblancoo/bitacoraai/blob/main/crates/agent/README.es.md">Español</a> · <b>Português</b></p>
 
-# crewhelm-agent (`tm-agent`)
+# bitacora-agent (`tm-agent`)
 
 > **0.6.3**: `TM_AGENT_TERMINAL=1` abre terminais web na pasta do projeto; o agente passa `TM_ALLOW` (comandos permitidos pela tarefa), informa tokens e custo reais e respeita as cotas. Licença **AGPL-3.0-only**.
 >
@@ -16,9 +16,9 @@ O que não vimos junto em nenhuma outra ferramenta (confira, e avise se achar um
 - 📊 **Portfólio de vários projetos**, com custo e horas da IA. *(custo e horas: chegam na 0.6.3)*
 - 🏠 **Auto-hospedado**: seus dados e suas chaves ficam no seu servidor.
 
-Põe uma IA para trabalhar quando uma tarefa é atribuída a ela no [painel de comando Rust TUI Manager](https://github.com/polblancoo/crewhelm): vigia o servidor, abre um agente na **pasta de trabalho do projeto**, comenta e move a tarefa para **Em andamento** e **Concluído**.
+Põe uma IA para trabalhar quando uma tarefa é atribuída a ela no [painel de comando BitacoraAI](https://github.com/polblancoo/bitacoraai): vigia o servidor, abre um agente na **pasta de trabalho do projeto**, comenta e move a tarefa para **Em andamento** e **Concluído**.
 
-Guia completo: [docs/AGENTES.pt.md](https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.pt.md).
+Guia completo: [docs/AGENTES.pt.md](https://github.com/polblancoo/bitacoraai/blob/main/docs/AGENTES.pt.md).
 
 ```bash
 TM_URL=https://tasks.example.com \
@@ -55,4 +55,4 @@ O comando recebe `TM_TASK_PROMPT`, `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID
 
 ## Licença
 
-**AGPL-3.0-only.** Grátis para usar e auto-hospedar. Se você oferecer uma versão modificada como serviço, precisa publicar suas mudanças com a mesma licença. Há licença comercial sem essa obrigação: pergunte nas [issues](https://github.com/polblancoo/crewhelm/issues). As versões publicadas até a 0.6.2 continuam em MIT.
+**AGPL-3.0-only.** Grátis para usar e auto-hospedar. Se você oferecer uma versão modificada como serviço, precisa publicar suas mudanças com a mesma licença. Há licença comercial sem essa obrigação: pergunte nas [issues](https://github.com/polblancoo/bitacoraai/issues). As versões publicadas até a 0.6.2 continuam em MIT.

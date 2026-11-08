@@ -1,12 +1,12 @@
-# Análisis de CrewHelm y la competencia (orquestadores de IA) — FODA
+# Análisis de BitacoraAI y la competencia (orquestadores de IA) — FODA
 
-> Tarea #105 · 2026-11-06 · Actualiza `Investigacion/investigacionCrewHelm.md` (2026-11-01), ahora con foco en **orquestadores de IA**, no solo gestores de tareas.
+> Tarea #105 · 2026-11-06 · Actualiza `Investigacion/investigacionBitacoraAI.md` (2026-11-01), ahora con foco en **orquestadores de IA**, no solo gestores de tareas.
 >
-> **Fiabilidad de los datos:** lo de CrewHelm sale del README y del repositorio. Lo de la competencia sale de búsquedas web (agregadores y blogs de comparación, que a veces se contradicen en precios) y de la investigación del 2026-11-01 (estrellas verificadas con `gh api`). Lo marcado ❓ es conocimiento previo sin confirmar. **Verificar precios en las páginas oficiales antes de citarlos.**
+> **Fiabilidad de los datos:** lo de BitacoraAI sale del README y del repositorio. Lo de la competencia sale de búsquedas web (agregadores y blogs de comparación, que a veces se contradicen en precios) y de la investigación del 2026-11-01 (estrellas verificadas con `gh api`). Lo marcado ❓ es conocimiento previo sin confirmar. **Verificar precios en las páginas oficiales antes de citarlos.**
 
 ## 1. Mapa del mercado
 
-El mercado de "orquestar IAs" son en realidad **cuatro categorías distintas**. CrewHelm toca las cuatro por los bordes, pero no es igual a ninguna:
+El mercado de "orquestar IAs" son en realidad **cuatro categorías distintas**. BitacoraAI toca las cuatro por los bordes, pero no es igual a ninguna:
 
 | Categoría | Ejemplos | Qué resuelven |
 |---|---|---|
@@ -25,7 +25,7 @@ El mercado de "orquestar IAs" son en realidad **cuatro categorías distintas**. 
 | **Debilidades** | No traen interfaz de equipo, permisos, costos por persona ni tablero: hay que construirlo; curva de aprendizaje; LangGraph es el más lento para el primer resultado; AutoGen fragmentado (3 ramas) |
 | **Amenazas** | Los proveedores de modelos (OpenAI, Anthropic, Google) ofrecen SDK de agentes propios; el estándar MCP reduce el valor de los frameworks |
 
-**Contra CrewHelm:** no compiten de frente. Son para quien *programa* agentes; CrewHelm es para quien *gestiona* equipos que ya usan agentes. Son más bien un posible **proveedor** (un agente hecho con LangGraph puede correr bajo `tm-agent`).
+**Contra BitacoraAI:** no compiten de frente. Son para quien *programa* agentes; BitacoraAI es para quien *gestiona* equipos que ya usan agentes. Son más bien un posible **proveedor** (un agente hecho con LangGraph puede correr bajo `tm-agent`).
 
 ### 2.2 Devin (Cognition)
 | | |
@@ -49,7 +49,7 @@ El mercado de "orquestar IAs" son en realidad **cuatro categorías distintas**. 
 | **Fortalezas** | Está donde ya vive el código y el equipo (issues, PR, Actions); precio bajo (Pro ~US$10, Pro+ ~US$39; fuentes hablan de créditos por uso desde junio 2026, sin confirmar); distribución enorme |
 | **Oportunidades** | Convertirse en el centro de agentes de varias marcas dentro de GitHub ❓ |
 | **Debilidades** | Atado a GitHub como fuente de verdad; límites de "premium requests" (300/1.500 al mes, sobrecosto ~US$0,04); no es autoalojado; poco control fino de comandos por agente |
-| **Amenazas** | Para él: modelos y CLI de terceros más baratos. Para CrewHelm: **es la mayor amenaza de distribución** |
+| **Amenazas** | Para él: modelos y CLI de terceros más baratos. Para BitacoraAI: **es la mayor amenaza de distribución** |
 
 ### 2.5 Vibe Kanban (BloopAI) — el más parecido
 | | |
@@ -73,7 +73,7 @@ El mercado de "orquestar IAs" son en realidad **cuatro categorías distintas**. 
 | **Fortalezas** | ~61,8 mil estrellas; producto completo (ciclos, módulos, páginas); empresa detrás; Plane AI (agentes, Autopilot, Skills desde v2.4.0), servidor MCP, claves propias OpenAI/Anthropic |
 | **Oportunidades** | Es la alternativa abierta a Jira/Linear con IA integrada: amenaza seria desde los gestores clásicos |
 | **Debilidades** | Despliegue pesado (varios servicios); la IA en autoalojado es comercial; no gobierna agentes de código (sin permisos por comando, sin terminal, sin costo por IA) |
-| **Amenazas** | Si agrega permisos por agente y ejecución de código, cubre el nicho de CrewHelm con mucho más alcance |
+| **Amenazas** | Si agrega permisos por agente y ejecución de código, cubre el nicho de BitacoraAI con mucho más alcance |
 
 ### 2.8 Linear (Linear Agent)
 | | |
@@ -83,12 +83,12 @@ El mercado de "orquestar IAs" son en realidad **cuatro categorías distintas**. 
 | **Debilidades** | Su agente no escribe código; SaaS cerrado, datos en la nube ajena; costo por usuario |
 | **Amenazas** | Competidores abiertos (Plane) y suites que lo igualan |
 
-## 3. FODA de CrewHelm
+## 3. FODA de BitacoraAI
 
 | | |
 |---|---|
 | **Fortalezas** | • **IA como miembro del equipo**: rol, token revocable, listas de comandos permitidos/prohibidos, permiso concedido desde la tarea (`/permitir`).<br>• **Pedido de ayuda de la IA a una persona** (`tm-agent ask`) por web, Telegram y email.<br>• **Costos, tokens, horas y cuotas** por proyecto/IA/tarea, con estimación al crear.<br>• **Terminal dentro de la tarea** (SSH o vía agente), con rastro de lo hecho.<br>• **Independiente del proveedor** (Claude, Gemini, Codex, cualquier CLI) y una IA compartida por todo el equipo.<br>• **Autoalojado y liviano**: un binario + SQLite, sin licencia por usuario.<br>• Tres clientes (TUI, escritorio, web), tiempo real, 3 idiomas, manual integrado.<br>• Flujo por etapas con IA revisora (`verdict`), integración GitHub/PR, portfolio multiproyecto.<br>• Usos más allá del código (procesos, contenido, presupuestos) |
-| **Oportunidades** | • Nicho vacío: **gobierno de IAs para equipos** (control, auditoría, costos) que nadie junta con tablero.<br>• Empresas con restricciones de datos que no pueden usar Devin/Copilot (sector público, salud, finanzas).<br>• Incertidumbre sobre Vibe Kanban y AutoGen en mantenimiento: usuarios buscando alternativa.<br>• Auge de MCP: terminar `tm-mcp` abre directorios y clientes.<br>• Modelos locales (Ollama/llama.cpp): "nada sale de tu infraestructura".<br>• Regulación (ej. AI Act) que exige trazabilidad y supervisión humana de agentes: justo lo que ofrece CrewHelm.<br>• Licencia comercial ya definida (0.7.0): hay camino de ingresos |
+| **Oportunidades** | • Nicho vacío: **gobierno de IAs para equipos** (control, auditoría, costos) que nadie junta con tablero.<br>• Empresas con restricciones de datos que no pueden usar Devin/Copilot (sector público, salud, finanzas).<br>• Incertidumbre sobre Vibe Kanban y AutoGen en mantenimiento: usuarios buscando alternativa.<br>• Auge de MCP: terminar `tm-mcp` abre directorios y clientes.<br>• Modelos locales (Ollama/llama.cpp): "nada sale de tu infraestructura".<br>• Regulación (ej. AI Act) que exige trazabilidad y supervisión humana de agentes: justo lo que ofrece BitacoraAI.<br>• Licencia comercial ya definida (0.7.0): hay camino de ingresos |
 | **Debilidades** | • **Sin tracción**: 0 estrellas, un solo autor, sin comunidad ni ecosistema.<br>• Instalador solo Linux x86_64; Windows/macOS sin probar.<br>• Modelos locales sin probar; `tm-mcp` en desarrollo.<br>• Las listas de comandos las **aplica el agente**, no un sandbox: no es barrera dura en máquinas no controladas.<br>• SQLite: límite de escala/alta disponibilidad.<br>• Sin auditoría de seguridad, certificaciones (SOC 2) ni soporte comercial.<br>• Mensaje demasiado amplio (tareas, procesos, código, contenido).<br>• Sin worktrees/aislamiento por tarea ni revisión de diffs integrada (Vibe Kanban sí) ❓ |
 | **Amenazas** | • **GitHub Copilot agent** y Agent-style hubs: distribución masiva y precio bajo.<br>• **Plane AI** agregando permisos y agentes de código.<br>• Vibe Kanban sumando multiusuario/permisos.<br>• Los propios CLI (Claude Code, Codex) incorporando subagentes, permisos y colas.<br>• Un incidente de seguridad (IA ejecutando comandos) mataría la confianza de un proyecto joven.<br>• Dependencia de que los CLI de terceros mantengan su interfaz y términos de uso (p. ej. uso de suscripciones en automatizaciones) |
 
@@ -96,7 +96,7 @@ El mercado de "orquestar IAs" son en realidad **cuatro categorías distintas**. 
 
 Leyenda: ✅ sí · ◐ parcial · ❌ no · ❓ sin confirmar.
 
-| Capacidad | CrewHelm | Vibe Kanban | claude-squad | Devin | OpenHands | Copilot agent | Plane AI | Linear Agent | LangGraph/CrewAI |
+| Capacidad | BitacoraAI | Vibe Kanban | claude-squad | Devin | OpenHands | Copilot agent | Plane AI | Linear Agent | LangGraph/CrewAI |
 |---|---|---|---|---|---|---|---|---|---|
 | Autoalojado | ✅ | ✅ | ✅ | ❌ (VPC en Enterprise) | ✅ | ❌ | ✅ (IA de pago) | ❌ | ✅ (es código) |
 | Tablero de equipo humanos+IA | ✅ | ◐ | ❌ | ❌ | ◐ | ◐ (GitHub) | ✅ | ✅ | ❌ |
@@ -115,7 +115,7 @@ Leyenda: ✅ sí · ◐ parcial · ❌ no · ❓ sin confirmar.
 
 ## 5. Conclusión: nuestro FODA frente al mercado
 
-1. **Posición real.** CrewHelm no gana en autonomía (Devin), en distribución (Copilot), en pulido (Linear) ni en comunidad (Plane, Vibe Kanban). **Gana en la combinación**: tablero de equipo + IA con permisos por comando + pedido de ayuda + costos/cuotas + autoalojado + agnóstico de proveedor. Ningún competidor revisado junta esas cinco cosas.
+1. **Posición real.** BitacoraAI no gana en autonomía (Devin), en distribución (Copilot), en pulido (Linear) ni en comunidad (Plane, Vibe Kanban). **Gana en la combinación**: tablero de equipo + IA con permisos por comando + pedido de ayuda + costos/cuotas + autoalojado + agnóstico de proveedor. Ningún competidor revisado junta esas cinco cosas.
 2. **El diferenciador es "gobierno", no "tareas".** Hay que dejar de venderse como gestor de tareas con IA. El mensaje defendible: *"el panel de control para que un equipo use varias IAs con reglas, permisos, costos y trazabilidad, en tu propio servidor"*.
 3. **El mayor riesgo es la ventana de tiempo.** Plane AI, Vibe Kanban y los propios CLI se mueven hacia el mismo terreno. Hoy la ventaja es de funciones; si no hay tracción y credibilidad (seguridad, usuarios reales) en 6 a 12 meses, será copiable.
 4. **La mayor debilidad técnica con peso comercial** es que las listas de comandos no son un sandbox. Para vender "control" a empresas, esto hay que cerrarlo: es la brecha entre lo que prometemos y lo que garantizamos.
@@ -155,9 +155,9 @@ Leyenda: ✅ sí · ◐ parcial · ❌ no · ❓ sin confirmar.
 - Funciones de Vibe Kanban sobre permisos, ayuda y costos; si Bloop cerró.
 - Precios actuales de Devin, Copilot (créditos por uso) y Linear: las fuentes se contradicen.
 - Alcance exacto de MCP en OpenHands, Copilot agent y Linear.
-- Si CrewHelm ya tiene aislamiento por worktree (no lo encontré en el README).
+- Si BitacoraAI ya tiene aislamiento por worktree (no lo encontré en el README).
 
 ## 9. Fuentes
-- `Investigacion/investigacionCrewHelm.md` (GitHub API de los repos, 2026-11-01).
-- README de CrewHelm.
+- `Investigacion/investigacionBitacoraAI.md` (GitHub API de los repos, 2026-11-01).
+- README de BitacoraAI.
 - Búsquedas web (agregadores, de fiabilidad media): [futureagi — orquestación 2026](https://futureagi.com/blog/best-ai-agent-orchestration-platforms-2026), [n-ix — LangGraph vs CrewAI vs AutoGen](https://www.n-ix.com/langgraph-vs-crewai-vs-autogen/), [firstaimovers — guía CTO](https://radar.firstaimovers.com/langgraph-vs-langchain-crewai-autogen-2026), [toolhalla — Devin vs OpenHands](https://toolhalla.ai/blog/devin-vs-openhands-vs-swe-agent-2026), [aiagentrank — Devin vs Copilot](https://aiagentrank.io/compare/devin-vs-github-copilot), [aiagentrank — Devin vs Linear Agent](https://aiagentrank.io/compare/devin-vs-linear-agent), [aiagentrank — Copilot vs OpenHands](https://aiagentrank.io/compare/github-copilot-vs-openhands).

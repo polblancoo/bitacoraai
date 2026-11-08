@@ -1,5 +1,5 @@
 "use strict";
-// Cliente de CrewHelm. Todo el contenido de usuario se inserta con textContent (sin innerHTML).
+// Cliente de BitacoraAI. Todo el contenido de usuario se inserta con textContent (sin innerHTML).
 
 const STATUS = [
   { id: "todo", label: "Por hacer", color: "var(--blue)" },
@@ -26,7 +26,7 @@ const ROLES = [["viewer", "Lector"], ["member", "Miembro"], ["admin", "Admin"], 
 const RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
 const AVATAR = ["#7aa2f7", "#bb9af7", "#9ece6a", "#e0af68", "#f7768e", "#7dcfff"];
 
-const APP_NAME = "CrewHelm";
+const APP_NAME = "BitacoraAI";
 const store = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
@@ -730,15 +730,15 @@ const openDav = guard(async () => {
     const http = `${location.protocol}//${location.hostname}${location.port ? ":" + location.port : ""}/dav/${id}/`;
     const https = port ? `https://${location.hostname}:${port}/dav/${id}/` : (location.protocol === "https:" ? http : null);
     out.replaceChildren(
-      h("p", { class: "hint" }, `Usuario: ${me} · Contraseña: la de tu cuenta de CrewHelm. Guardá tu trabajo dentro de la carpeta «${me}»: ahí escribís vos; el resto del equipo lo ve y no lo puede tocar.`),
+      h("p", { class: "hint" }, `Usuario: ${me} · Contraseña: la de tu cuenta de BitacoraAI. Guardá tu trabajo dentro de la carpeta «${me}»: ahí escribís vos; el resto del equipo lo ve y no lo puede tocar.`),
       https && row("Dirección segura", https), row("Dirección HTTP", http),
       h("details", { open: true }, h("summary", {}, "🪟 Windows"),
         h("ol", {}, h("li", {}, "Explorador de archivos → Este equipo → «Conectar a unidad de red…»."), h("li", {}, "Pegá la dirección segura y marcá «Conectar con otras credenciales»."),
-          h("li", {}, "Si dice que el certificado no es de confianza: ", h("a", { href: S.server + "/api/tls/cert", download: "crewhelm.crt" }, "bajá el certificado"), ", doble clic → Instalar certificado → Equipo local → «Entidades de certificación raíz de confianza»."),
+          h("li", {}, "Si dice que el certificado no es de confianza: ", h("a", { href: S.server + "/api/tls/cert", download: "bitacora.crt" }, "bajá el certificado"), ", doble clic → Instalar certificado → Equipo local → «Entidades de certificación raíz de confianza»."),
           h("li", {}, "Con la dirección HTTP Windows no deja entrar salvo que un administrador ponga BasicAuthLevel=2 en HKLM\\SYSTEM\\CurrentControlSet\\Services\\WebClient\\Parameters y reinicie el servicio WebClient."))),
       h("details", {}, h("summary", {}, "🍎 macOS"), h("ol", {}, h("li", {}, "Finder → Ir → «Conectarse al servidor…» (⌘K)."), h("li", {}, "Pegá la dirección (la HTTP sirve en una red de confianza) y entrá con tu usuario y contraseña."))),
       h("details", {}, h("summary", {}, "🐧 Linux"), h("ol", {}, h("li", {}, "Archivos → Otras ubicaciones → «Conectar con el servidor»."), h("li", {}, `Escribí dav://${location.hostname}${location.port ? ":" + location.port : ""}/dav/${id}/ (o davs:// para la segura).`))),
-      h("small", { class: "hint" }, "Si guardás encima de un archivo o lo borrás, CrewHelm guarda la versión anterior (las últimas 20). No se suben programas ejecutables."));
+      h("small", { class: "hint" }, "Si guardás encima de un archivo o lo borrás, BitacoraAI guarda la versión anterior (las últimas 20). No se suben programas ejecutables."));
   };
   sel.onchange = draw; draw();
   const m = h("div", { class: "overlay", id: "dav-modal", onmousedown: (e) => e.target.id === "dav-modal" && close() },
@@ -785,7 +785,7 @@ function agentsGuide() {
       h("ol", { class: "guide" },
         h("li", {}, "Creá la IA en la barra lateral (🤖 IAs → «+») y copiá su token."),
         h("li", {}, "Definí la carpeta de trabajo del proyecto (⚙ Proyecto): tiene que existir en la máquina donde corre tm-agent."),
-        h("li", {}, "Instalá tm-agent en esa máquina: cargo install --git https://github.com/polblancoo/crewhelm crewhelm-agent"),
+        h("li", {}, "Instalá tm-agent en esa máquina: cargo install --git https://github.com/polblancoo/bitacoraai bitacora-agent"),
         h("li", {}, "Ejecutalo con el token y el comando de tu agente (Claude Code, Gemini CLI, un script…). Ejemplo:"),
         h("pre", { class: "bot-cfg" }, agentCmd()),
         h("li", {}, "Con Gemini CLI usá este (no entiende --permission-mode; la clave sale de aistudio.google.com/apikey, o iniciá sesión una vez con «gemini»). Si algo falla, el motivo queda como comentario ❌ en la tarea de la IA:"),
@@ -955,7 +955,7 @@ const runnerModal = async (b) => {
   const box = h("div", { class: "overlay", id: "runner-modal", onmousedown: (e) => e.target === box && box.remove() },
     h("div", { class: "modal small" }, h("h3", {}, `⚙ ${b.username}: ejecución en el servidor`), h("p", {}, st),
       !av.allowed ? h("p", { class: "warn" }, "Solo la primera persona registrada puede activar esto, y el servidor no debe tener TM_RUNNER=0.") : [
-        !av.agent_found && h("p", { class: "warn" }, "El servidor no encuentra el programa tm-agent: instalalo en la misma máquina (cargo install crewhelm-agent)."),
+        !av.agent_found && h("p", { class: "warn" }, "El servidor no encuentra el programa tm-agent: instalalo en la misma máquina (cargo install bitacora-agent)."),
         h("label", {}, "¿Qué IA es?", kind), h("label", {}, "Modelo", model, dl), urlL, orL, tool,
         h("small", { class: "hint" }, "La clave de la IA se toma de las variables de entorno del servidor (ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY) o de su sesión iniciada. No se guarda acá."),
         h("div", { class: "row" }, cur.enabled && h("button", { class: "danger", onclick: save(false) }, "Detener"), h("span", { class: "spacer" }),
@@ -1411,7 +1411,7 @@ function procPanel() {
           h("div", {}, h("b", {}, "Disco"), bar(dskP), h("small", { style: dskP > 90 ? "color:var(--red)" : "" }, r.disk_mb.total ? `${gb(r.disk_mb.used)} de ${gb(r.disk_mb.total)} (${Math.round(dskP)}%) · ${r.disk_mb.dir}` : "no se pudo leer el disco de " + r.disk_mb.dir)),
           h("div", {}, h("b", {}, "Carga"), bar((100 * (r.load[0] || 0)) / r.cpus), h("small", {}, `${(r.load || []).join(" · ")} (${r.cpus} núcleos)`)),
           h("div", {}, h("b", {}, "Encendido"), h("small", {}, `${Math.floor(r.uptime_s / 86400)} d ${Math.floor((r.uptime_s % 86400) / 3600)} h`))),
-        h("h5", {}, "Procesos de CrewHelm"),
+        h("h5", {}, "Procesos de BitacoraAI"),
         h("table", { class: "proc-t" }, h("tr", {}, ["Proceso", "PID", "CPU %", "RAM"].map((x) => h("th", {}, x))),
           r.procs.map((p) => h("tr", {}, h("td", {}, p.name + (p.me ? " (servidor)" : "")), h("td", {}, p.pid), h("td", {}, p.cpu), h("td", {}, p.rss_mb + " MB")))),
         r.docker.length > 0 && [h("h5", {}, "Contenedores"), h("ul", { class: "wiz-list" }, r.docker.map((d) => h("li", {}, `${d.name} · ${d.status} · ${d.image}`)))],
@@ -1475,13 +1475,13 @@ function mailPanel() {
     const sec = h("select", {}, [["ssl", "SSL/TLS (puerto 465)"], ["starttls", "STARTTLS (puerto 587)"], ["none", "Sin cifrar (solo red propia)"]].map(([k, l]) => h("option", { value: k, selected: k === (cur.sec || MAIL_PRESETS[pre][3]) }, l)));
     const user = h("input", { value: cur.user || "", placeholder: "tucuenta@gmail.com", autocomplete: "off", maxLength: 120, style: "width:100%" });
     const pass = h("input", { type: "password", placeholder: cur.has_pass ? "(guardada: dejala vacía para conservarla)" : "contraseña de aplicación o clave SMTP", autocomplete: "new-password", maxLength: 200, style: "width:100%" });
-    const from = h("input", { value: cur.from || "", placeholder: "CrewHelm <tucuenta@gmail.com>", maxLength: 200, style: "width:100%" });
+    const from = h("input", { value: cur.from || "", placeholder: "BitacoraAI <tucuenta@gmail.com>", maxLength: 200, style: "width:100%" });
     const to = h("input", { type: "email", value: S.me?.email || "", placeholder: "adónde mandar la prueba", maxLength: 120, style: "width:100%" });
     const tip = h("small", { class: "hint" }, MAIL_PRESETS[pre][4]);
     const out = h("div", { class: "mail-out" });
     sel.onchange = () => { const p = MAIL_PRESETS[sel.value]; if (p[1] || sel.value === "otro") host.value = p[1]; port.value = p[2]; sec.value = p[3]; tip.textContent = p[4]; };
     sec.onchange = () => { if (sec.value === "ssl") port.value = 465; else if (sec.value === "starttls") port.value = 587; };
-    user.oninput = () => { if (!from.value || from.dataset.auto) { from.dataset.auto = "1"; from.value = /@/.test(user.value) ? `CrewHelm <${user.value.trim()}>` : ""; } };
+    user.oninput = () => { if (!from.value || from.dataset.auto) { from.dataset.auto = "1"; from.value = /@/.test(user.value) ? `BitacoraAI <${user.value.trim()}>` : ""; } };
     from.oninput = () => delete from.dataset.auto;
     const body = (withTo) => ({ host: host.value.trim(), port: +port.value, sec: sec.value, user: user.value.trim(), pass: pass.value, from: from.value.trim(), to: withTo ? to.value.trim() : "" });
     const run = (path, method, withTo) => guard(async () => {
@@ -1494,7 +1494,7 @@ function mailPanel() {
     const stat = h("p", { class: cur.active ? "ok" : "warn" }, cur.active ? `✓ El servidor puede mandar correos${cur.source === "app" ? ` (cuenta guardada: ${cur.host})` : cur.source === "env" ? " (configurado por variables de entorno)" : ""}.` : "✗ El servidor todavía no manda correos: sin esto nadie puede verificar su email ni recibir avisos por correo.");
     box.replaceChildren(
       stat,
-      h("p", { class: "hint" }, "CrewHelm solo ENVÍA correo (códigos de verificación, avisos, informes, invitaciones). No lee ninguna casilla, así que no hace falta POP3 ni IMAP: alcanza con una cuenta que permita enviar por SMTP."),
+      h("p", { class: "hint" }, "BitacoraAI solo ENVÍA correo (códigos de verificación, avisos, informes, invitaciones). No lee ninguna casilla, así que no hace falta POP3 ni IMAP: alcanza con una cuenta que permita enviar por SMTP."),
       label("1. Proveedor", sel), tip,
       label("2. Servidor SMTP de salida", host),
       h("div", { class: "row" }, label("Puerto", port), label("Seguridad", sec)),
@@ -1590,7 +1590,7 @@ function gitPolicyPanel() {
 function githubPanel(cur) {
   const app = wizPanel("srvgh", "/api/admin/setup/github", cur, [
     h("span", {}, "Entrá a ", extLink("https://github.com/settings/developers"), " → OAuth Apps → New OAuth App."),
-    `Nombre: CrewHelm. Homepage URL: ${location.origin}. Authorization callback URL: la misma dirección (no se usa).`,
+    `Nombre: BitacoraAI. Homepage URL: ${location.origin}. Authorization callback URL: la misma dirección (no se usa).`,
     "Después de crearla, tildá «Enable Device Flow» y guardá.",
     "Copiá el Client ID (no hace falta el secreto) y pegalo acá. Así cada persona conecta SU cuenta de GitHub, con sus propios permisos.",
   ], [{ k: "client_id", label: "Client ID", ph: "Ov23li…", value: cur.client_id || "" }, { k: "scope", label: "Permisos que se piden (opcional)", ph: "read:user repo", value: cur.scope || "" }], { clear: "¿Quitar GitHub? Nadie puede conectar su cuenta hasta volver a configurarlo." });
@@ -1827,7 +1827,7 @@ function teamPanel() {
         !admin && h("small", {}, "Solo un admin o el dueño puede cambiar los datos del equipo y gestionar miembros."))));
   return box;
 }
-const RELEASES_URL = "https://github.com/polblancoo/crewhelm/releases/latest";
+const RELEASES_URL = "https://github.com/polblancoo/bitacoraai/releases/latest";
 // dirección que la otra persona puede alcanzar: si el admin entra por localhost, se usa la IP de la red local
 async function reachableServer() {
   if (!/localhost|127\.0\.0\.1/.test(S.server)) return S.server;
@@ -1844,7 +1844,7 @@ const inviteMessage = (code, srv = S.server) => [
   "",
   "Si preferís la app de escritorio:",
   `- Windows / Mac / Linux: ${RELEASES_URL}`,
-  `- Linux, en una línea: curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh -s -- --client --server ${srv}`,
+  `- Linux, en una línea: curl -fsSL https://raw.githubusercontent.com/polblancoo/bitacoraai/main/install.sh | sh -s -- --client --server ${srv}`,
   `  (al abrirla, en «Servidor» poné ${srv})`,
   "",
   "El código vence en 7 días.",
@@ -2955,7 +2955,7 @@ const CFG_HELP = {
   message: ["Mensaje al equipo", "Escribe un aviso que le llega a todos los miembros del equipo por bandeja, y por email y Telegram a quienes lo tengan conectado.", null],
   members: ["Miembros e invitaciones", "Mirá quiénes están en el equipo. Si sos admin o dueño: buscá a alguien ya registrado y agregalo, o generá un código de invitación (y «Copiar invitación» arma el texto con el enlace de instalación para pegar en un chat).", null],
   agents: ["Agentes de IA (tm-agent)", "Para que una IA trabaje sola cuando le asignás una tarea, instalás tm-agent en la máquina donde está la carpeta del proyecto. Tocá «Ver instructivo» para los pasos y el comando listo.",
-    "tm-agent no es parte del servidor: es otro programa que se conecta al servidor con el token de la IA. Se instala con cargo install --git https://github.com/polblancoo/crewhelm crewhelm-agent y se deja como servicio (systemd, launchd o el Programador de tareas)."],
+    "tm-agent no es parte del servidor: es otro programa que se conecta al servidor con el token de la IA. Se instala con cargo install --git https://github.com/polblancoo/bitacoraai bitacora-agent y se deja como servicio (systemd, launchd o el Programador de tareas)."],
   join: ["Unirme con un código", "Si un admin te pasó un código de invitación, pegalo acá para entrar a su equipo.", null],
   newTeam: ["Crear un equipo", "Creás un equipo nuevo y quedás como Dueño. Después invitás a la gente desde «Miembros, roles e invitaciones».", null],
   project: ["Proyecto", "Un proyecto agrupa las tareas del equipo (tablero, calendario, Gantt y pizarra). Creá uno con «Nuevo proyecto».", null],
@@ -3057,7 +3057,7 @@ const githubProject = guard(async () => {
   if (info.repo !== fromProject && /^[\w.-]+\/[\w.-]+$/.test(fromProject)) {
     await api("PUT", `/api/projects/${p.id}/github`, { repo: fromProject }); info.repo = fromProject;
   }
-  const repo = h("input", { value: info.repo || "", placeholder: "dueño/repositorio, ej. polblancoo/crewhelm", maxLength: 200 });
+  const repo = h("input", { value: info.repo || "", placeholder: "dueño/repositorio, ej. polblancoo/bitacoraai", maxLength: 200 });
   const list = h("div", { class: "subs" });
   const picked = new Set();
   const load = guard(async () => {
@@ -3140,7 +3140,7 @@ const callItem = () => (S.integ?.items || []).find((i) => i.url.includes("{sala}
 function openCall(room) {
   const it = callItem();
   if (!it) { toast("Falta configurar la videollamada (Configuración → Integraciones)", true); return; }
-  const src = integUrl(it.url, "crewhelm-" + room), id = "call-" + room;
+  const src = integUrl(it.url, "bitacora-" + room), id = "call-" + room;
   if (it.mode !== "panel") { window.open(src, "_blank", "noopener,noreferrer"); return; }
   if (!DOCK.tabs.some((t) => t.id === id)) DOCK.tabs.push({ id, name: "Llamada", icon: "📞", src });
   DOCK.active = id; document.getElementById("integ-dock")?.classList.remove("min"); drawDock();
@@ -3172,7 +3172,7 @@ const inviteModal = guard(async () => {
   const crear = guard(async () => {
     const r = await api("POST", `/api/teams/${S.team.id}/call-invites`, { label: label.value, hours: +hours.value });
     const url = link(r.code), mail = h("input", { type: "email", placeholder: "email de la persona invitada", maxLength: 120 });
-    out.replaceChildren(h("p", { class: "hint" }, "Quien tenga este enlace entra a esta sala, sin cuenta y sin ver nada más de CrewHelm. Anulalo cuando termine."),
+    out.replaceChildren(h("p", { class: "hint" }, "Quien tenga este enlace entra a esta sala, sin cuenta y sin ver nada más de BitacoraAI. Anulalo cuando termine."),
       h("input", { readonly: true, value: url, onfocus: (e) => e.target.select() }),
       h("div", { class: "row" }, h("button", { class: "primary", onclick: () => copy(url, "Enlace copiado") }, "📋 Copiar enlace"), h("button", { onclick: () => { openCall(r.room); box.remove(); } }, "📞 Entrar yo ahora")),
       r.email_available ? h("div", { class: "row" }, mail, h("button", { onclick: guard(async () => { await api("POST", `/api/teams/${S.team.id}/call-invites/${r.code}/email`, { to: mail.value, origin: location.origin }); toast("Invitación enviada por email"); }) }, "✉ Enviar por email"))
@@ -3241,7 +3241,7 @@ const integAdmin = guard(async () => {
       if (st.where === "lan" && !/:\d+$/.test(h0)) h0 += ":8443";
       return h0;
     };
-    const url = () => (st.where === "internet" ? "https://meet.jit.si" : "https://" + host()) + "/crewhelm-{sala}";
+    const url = () => (st.where === "internet" ? "https://meet.jit.si" : "https://" + host()) + "/bitacora-{sala}";
     const nsteps = () => (own() ? ["Dónde", "Datos", "Instalar", "Probar"] : ["Dónde", "Datos", "Probar"]);
     const testStep = () => nsteps().length;
     // un solo bloque para pegar en la máquina del Jitsi: baja, configura y levanta todo
@@ -3260,7 +3260,7 @@ const integAdmin = guard(async () => {
         "EOF",
         ...(lan ? [] : ['echo "DOCKER_HOST_ADDRESS=$(curl -s https://ifconfig.me)" >> .env']),
         "docker compose up -d",
-        ...(lan ? [] : ['PASS=$(openssl rand -hex 8)', 'sleep 20 && docker compose exec -T prosody prosodyctl --config /config/prosody.cfg.lua register crewhelm meet.jitsi "$PASS"', 'echo "Usuario para crear salas: crewhelm / $PASS"']),
+        ...(lan ? [] : ['PASS=$(openssl rand -hex 8)', 'sleep 20 && docker compose exec -T prosody prosodyctl --config /config/prosody.cfg.lua register bitacora meet.jitsi "$PASS"', 'echo "Usuario para crear salas: bitacora / $PASS"']),
       ].join("\n");
     };
     const dd = () => {
@@ -3886,7 +3886,7 @@ function gitBox(pid) {
     if (err) parts.push(h("p", { class: "err" }, "⚠ " + err));
     if (st?.steps?.length) parts.push(h("ul", { class: "gitsteps" }, st.steps.map((x) => h("li", {}, "✔ " + x))));
     if (!st) { parts.push(h("button", { class: "ghost", onclick: load }, "↻ Revisar de nuevo")); return body.replaceChildren(...parts); }
-    const repoIn = h("input", { placeholder: "usuario/repositorio", title: "Por ejemplo polblancoo/crewhelm" });
+    const repoIn = h("input", { placeholder: "usuario/repositorio", title: "Por ejemplo polblancoo/bitacoraai" });
     const nameIn = h("input", { placeholder: "nombre del repositorio nuevo", value: "", title: "Letras, números, guiones y puntos" });
     const priv = h("input", { type: "checkbox", checked: true });
     const newBlock0 = h("div", { class: "gitopt" }, h("b", {}, "✨ Crear un repositorio nuevo en GitHub"),
@@ -4440,7 +4440,7 @@ const openLicense = guard(async () => {
     const kids = [h("p", {}, `Hoy: ${l.humans} personas · ${l.ais} IAs · ${l.projects} proyectos · ${l.teams} equipos. Uso gratuito sin aviso: hasta ${l.free.humans} personas y ${l.free.ais} IAs.`)];
     kids.push(l.licensed
       ? h("p", { class: "lic-ok" }, `✅ Licencia comercial «${l.license.plan}» vigente hasta ${String(l.license.hasta).slice(0, 10)}.`)
-      : h("p", { class: "hint" }, "Rust TUI Manager es software libre (AGPL-3.0-only) y puede usarse gratis cumpliendo esa licencia. La licencia comercial es para quien no quiere cumplirla (por ejemplo, no publicar sus modificaciones)."));
+      : h("p", { class: "hint" }, "BitacoraAI es software libre (AGPL-3.0-only) y puede usarse gratis cumpliendo esa licencia. La licencia comercial es para quien no quiere cumplirla (por ejemplo, no publicar sus modificaciones)."));
     if (l.exceeds_plan) kids.push(h("p", { class: "lic-warn" }, `⚠️ Tu plan «${l.license.plan}» incluye hasta ${l.plan_limits.humans ?? "—"} personas y ${l.plan_limits.ais ?? "—"} IAs, y hoy hay ${l.humans} personas y ${l.ais} IAs. Para seguir en regla pasá al plan que corresponde y pagá solo la diferencia.`));
     if (l.message) kids.push(h("p", { class: "hint" }, l.message));
     return kids;

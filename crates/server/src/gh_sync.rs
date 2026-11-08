@@ -479,12 +479,12 @@ async fn agent_pr(State(st): State<AppState>, user: AuthUser, Json(b): Json<Agen
     }
     let g = crate::github::gh_p(&st, b.project)?;
     let repo = repo_of(&st, b.project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene repositorio de GitHub"))?;
-    let cfg = load(&st, b.project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene GitHub conectado en CrewHelm"))?;
+    let cfg = load(&st, b.project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene GitHub conectado en BitacoraAI"))?;
     let token = token_of(&st, cfg.owner).await?;
     let info = api_get(&g, &token, &format!("/repos/{repo}")).await?;
     let base = info["default_branch"].as_str().unwrap_or("main").to_string();
     let title: String = b.title.trim().chars().take(200).collect();
-    let body = format!("{}\n\n— Pedido desde CrewHelm por {}", b.body.trim().chars().take(7000).collect::<String>(), b.who);
+    let body = format!("{}\n\n— Pedido desde BitacoraAI por {}", b.body.trim().chars().take(7000).collect::<String>(), b.who);
     let res = api_json(&g, &token, reqwest::Method::POST, &format!("/repos/{repo}/pulls"), json!({ "title": if title.is_empty() { branch.clone() } else { title }, "head": branch, "base": base, "body": body })).await;
     let pr = match res {
         Ok(pr) => pr,

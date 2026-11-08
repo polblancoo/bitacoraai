@@ -1,6 +1,6 @@
-<p align="center"><a href="https://github.com/polblancoo/crewhelm/blob/main/crates/server/README.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/crewhelm/blob/main/crates/server/README.pt.md">Português</a></p>
+<p align="center"><a href="https://github.com/polblancoo/bitacoraai/blob/main/crates/server/README.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/bitacoraai/blob/main/crates/server/README.pt.md">Português</a></p>
 
-# crewhelm-server
+# bitacora-server
 
 > 🎛️ **Tablero de comando para tus proyectos**: dirigí varios proyectos a la vez —una fábrica de apps, una planilla, un onboarding, lo que sea— con **personas e IAs en el mismo tablero**. Cada proyecto sabe dónde vive su trabajo (carpeta y repo). Self-hosted.
 
@@ -14,57 +14,57 @@ Lo que no vimos junto en ninguna otra herramienta (comprobalo, y avisanos si enc
 - 📊 **Portafolio de varios proyectos**, con costo y horas de la IA. *(costo y horas: llegan en la 0.6.3)*
 - 🏠 **Autoalojado**: tus datos y tus claves quedan en tu servidor.
 
-Servidor multiusuario (axum + SQLite + WebSocket) del gestor de tareas colaborativo [CrewHelm](https://github.com/polblancoo/crewhelm). Los clientes son [`rust-tui-manager`](https://crates.io/crates/rust-tui-manager) (terminal) y la app Tauri del repositorio.
+Servidor multiusuario (axum + SQLite + WebSocket) del gestor de tareas colaborativo [BitacoraAI](https://github.com/polblancoo/bitacoraai). Los clientes son [`rust-tui-manager`](https://crates.io/crates/rust-tui-manager) (terminal) y la app Tauri del repositorio.
 
 Clientes: la TUI, la app gráfica de escritorio y la **web que este mismo servidor sirve en `/`** (desactivable con `TM_WEB=0`).
 
-![Cliente gráfico conectado al servidor](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-board.png)
+![Cliente gráfico conectado al servidor](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/desktop-board.png)
 
-![Tablero de comando: proyectos, IAs y tareas](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-01-tablero.png)
+![Tablero de comando: proyectos, IAs y tareas](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-01-tablero.png)
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-gantt.png" alt="Gantt con dependencias"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-canvas.png" alt="Pizarra colaborativa"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-gantt.png" alt="Gantt con dependencias"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-canvas.png" alt="Pizarra colaborativa"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-inbox.png" alt="Bandeja de novedades"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-settings.png" alt="Menú de configuración"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-inbox.png" alt="Bandeja de novedades"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-settings.png" alt="Menú de configuración"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-team.png" alt="Equipo: buscar usuarios registrados"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-team.png" alt="Equipo: buscar usuarios registrados"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-invite.png" alt="Código de invitación generado"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-06-panel-equipo.png" alt="Panel del equipo con personas e IAs"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-invite.png" alt="Código de invitación generado"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-06-panel-equipo.png" alt="Panel del equipo con personas e IAs"></td>
   </tr>
 </table>
 
-> 👉 **[Guía paso a paso: tu primer proyecto](https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.md)**, con capturas.
+> 👉 **[Guía paso a paso: tu primer proyecto](https://github.com/polblancoo/bitacoraai/blob/main/docs/GUIA.md)**, con capturas.
 
 ## 🤖 Agentes de IA como integrantes del equipo
 
-Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier cliente MCP) pueden **conectarse a un equipo humano**: cada IA tiene su usuario, token, rol y modelo (p. ej. `claude:Opus`), crea y completa tareas, **se las asigna a personas** y recibe las que le asignes. Se suman desde la barra lateral (**🤖 IAs → «+»**), el token se muestra una vez y se rota o revoca con un clic. Una IA no puede administrar equipos, invitar ni tocar tareas ajenas. Detalles en el [README principal](https://github.com/polblancoo/crewhelm#readme); con **`tm-agent`** una IA toma sola las tareas que le asignes (ver [instructivo](https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.md)); el binario `tm-mcp` está en desarrollo.
+Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier cliente MCP) pueden **conectarse a un equipo humano**: cada IA tiene su usuario, token, rol y modelo (p. ej. `claude:Opus`), crea y completa tareas, **se las asigna a personas** y recibe las que le asignes. Se suman desde la barra lateral (**🤖 IAs → «+»**), el token se muestra una vez y se rota o revoca con un clic. Una IA no puede administrar equipos, invitar ni tocar tareas ajenas. Detalles en el [README principal](https://github.com/polblancoo/bitacoraai#readme); con **`tm-agent`** una IA toma sola las tareas que le asignes (ver [instructivo](https://github.com/polblancoo/bitacoraai/blob/main/docs/AGENTES.md)); el binario `tm-mcp` está en desarrollo.
 
-![Ficha de la IA y token con la configuración MCP y de tm-agent lista para copiar](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-03-token.png)
+![Ficha de la IA y token con la configuración MCP y de tm-agent lista para copiar](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-03-token.png)
 
 ## Novedades de la 0.6.2
 
 ### 📊 Portafolio: todos tus proyectos en una pantalla
 Avance, vencidas, recursos, quién trabaja en qué y qué proyecto está en riesgo (🟢 al día · 🔴 con vencidas · 🟡 sin movimiento en 7 días · ✅ terminado). Un clic en una tarjeta abre el proyecto; se actualiza en vivo.
 
-![Portafolio con todos los proyectos](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-11-portafolio.png)
+![Portafolio con todos los proyectos](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-11-portafolio.png)
 
 ### 🙋 Cuando una IA te necesita, te lo pide y le contestás en el mismo mensaje
 Si una IA se topa con algo que no puede hacer sola (un comando bloqueado, un permiso), corre `tm-agent ask`: el servidor crea una **tarea de pedido** para una persona autorizada, con el comando listo para copiar (**📋 Copiar**). La tarea abre con un panel: copiás cada comando, lo ejecutás en tu terminal, pegás la salida en el recuadro y apretás **📤 Enviar** (o **✅ Autorizar / ❌ Rechazar** si es una decisión): le llega sola a la IA. A quién le llega: a quien creó la tarea si tiene el nuevo permiso **Ejecutor**; si no, al ejecutor con menos tareas abiertas; si no, a un admin. Cada IA tiene además una lista editable de **🚫 comandos prohibidos**.
 
-![Pedido de una IA: tarea creada y comando para copiar](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-12-pedido.png)
+![Pedido de una IA: tarea creada y comando para copiar](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-12-pedido.png)
 
 ### 📖 Manual dentro de la app, tooltips y tres idiomas
 Un manual con **buscador e índice por temas** (botón **📖 Manual**), un tooltip en cada botón y toda la interfaz en **español, inglés y portugués** (Configuración → Preferencias → Idioma). El detalle de la tarea se puede **maximizar** para leer comentarios largos.
 
-![El manual dentro de la app, con buscador](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-13-manual.png)
+![El manual dentro de la app, con buscador](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-13-manual.png)
 
 ### También nuevo
 - Tareas numeradas (`#12`) y **orden manual con arrastrar y soltar**.
@@ -77,18 +77,18 @@ Un manual con **buscador e índice por temas** (botón **📖 Manual**), un tool
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-google.png" alt="Configuración con Google Calendar conectado y un «?» de ayuda en cada fila"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-google-help.png" alt="Ayuda de Google Calendar: qué hace y qué configura quien administra el servidor"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-google.png" alt="Configuración con Google Calendar conectado y un «?» de ayuda en cada fila"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-google-help.png" alt="Ayuda de Google Calendar: qué hace y qué configura quien administra el servidor"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-config-help.png" alt="Ayuda de una fila: «Si sos usuario» y «Si administrás el servidor»"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-invite.png" alt="Código de invitación con «Copiar invitación» y «Enviar por email»"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-config-help.png" alt="Ayuda de una fila: «Si sos usuario» y «Si administrás el servidor»"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-invite.png" alt="Código de invitación con «Copiar invitación» y «Enviar por email»"></td>
   </tr>
 </table>
 
 - **Panel del equipo** (botón «👥 Equipo», columna derecha): miembros con su rol (editable ahí mismo), desde cuándo están, quién los sumó y si entraron con un código, y cuántas tareas abiertas tiene cada uno; las invitaciones con sus usos, vencimiento y **quiénes entraron con cada código**; y los ajustes del equipo (editar nombre y descripción, transferir la propiedad, salir o eliminar el equipo con confirmación por nombre).
 
-<img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-team-panel.png" alt="Panel del equipo: miembros, invitaciones y ajustes">
+<img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-team-panel.png" alt="Panel del equipo: miembros, invitaciones y ajustes">
 
 - **Google Calendar** (opcional, un solo sentido): cada usuario conecta su cuenta desde *Configuración → Google Calendar* y sus tareas con fecha (asignadas a él o sin responsable, de sus equipos) aparecen como eventos de día completo en su calendario principal. Si cambian, se terminan o se borran, el evento se actualiza o se quita solo (cada minuto); «Desconectar» limpia lo que creó la app. Lo habilita **una sola vez quien administra el servidor** con `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET` y `TM_GOOGLE_REDIRECT` (cliente OAuth «Aplicación web» de Google Cloud); mientras la app de Google esté en modo *Pruebas* solo entran los Gmail agregados como usuarios de prueba.
 - **Ayuda en cada parámetro de Configuración**: un botón «?» por fila explica qué hace para el usuario común y qué hay que tener configurado si administrás el servidor (SMTP, Telegram, Google, HTTPS…).
@@ -100,7 +100,7 @@ Un manual con **buscador e índice por temas** (botón **📖 Manual**), un tool
 ## Uso
 
 ```sh
-cargo install crewhelm-server
+cargo install bitacora-server
 tm-server                      # escucha en 0.0.0.0:7878
 ```
 
@@ -170,7 +170,7 @@ Cuerpo de 64 KB; usuario 3–32 caracteres, contraseña 8–128; título 200, de
 
 ## Licencia
 
-**AGPL-3.0-only.** Gratis para usar y autoalojar. Si ofrecés una versión modificada como servicio, tenés que publicar tus cambios con la misma licencia. Hay licencia comercial sin esa obligación: consultala en [los issues](https://github.com/polblancoo/crewhelm/issues). Las versiones publicadas hasta la 0.6.2 siguen siendo MIT.
+**AGPL-3.0-only.** Gratis para usar y autoalojar. Si ofrecés una versión modificada como servicio, tenés que publicar tus cambios con la misma licencia. Hay licencia comercial sin esa obligación: consultala en [los issues](https://github.com/polblancoo/bitacoraai/issues). Las versiones publicadas hasta la 0.6.2 siguen siendo MIT.
 
 ## Google Calendar
 

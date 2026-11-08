@@ -148,7 +148,7 @@ fn example_for(profile: &str) -> Vec<Ex> {
                 ("Definir qué problema resuelve la app", "", Todo, 1, Some(2)),
                 ("Crear el repositorio y la estructura", "", Doing, 2, Some(3)),
                 ("Primer prototipo (asignalo a una IA)", "Indicá la carpeta del proyecto en «⚙ Proyecto» para que la IA trabaje sobre el código.", Todo, 2, Some(7)),
-                ("Instalar CrewHelm", "", Done, 1, None),
+                ("Instalar BitacoraAI", "", Done, 1, None),
             ],
         }],
     }

@@ -1,28 +1,28 @@
-<p align="center"><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/logo/logo-512.png" width="140" alt="Logo de Rust TUI Manager"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/logo/logo-512.png" width="140" alt="Logo de BitacoraAI"></p>
 
-<p align="center"><a href="https://github.com/polblancoo/crewhelm/blob/main/README.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/crewhelm/blob/main/README.pt.md">Português</a></p>
+<p align="center"><a href="https://github.com/polblancoo/bitacoraai/blob/main/README.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/bitacoraai/blob/main/README.pt.md">Português</a></p>
 
-# CrewHelm
+# BitacoraAI
 
-> *(antes Rust TUI Manager)*
+> *(antes CrewHelm, y antes Rust TUI Manager)*
 
 ## 🎛️ Tablero de comando para tus proyectos
 
 Dirigí **varios proyectos a la vez desde un solo lugar**, con **personas y agentes de IA trabajando en el mismo tablero**. Un CTO, una gerente de operaciones o una dueña de agencia arma los proyectos, asigna recursos (humanos e IAs de distintos modelos), delega cada uno en un líder y **ve cómo va todo, momento a momento**.
 
-![Tablero de comando: proyectos, IAs y tareas del equipo](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-01-tablero.png)
+![Tablero de comando: proyectos, IAs y tareas del equipo](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-01-tablero.png)
 
 ## ⭐ En 30 segundos
 
-**CrewHelm es el tablero donde tus IAs de código trabajan como parte del equipo, pero con el riesgo bajo control: permisos por comando, cápsula aislada, presupuesto por proyecto y auditoría de todo, en tu propio servidor.**
+**BitacoraAI es el tablero donde tus IAs de código trabajan como parte del equipo, pero con el riesgo bajo control: permisos por comando, cápsula aislada, presupuesto por proyecto y auditoría de todo, en tu propio servidor.**
 
 1. **Creás proyectos** y sumás personas e IAs (Claude, Gemini, Codex o un modelo abierto propio).
 2. **Asignás una tarea a una IA.** `tm-agent` la ejecuta dentro de la carpeta del proyecto, comenta y la deja en *Hecho*.
 3. **Vos mirás y decidís.** La IA pide permiso o ayuda cuando lo necesita; ves tokens, costo y horas por proyecto.
 
-**Nuestra fortaleza es el control.** Hoy muchos equipos tienen a cada desarrollador usando una IA con sus propias claves y sin registro. CrewHelm te da lo que eso no tiene:
+**Nuestra fortaleza es el control.** Hoy muchos equipos tienen a cada desarrollador usando una IA con sus propias claves y sin registro. BitacoraAI te da lo que eso no tiene:
 
-| Sin control | Con CrewHelm |
+| Sin control | Con BitacoraAI |
 |---|---|
 | Cada persona usa una IA con sus claves | Una IA compartida por equipo; el token se revoca con un clic |
 | Nadie sabe qué ejecutó la IA | Comandos permitidos y prohibidos por IA, aprobación por riesgo, auditoría exportable |
@@ -70,31 +70,31 @@ Lo que no vimos junto en ninguna otra herramienta (comprobalo, y avisanos si enc
 
 Cada proyecto sabe **dónde vive su trabajo** (carpeta y repositorio); el líder por proyecto está en la [hoja de ruta](ROADMAP.md). Todo es **self-hosted**: tus datos quedan en tu servidor.
 
-> 👉 **¿Primera vez? Seguí la [guía paso a paso: tu primer proyecto](https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.md)** (instalar, crear el equipo, sumar personas e IAs, asignar y seguir el avance, con capturas).
+> 👉 **¿Primera vez? Seguí la [guía paso a paso: tu primer proyecto](https://github.com/polblancoo/bitacoraai/blob/main/docs/GUIA.md)** (instalar, crear el equipo, sumar personas e IAs, asignar y seguir el avance, con capturas).
 
 **Cómo está hecho:** gestor de tareas colaborativo, multiusuario y self-hosted, escrito en Rust. Un único servidor y tres clientes: una **TUI** (ratatui), una **app gráfica** (Tauri 2) y una **web** que el propio servidor sirve, con actualizaciones en tiempo real entre todos los conectados.
 
 | Pieza | Crate / ruta | Qué es |
 |---|---|---|
-| Servidor | [`crewhelm-server`](crates/server) (binario `tm-server`) | API REST + WebSocket sobre axum y SQLite |
-| Cliente de terminal | [`crewhelm`](crates/tui) | Tablero kanban con ratatui |
-| Agente de IA | [`crewhelm-agent`](crates/agent) (binario `tm-agent`) | Vigila el tablero y pone a trabajar a una IA cuando le asignan una tarea |
+| Servidor | [`bitacora-server`](crates/server) (binario `tm-server`) | API REST + WebSocket sobre axum y SQLite |
+| Cliente de terminal | [`bitacora`](crates/tui) | Tablero kanban con ratatui |
+| Agente de IA | [`bitacora-agent`](crates/agent) (binario `tm-agent`) | Vigila el tablero y pone a trabajar a una IA cuando le asignan una tarea |
 | Cliente gráfico | [`apps/desktop`](apps/desktop) | App Tauri 2 (la misma interfaz que la web, en ventana propia) |
 | Cliente web | [`crates/server/web`](crates/server/web) | Interfaz gráfica servida por `tm-server` en `/`: tablero, calendario, Gantt, pizarra, bandeja |
-| Modelos compartidos | [`crewhelm-core`](crates/core) | Tipos y eventos usados por todos |
+| Modelos compartidos | [`bitacora-core`](crates/core) | Tipos y eventos usados por todos |
 
 > La versión 0.1.x de `rust-tui-manager` (el nombre anterior del proyecto) era un gestor local de notas y snippets. Ese código queda en el historial de git y en las versiones 0.1.x del crate.
 
-![Tablero kanban en el cliente gráfico](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-board.png)
+![Tablero kanban en el cliente gráfico](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/desktop-board.png)
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-task.png" alt="Detalle de tarea con etiquetas, subtareas y comentarios"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-calendar.png" alt="Vista de calendario por fecha límite"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/desktop-task.png" alt="Detalle de tarea con etiquetas, subtareas y comentarios"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/desktop-calendar.png" alt="Vista de calendario por fecha límite"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-team.png" alt="Gestión del equipo: roles e invitaciones por código"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/tui-board.png" alt="Cliente de terminal (ratatui)"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/desktop-team.png" alt="Gestión del equipo: roles e invitaciones por código"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/tui-board.png" alt="Cliente de terminal (ratatui)"></td>
   </tr>
 </table>
 
@@ -104,23 +104,23 @@ Cada proyecto sabe **dónde vive su trabajo** (carpeta y repositorio); el líder
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-gantt.png" alt="Gantt con dependencias entre tareas"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-canvas.png" alt="Pizarra colaborativa con notas, tarjetas de tarea y conexiones"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-gantt.png" alt="Gantt con dependencias entre tareas"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-canvas.png" alt="Pizarra colaborativa con notas, tarjetas de tarea y conexiones"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-inbox.png" alt="Bandeja de novedades al iniciar sesión"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-mindmap.png" alt="Mapa mental de una tarea"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-inbox.png" alt="Bandeja de novedades al iniciar sesión"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-mindmap.png" alt="Mapa mental de una tarea"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-settings.png" alt="Menú de configuración: cuenta, Telegram, equipo y preferencias"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-message.png" alt="Mensaje al equipo (bandeja, email y Telegram)"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-settings.png" alt="Menú de configuración: cuenta, Telegram, equipo y preferencias"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-message.png" alt="Mensaje al equipo (bandeja, email y Telegram)"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-team.png" alt="Equipo: buscar usuarios registrados, generar código de invitación y miembros"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-team.png" alt="Equipo: buscar usuarios registrados, generar código de invitación y miembros"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-activity.png" alt="Actividad del proyecto"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-invite.png" alt="Código de invitación generado"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-invite.png" alt="Código de invitación generado"></td>
   </tr>
 </table>
 
@@ -133,11 +133,11 @@ Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier client
 - **Control humano**: el token se **rota o revoca con un clic**; el rol es lector o miembro; una IA **no puede** crear ni borrar equipos, invitar, cambiar roles ni tocar tareas ajenas (salvo comentar).
 - **Un tablero de comandos**: asignás trabajo a tus agentes desde la web, la app o la terminal, y ves en vivo qué hace cada uno.
 
-> 🚀 **Que trabajen solas**: **`tm-agent`** vigila el tablero y, cuando le asignás una tarea a una IA, abre tu agente (Claude Code, Gemini CLI…) en la carpeta del proyecto, la pasa a *En curso*, la comenta y la deja en *Hecho*. El agente también puede levantar una **alarma de asistencia** 🙋 (`tm-agent ask "..."`) y esperar la respuesta de una persona. Paso a paso en el **[instructivo de agentes](https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.md)**; dentro de la app está en *Configuración → Agentes de IA*. El binario `tm-mcp` (herramientas MCP) sigue en desarrollo (ver [ROADMAP.md](ROADMAP.md)).
+> 🚀 **Que trabajen solas**: **`tm-agent`** vigila el tablero y, cuando le asignás una tarea a una IA, abre tu agente (Claude Code, Gemini CLI…) en la carpeta del proyecto, la pasa a *En curso*, la comenta y la deja en *Hecho*. El agente también puede levantar una **alarma de asistencia** 🙋 (`tm-agent ask "..."`) y esperar la respuesta de una persona. Paso a paso en el **[instructivo de agentes](https://github.com/polblancoo/bitacoraai/blob/main/docs/AGENTES.md)**; dentro de la app está en *Configuración → Agentes de IA*. El binario `tm-mcp` (herramientas MCP) sigue en desarrollo (ver [ROADMAP.md](ROADMAP.md)).
 
 ## Novedades de la 0.7.1
 
-- **Se llama CrewHelm.** Nuevo nombre en la interfaz, los correos y el manifiesto.
+- **Se llama BitacoraAI.** Nuevo nombre en la interfaz, los correos y el manifiesto.
 - **Instalador de una línea** (`install.sh`, Linux x86_64, sin sudo, con verificación SHA256) y **guía de inicio** con dibujos la primera vez que entrás.
 - **Pedidos de una IA**: lista de comandos con ✕ para quitar, un solo «✅ Permitir siempre», acceso a la lista de la IA; la IA escribe los comandos en bloque.
 - **Terminal de tarea** a pantalla completa con herdr por defecto.
@@ -148,7 +148,7 @@ Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier client
 ## Novedades de la 0.7.0
 
 ### 🏢 Licencia comercial y aviso de instalación
-Rust TUI Manager sigue siendo **AGPL-3.0-only y gratis**. Si lo usás en una empresa y no querés cumplir la AGPL (por ejemplo, no publicar tus cambios), hay una **licencia comercial anual**: **Configuración → 🏢 Licencia**. Pagás en **USDT por Solana o Ethereum** con un QR; la app te muestra el monto exacto (los últimos decimales identifican tu pago), la dirección y el **contrato del token** con enlace al explorador. Cuando la red confirma el pago, te llega un mail con tu código y la licencia se activa sola.
+BitacoraAI sigue siendo **AGPL-3.0-only y gratis**. Si lo usás en una empresa y no querés cumplir la AGPL (por ejemplo, no publicar tus cambios), hay una **licencia comercial anual**: **Configuración → 🏢 Licencia**. Pagás en **USDT por Solana o Ethereum** con un QR; la app te muestra el monto exacto (los últimos decimales identifican tu pago), la dirección y el **contrato del token** con enlace al explorador. Cuando la red confirma el pago, te llega un mail con tu código y la licencia se activa sola.
 
 - **Cartel suave**: cuando el servidor pasa de 3 personas o 2 IAs (o si declarás que es de empresa) aparece una barra arriba. Se puede descartar 7 días y **nunca bloquea nada**.
 - **Aviso de instalación (telemetría)**: una vez por día el servidor avisa que existe. Envía un código al azar guardado en tu base, la versión, el sistema operativo y **cuántas** personas, IAs, proyectos y equipos hay. **Nunca** nombres, correos, tareas ni contenido; la IP no se guarda (solo se usa para saber el país). Se apaga con `TM_TELEMETRY=0` o desde la ventana Licencia.
@@ -158,18 +158,18 @@ Rust TUI Manager sigue siendo **AGPL-3.0-only y gratis**. Si lo usás en una emp
 ### 💻 Terminal en el navegador y vista Terminales
 Un botón **💻 Terminal** en cada tarea (solo owners) abre una consola en la carpeta del proyecto. Dos caminos: **por el agente** (`TM_AGENT_TERMINAL=1`, la conexión sale desde la máquina del proyecto: sin claves ni puertos abiertos) o **SSH con clave** (la app genera la clave y guarda la huella del servidor). Cada sesión deja una nota `.tm/terminal-tarea-N.md` que la IA lee al retomar. La vista **🖥️ Terminales** muestra hasta 8 paneles y el estado de cada IA.
 
-![Vista Terminales](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-14-terminales.png)
+![Vista Terminales](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-14-terminales.png)
 
 ### 💰 Consumo y cuotas
 Tokens, costo y horas por tarea, proyecto, equipo e IA, con **cuotas** que se revisan antes de cada ejecución y una **estimación** de tokens (🧮) para fijar el tope de la tarea.
 
-![Consumo](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-15-consumo.png)
-![Tope de tokens en la tarea](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-17-tokens.png)
+![Consumo](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-15-consumo.png)
+![Tope de tokens en la tarea](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-17-tokens.png)
 
 ### ✅ Permitir comandos desde la tarea
 Si una IA pide un comando, el botón **✅ Permitir comando…** explica qué hace y lo autoriza **una vez** o **siempre** (también con `/permitir` en un comentario).
 
-![Permitir comando](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-16-permitir.png)
+![Permitir comando](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-16-permitir.png)
 
 ### Licencia
 Desde la 0.6.3 el proyecto es **AGPL-3.0-only** (las versiones anteriores siguen bajo MIT). Incluye xterm.js (MIT).
@@ -179,17 +179,17 @@ Desde la 0.6.3 el proyecto es **AGPL-3.0-only** (las versiones anteriores siguen
 ### 📊 Portafolio: todos tus proyectos en una pantalla
 Avance, vencidas, recursos, quién trabaja en qué y qué proyecto está en riesgo (🟢 al día · 🔴 con vencidas · 🟡 sin movimiento en 7 días · ✅ terminado). Un clic en una tarjeta abre el proyecto; se actualiza en vivo.
 
-![Portafolio con todos los proyectos](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-11-portafolio.png)
+![Portafolio con todos los proyectos](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-11-portafolio.png)
 
 ### 🙋 Cuando una IA te necesita, te lo pide y le contestás en el mismo mensaje
 Si una IA se topa con algo que no puede hacer sola (un comando bloqueado, un permiso), corre `tm-agent ask`: el servidor crea una **tarea de pedido** para una persona autorizada, con el comando listo para copiar (**📋 Copiar**). La tarea abre con un panel: copiás cada comando, lo ejecutás en tu terminal, pegás la salida en el recuadro y apretás **📤 Enviar** (o **✅ Autorizar / ❌ Rechazar** si es una decisión): le llega sola a la IA. A quién le llega: a quien creó la tarea si tiene el nuevo permiso **Ejecutor**; si no, al ejecutor con menos tareas abiertas; si no, a un admin. Cada IA tiene además una lista editable de **🚫 comandos prohibidos**.
 
-![Pedido de una IA: tarea creada y comando para copiar](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-12-pedido.png)
+![Pedido de una IA: tarea creada y comando para copiar](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-12-pedido.png)
 
 ### 📖 Manual dentro de la app, tooltips y tres idiomas
 Un manual con **buscador e índice por temas** (botón **📖 Manual**), un tooltip en cada botón y toda la interfaz en **español, inglés y portugués** (Configuración → Preferencias → Idioma). El detalle de la tarea se puede **maximizar** para leer comentarios largos.
 
-![El manual dentro de la app, con buscador](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-13-manual.png)
+![El manual dentro de la app, con buscador](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-13-manual.png)
 
 ### También nuevo
 - Tareas numeradas (`#12`) y **orden manual con arrastrar y soltar**.
@@ -202,18 +202,18 @@ Un manual con **buscador e índice por temas** (botón **📖 Manual**), un tool
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-google.png" alt="Configuración con Google Calendar conectado y un «?» de ayuda en cada fila"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-google-help.png" alt="Ayuda de Google Calendar: qué hace y qué configura quien administra el servidor"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-google.png" alt="Configuración con Google Calendar conectado y un «?» de ayuda en cada fila"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-google-help.png" alt="Ayuda de Google Calendar: qué hace y qué configura quien administra el servidor"></td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-config-help.png" alt="Ayuda de una fila: «Si sos usuario» y «Si administrás el servidor»"></td>
-    <td><img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-invite.png" alt="Código de invitación con «Copiar invitación» y «Enviar por email»"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-config-help.png" alt="Ayuda de una fila: «Si sos usuario» y «Si administrás el servidor»"></td>
+    <td><img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-invite.png" alt="Código de invitación con «Copiar invitación» y «Enviar por email»"></td>
   </tr>
 </table>
 
 - **Panel del equipo** (botón «👥 Equipo», columna derecha): miembros con su rol (editable ahí mismo), desde cuándo están, quién los sumó y si entraron con un código, y cuántas tareas abiertas tiene cada uno; las invitaciones con sus usos, vencimiento y **quiénes entraron con cada código**; y los ajustes del equipo (editar nombre y descripción, transferir la propiedad, salir o eliminar el equipo con confirmación por nombre).
 
-<img src="https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/web-team-panel.png" alt="Panel del equipo: miembros, invitaciones y ajustes">
+<img src="https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/web-team-panel.png" alt="Panel del equipo: miembros, invitaciones y ajustes">
 
 - **Google Calendar** (opcional, un solo sentido): cada usuario conecta su cuenta desde *Configuración → Google Calendar* y sus tareas con fecha (asignadas a él o sin responsable, de sus equipos) aparecen como eventos de día completo en su calendario principal. Si cambian, se terminan o se borran, el evento se actualiza o se quita solo (cada minuto); «Desconectar» limpia lo que creó la app. Lo habilita **una sola vez quien administra el servidor** con `TM_GOOGLE_CLIENT_ID`, `TM_GOOGLE_CLIENT_SECRET` y `TM_GOOGLE_REDIRECT` (cliente OAuth «Aplicación web» de Google Cloud); mientras la app de Google esté en modo *Pruebas* solo entran los Gmail agregados como usuarios de prueba.
 - **Ayuda en cada parámetro de Configuración**: un botón «?» por fila explica qué hace para el usuario común y qué hay que tener configurado si administrás el servidor (SMTP, Telegram, Google, HTTPS…).
@@ -248,26 +248,26 @@ Un manual con **buscador e índice por temas** (botón **📖 Manual**), un tool
 
 ## Instalación rápida
 
-**Descarga**: [última versión](https://github.com/polblancoo/crewhelm/releases/latest) (Linux: `.deb`, `.rpm`, AppImage y `tar.gz`; **Windows y macOS próximamente**) · Sitio: https://polblancoo.github.io/rust_tuiManager/
+**Descarga**: [última versión](https://github.com/polblancoo/bitacoraai/releases/latest) (Linux: `.deb`, `.rpm`, AppImage y `tar.gz`; **Windows y macOS próximamente**) · Sitio: https://polblancoo.github.io/rust_tuiManager/
 
 
 **Una línea (Linux, sin sudo)**: baja `tm-server`, verifica su SHA-256, lo deja como servicio de tu usuario y te dice la dirección. La primera vez que abrís la página, una guía corta con dibujos te lleva por equipo, proyecto e IA.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/polblancoo/crewhelm/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/polblancoo/bitacoraai/main/install.sh | sh
 ```
 
 ```sh
-cargo install crewhelm-server   # instala el binario `tm-server`
-cargo install crewhelm          # cliente de terminal
-cargo install crewhelm-agent    # instala `tm-agent` (opcional, para agentes de IA)
+cargo install bitacora-server   # instala el binario `tm-server`
+cargo install bitacora          # cliente de terminal
+cargo install bitacora-agent    # instala `tm-agent` (opcional, para agentes de IA)
 ```
 
 O desde este repositorio:
 
 ```sh
-cargo run -p crewhelm-server                          # servidor en 0.0.0.0:7878
-cargo run -p crewhelm -- http://127.0.0.1:7878        # cliente TUI (F2 = crear cuenta)
+cargo run -p bitacora-server                          # servidor en 0.0.0.0:7878
+cargo run -p bitacora -- http://127.0.0.1:7878        # cliente TUI (F2 = crear cuenta)
 cargo run -p tm-desktop                                       # cliente gráfico
 ```
 
@@ -343,4 +343,4 @@ apps/desktop     cliente Tauri (frontend estático en ui/)
 
 ## Licencia
 
-**AGPL-3.0-only.** Gratis para usar y autoalojar. Si ofrecés una versión modificada como servicio, tenés que publicar tus cambios con la misma licencia. Hay licencia comercial sin esa obligación: consultala en [los issues](https://github.com/polblancoo/crewhelm/issues). Las versiones publicadas hasta la 0.6.2 siguen siendo MIT.
+**AGPL-3.0-only.** Gratis para usar y autoalojar. Si ofrecés una versión modificada como servicio, tenés que publicar tus cambios con la misma licencia. Hay licencia comercial sin esa obligación: consultala en [los issues](https://github.com/polblancoo/bitacoraai/issues). Las versiones publicadas hasta la 0.6.2 siguen siendo MIT.

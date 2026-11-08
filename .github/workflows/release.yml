@@ -2,7 +2,7 @@ name: Release
 
 # Al publicar un tag vX.Y.Z genera: .msi/.exe (Windows), .dmg (macOS Intel y ARM),
 # .deb, .rpm y AppImage (Linux) del escritorio, más los binarios tm-server,
-# crewhelm (TUI) y tm-agent de cada sistema. Todo se adjunta a un release en borrador.
+# bitacora (TUI) y tm-agent de cada sistema. Todo se adjunta a un release en borrador.
 on:
   push:
     tags: ["v*"]
@@ -115,7 +115,7 @@ jobs:
         shell: bash
         run: |
           mkdir dist
-          for b in tm-server crewhelm tm-agent; do
+          for b in tm-server bitacora tm-agent; do
             cp "target/release/$b${{ matrix.ext }}" dist/
           done
           cd dist

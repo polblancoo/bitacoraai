@@ -1,5 +1,5 @@
 # crewhelm-default v2
-# Configuración por defecto de CrewHelm. Para personalizarla, borrá la primera línea (así CrewHelm ya no la reemplaza).
+# Configuración por defecto de BitacoraAI. Para personalizarla, borrá la primera línea (así BitacoraAI ya no la reemplaza).
 export LANG="${LANG:-C.UTF-8}" COLORTERM=truecolor PAGER=less LESS='-R'
 export EDITOR="${EDITOR:-nano}"; command -v nvim >/dev/null && export EDITOR=nvim
 export PATH="$HOME/.local/bin:$PATH"
@@ -9,8 +9,8 @@ if command -v eza >/dev/null; then alias ls='eza --group-directories-first' ll='
 alias grep='grep --color=auto' ..='cd ..' gs='git status -sb'
 bind '"\e[A": history-search-backward' 2>/dev/null; bind '"\e[B": history-search-forward' 2>/dev/null
 # herdr: una sesión por proyecto, así siempre abre en la carpeta del proyecto (y no en lo último que se usó)
-if [ -n "$CREWHELM_PROJECT" ]; then
-  herdr() { if [ $# -eq 0 ]; then command herdr --session "$CREWHELM_PROJECT"; else command herdr "$@"; fi; }
+if [ -n "$BITACORA_PROJECT" ]; then
+  herdr() { if [ $# -eq 0 ]; then command herdr --session "$BITACORA_PROJECT"; else command herdr "$@"; fi; }
 fi
 
-if command -v starship >/dev/null; then eval "$(starship init bash)"; else PS1='\[\e[36m\]\u@crewhelm\[\e[0m\] \[\e[33m\]\w\[\e[0m\] \$ '; fi
+if command -v starship >/dev/null; then eval "$(starship init bash)"; else PS1='\[\e[36m\]\u@bitacora\[\e[0m\] \[\e[33m\]\w\[\e[0m\] \$ '; fi

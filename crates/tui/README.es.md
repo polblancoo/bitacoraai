@@ -1,6 +1,6 @@
-<p align="center"><a href="https://github.com/polblancoo/crewhelm/blob/main/crates/tui/README.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/crewhelm/blob/main/crates/tui/README.pt.md">Português</a></p>
+<p align="center"><a href="https://github.com/polblancoo/bitacoraai/blob/main/crates/tui/README.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/bitacoraai/blob/main/crates/tui/README.pt.md">Português</a></p>
 
-# crewhelm
+# bitacora
 
 > **0.6.3**: licencia **AGPL-3.0-only**; el servidor suma terminal en el navegador, consumo y cuotas.
 >
@@ -18,25 +18,25 @@ Lo que no vimos junto en ninguna otra herramienta (comprobalo, y avisanos si enc
 - 📊 **Portafolio de varios proyectos**, con costo y horas de la IA. *(costo y horas: llegan en la 0.6.3)*
 - 🏠 **Autoalojado**: tus datos y tus claves quedan en tu servidor.
 
-Cliente de terminal (ratatui) del gestor de tareas colaborativo [Rust TUI Manager](https://github.com/polblancoo/crewhelm). Necesita un servidor [`crewhelm-server`](https://crates.io/crates/crewhelm-server) en marcha.
+Cliente de terminal (ratatui) del gestor de tareas colaborativo [BitacoraAI](https://github.com/polblancoo/bitacoraai). Necesita un servidor [`bitacora-server`](https://crates.io/crates/bitacora-server) en marcha.
 
 > **Versiones 0.2 en adelante**: este crate pasó de ser un gestor local de notas y snippets a ser un cliente de red. El código anterior está en la carpeta `legacy/` del repositorio y en las versiones 0.1.x.
 
-![Tablero en la terminal](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/tui-board.png)
+![Tablero en la terminal](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/tui-board.png)
 
-![Detalle de una tarea: subtareas, etiquetas y comentarios](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/tui-detail.png)
+![Detalle de una tarea: subtareas, etiquetas y comentarios](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/tui-detail.png)
 
-> 👉 **[Guía paso a paso: tu primer proyecto](https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.md)**, con capturas.
+> 👉 **[Guía paso a paso: tu primer proyecto](https://github.com/polblancoo/bitacoraai/blob/main/docs/GUIA.md)**, con capturas.
 
 ## 🤖 Agentes de IA como integrantes del equipo
 
-Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier cliente MCP) pueden **conectarse a un equipo humano**: cada IA tiene su usuario, token y rol, crea y completa tareas, **se las asigna a personas** y recibe las que le asignes. Se suman desde la barra lateral (**🤖 IAs → «+»**), el token se muestra una vez y se rota o revoca con un clic. Una IA no puede administrar equipos, invitar ni tocar tareas ajenas. Detalles en el [README principal](https://github.com/polblancoo/crewhelm#readme); con **`tm-agent`** una IA toma sola las tareas que le asignes (ver [instructivo](https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.md)); el binario `tm-mcp` está en desarrollo.
+Los asistentes de código (Claude Code, Cursor, Windsurf, Zed o cualquier cliente MCP) pueden **conectarse a un equipo humano**: cada IA tiene su usuario, token y rol, crea y completa tareas, **se las asigna a personas** y recibe las que le asignes. Se suman desde la barra lateral (**🤖 IAs → «+»**), el token se muestra una vez y se rota o revoca con un clic. Una IA no puede administrar equipos, invitar ni tocar tareas ajenas. Detalles en el [README principal](https://github.com/polblancoo/bitacoraai#readme); con **`tm-agent`** una IA toma sola las tareas que le asignes (ver [instructivo](https://github.com/polblancoo/bitacoraai/blob/main/docs/AGENTES.md)); el binario `tm-mcp` está en desarrollo.
 
 ## Uso
 
 ```sh
-cargo install crewhelm
-crewhelm http://127.0.0.1:7878
+cargo install bitacora
+bitacora http://127.0.0.1:7878
 ```
 
 En la pantalla de acceso, `F2` alterna entre iniciar sesión y crear cuenta. La sesión se guarda en `~/.config/rust-tui-manager/client.json` (permisos `0600`) y el servidor se recuerda para la próxima vez.
@@ -85,8 +85,8 @@ En la pantalla de acceso, `F2` alterna entre iniciar sesión y crear cuenta. La 
 
 La cabecera marca los roles: `★` dueño, `⚙` admin, `👁` lector. El punto verde de la esquina indica conexión en vivo.
 
-Más información, seguridad y configuración del servidor en el [README del proyecto](https://github.com/polblancoo/crewhelm).
+Más información, seguridad y configuración del servidor en el [README del proyecto](https://github.com/polblancoo/bitacoraai).
 
 ## Licencia
 
-**AGPL-3.0-only.** Gratis para usar y autoalojar. Si ofrecés una versión modificada como servicio, tenés que publicar tus cambios con la misma licencia. Hay licencia comercial sin esa obligación: consultala en [los issues](https://github.com/polblancoo/crewhelm/issues). Las versiones publicadas hasta la 0.6.2 siguen siendo MIT.
+**AGPL-3.0-only.** Gratis para usar y autoalojar. Si ofrecés una versión modificada como servicio, tenés que publicar tus cambios con la misma licencia. Hay licencia comercial sin esa obligación: consultala en [los issues](https://github.com/polblancoo/bitacoraai/issues). Las versiones publicadas hasta la 0.6.2 siguen siendo MIT.

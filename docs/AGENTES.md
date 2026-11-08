@@ -1,4 +1,4 @@
-<p align="center"><a href="https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTS.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/crewhelm/blob/main/docs/AGENTES.pt.md">Português</a></p>
+<p align="center"><a href="https://github.com/polblancoo/bitacoraai/blob/main/docs/AGENTS.md">English</a> · <b>Español</b> · <a href="https://github.com/polblancoo/bitacoraai/blob/main/docs/AGENTES.pt.md">Português</a></p>
 
 # Instructivo: que una IA trabaje sola con `tm-agent`
 
@@ -17,13 +17,13 @@ Todo se ve en vivo en el tablero. Este instructivo es para **quien instala** y p
 
 El mismo instructivo está **dentro de la app**: *Configuración → Agentes de IA → Ver instructivo*, y al crear una IA se muestra el comando listo con su token.
 
-![Instructivo de tm-agent dentro de la app](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-10-agentes.png)
+![Instructivo de tm-agent dentro de la app](https://raw.githubusercontent.com/polblancoo/bitacoraai/main/docs/screenshots/guia-10-agentes.png)
 
 ## Lo que necesitás
 
 - El servidor andando y una cuenta de **admin o dueño** del equipo.
 - Una máquina con la **carpeta del proyecto** y con el agente que querés usar instalado y con sesión iniciada (por ejemplo `claude`).
-- Rust (`cargo`) para instalar `tm-agent`. Instaladores listos para descargar: ver el [ROADMAP](https://github.com/polblancoo/crewhelm/blob/main/ROADMAP.md).
+- Rust (`cargo`) para instalar `tm-agent`. Instaladores listos para descargar: ver el [ROADMAP](https://github.com/polblancoo/bitacoraai/blob/main/ROADMAP.md).
 
 ## Paso a paso
 
@@ -40,7 +40,7 @@ Con **⚙ Proyecto** completá **Carpeta de trabajo** (por ejemplo `/home/ana/pr
 En la máquina del proyecto:
 
 ```bash
-cargo install crewhelm-agent
+cargo install bitacora-agent
 ```
 
 ### 4. Elegir el comando del agente
@@ -110,9 +110,9 @@ En macOS se usa un `launchd` agent y en Windows el Programador de tareas, con la
 
 El comando también recibe `TM_TASK_ID`, `TM_TASK_TITLE`, `TM_PROJECT_ID`, `TM_URL` y `TM_TOKEN`, por si tu agente quiere comentar o crear subtareas por la API.
 
-**Pedir ayuda a una persona.** Dentro de una tarea la IA puede ejecutar `tm-agent ask "pregunta"`: levanta una alarma 🙋 (en la app y por Telegram) y espera la respuesta como comentario. El servidor además **crea una tarea de pedido** para una persona: quien creó la tarea, si tiene el permiso **Ejecutor**; si no, el ejecutor con menos tareas abiertas; si no hay ejecutores, un admin. El comentario dice cuál es esa tarea y que podés responder ahí mismo; los comandos del pedido salen con un botón **📋 Copiar**. Mirá el [capítulo 10 de la guía](https://github.com/polblancoo/crewhelm/blob/main/docs/GUIA.md#10-cuando-una-ia-necesita-que-hagas-algo).
+**Pedir ayuda a una persona.** Dentro de una tarea la IA puede ejecutar `tm-agent ask "pregunta"`: levanta una alarma 🙋 (en la app y por Telegram) y espera la respuesta como comentario. El servidor además **crea una tarea de pedido** para una persona: quien creó la tarea, si tiene el permiso **Ejecutor**; si no, el ejecutor con menos tareas abiertas; si no hay ejecutores, un admin. El comentario dice cuál es esa tarea y que podés responder ahí mismo; los comandos del pedido salen con un botón **📋 Copiar**. Mirá el [capítulo 10 de la guía](https://github.com/polblancoo/bitacoraai/blob/main/docs/GUIA.md#10-cuando-una-ia-necesita-que-hagas-algo).
 
-**Ejemplo listo para usar.** En [`examples/`](https://github.com/polblancoo/crewhelm/tree/main/examples) hay un `run-claude.sh` con listas de comandos permitidos y prohibidos (`whitelist.txt`, `blacklist.txt`) para usar como `TM_AGENT_CMD`.
+**Ejemplo listo para usar.** En [`examples/`](https://github.com/polblancoo/bitacoraai/tree/main/examples) hay un `run-claude.sh` con listas de comandos permitidos y prohibidos (`whitelist.txt`, `blacklist.txt`) para usar como `TM_AGENT_CMD`.
 
 ## Cómo se comporta
 
@@ -147,7 +147,7 @@ Si el código del proyecto está en la **misma máquina** que `tm-server`, no ha
 - Soporta Claude, Gemini, OpenAI/Codex y un modelo propio de la empresa (dirección que da IT). Claude usa `run-claude.sh` con sus listas (`whitelist.txt`/`blacklist.txt` en `~/.local/share/tm-server/agents/<nombre>/`) y los pedidos 🙋 por la web.
 - La clave de la IA se toma de las variables del entorno del servidor (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`) o de la sesión iniciada de `claude`; no se guarda en la base.
 - Cada arranque emite un token nuevo para la IA: el anterior deja de valer.
-- Si el servidor está en la nube y el código en las PCs del equipo, usá el instructivo de arriba (`cargo install crewhelm-agent` y el comando que muestra la app al crear la IA).
+- Si el servidor está en la nube y el código en las PCs del equipo, usá el instructivo de arriba (`cargo install bitacora-agent` y el comando que muestra la app al crear la IA).
 
 ## Comandos habituales y autorización total
 

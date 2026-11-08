@@ -26,7 +26,7 @@ pub enum Net {
     Open,
     /// sin red propia: sale por el proxy que filtra destinos
     Proxy,
-    /// sin red salvo el puente al servidor de CrewHelm
+    /// sin red salvo el puente al servidor de BitacoraAI
     None,
 }
 
@@ -232,7 +232,7 @@ pub async fn finish(work: &Work, ia: &str, task: i64, title: &str) -> Option<Out
     if !git(dir, &["status", "--porcelain"]).await.unwrap_or_default().is_empty() {
         let _ = git(dir, &["add", "-A"]).await;
         let name = format!("user.name={ia}");
-        let mail = format!("user.email={}@crewhelm.local", slug(ia));
+        let mail = format!("user.email={}@bitacora.local", slug(ia));
         let msg = format!("Tarea #{task}: {}", title.chars().take(120).collect::<String>());
         if let Err(e) = git(dir, &["-c", &name, "-c", &mail, "commit", "-q", "-m", &msg]).await {
             return Some(Outcome { branch, commits: 0, files: 0, pushed: Pushed::Failed(format!("no pude guardar los cambios: {e}")) });
@@ -417,7 +417,7 @@ pub fn person_args(p: &PersonPlan) -> Vec<String> {
     a.extend(["--setenv".into(), "HOME".into(), PERSON_HOME.into(), "--setenv".into(), "PATH".into(), PERSON_PATH.into(), "--chdir".into(), chdir]);
     // herdr abre una sesión por proyecto (la shell lo usa para arrancar siempre en la carpeta del proyecto)
     if let Some((_, name)) = p.project {
-        a.extend(["--setenv".into(), "CREWHELM_PROJECT".into(), slug(name)]);
+        a.extend(["--setenv".into(), "BITACORA_PROJECT".into(), slug(name)]);
     }
     if !p.who.is_empty() {
         a.extend(["--setenv".into(), "CW_WHO".into(), p.who.into()]);
@@ -538,7 +538,7 @@ pub fn person_tools() -> Vec<PathBuf> {
         .collect()
 }
 
-/// El shell de las personas: `zsh` si el sistema lo tiene (con la configuración por defecto de CrewHelm), si no `bash`.
+/// El shell de las personas: `zsh` si el sistema lo tiene (con la configuración por defecto de BitacoraAI), si no `bash`.
 pub fn person_shell() -> &'static str {
     if Path::new("/usr/bin/zsh").exists() { "/usr/bin/zsh" } else { "/bin/bash" }
 }
@@ -589,7 +589,7 @@ async fn handle_proxy(mut c: UnixStream, allow: Arc<Vec<String>>, blocked: Block
     let first = text.lines().next().unwrap_or("");
     let mut it = first.split_whitespace();
     let (method, target) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
-    let deny = |why: &str| format!("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nCrewHelm bloqueó esta conexión: {why}\n");
+    let deny = |why: &str| format!("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nBitacoraAI bloqueó esta conexión: {why}\n");
     if method != "CONNECT" {
         let _ = c.write_all(deny("solo se permite HTTPS").as_bytes()).await;
         return;
@@ -643,7 +643,7 @@ impl Drop for NetGuard {
     }
 }
 
-/// Levanta los sockets `p.sock` (proxy HTTPS filtrado; solo en modo `Proxy`) y `s.sock` (servidor de CrewHelm, `host:puerto`).
+/// Levanta los sockets `p.sock` (proxy HTTPS filtrado; solo en modo `Proxy`) y `s.sock` (servidor de BitacoraAI, `host:puerto`).
 pub fn start_net(task: i64, mode: Net, allow: Vec<String>, server_addr: String) -> std::io::Result<NetGuard> {
     let dir = std::env::temp_dir().join(format!("tmr-{}-{task}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -779,7 +779,7 @@ mod tests {
         std::fs::create_dir_all(&proj).unwrap();
         std::fs::write(proj.join("f.txt"), "hola").unwrap();
         let mut a = person_args(&PersonPlan { home: &home, project: Some((&proj, "Mi Proyecto")), other_space: None, tools: &[], work: None, who: "" });
-        let script = "echo P=$CREWHELM_PROJECT; ls -A /home; echo --; pwd; echo --; cat /proyectos/mi-proyecto/f.txt; touch /proyectos/mi-proyecto/x 2>&1 | head -1; touch ~/mio && echo escribe; ls /root /home/pablo 2>&1 | head -2";
+        let script = "echo P=$BITACORA_PROJECT; ls -A /home; echo --; pwd; echo --; cat /proyectos/mi-proyecto/f.txt; touch /proyectos/mi-proyecto/x 2>&1 | head -1; touch ~/mio && echo escribe; ls /root /home/pablo 2>&1 | head -2";
         a.extend(["--".into(), "/bin/bash".into(), "-c".into(), script.into()]);
         let out = std::process::Command::new("bwrap").args(a).env_clear().output().unwrap();
         let t = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
@@ -940,7 +940,7 @@ mod tests {
             eprintln!("sin bwrap: prueba omitida");
             return;
         }
-        // «servidor» de CrewHelm de mentira
+        // «servidor» de BitacoraAI de mentira
         let srv = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let srv_addr = srv.local_addr().unwrap().to_string();
         tokio::spawn(async move {
@@ -961,7 +961,7 @@ mod tests {
         // el puente es un subcomando del binario real de tm-agent
         let agent = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/tm-agent");
         if !agent.exists() {
-            eprintln!("falta target/debug/tm-agent (cargo build -p crewhelm-agent): prueba omitida");
+            eprintln!("falta target/debug/tm-agent (cargo build -p bitacora-agent): prueba omitida");
             return;
         }
         args.extend(["--ro-bind".into(), agent.to_string_lossy().to_string(), "/tmp/agent-bin".into()]);
