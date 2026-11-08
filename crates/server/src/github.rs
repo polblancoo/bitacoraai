@@ -455,6 +455,10 @@ async fn task_link(State(st): State<AppState>, user: AuthUser, Path(task): Path<
     let team = crate::routes::team_of_task(&st, task).await?;
     crate::routes::require(&st, team, user.id, tm_core::Role::Viewer).await?;
     let project: Id = sqlx::query_scalar("SELECT project_id FROM tasks WHERE id = ?").bind(task).fetch_one(&st.db).await?;
+    if crate::gitmode::internal_for(&st, project) {
+        // proyecto «todo en el servidor»: la tarea no muestra enlaces ni botones de GitHub
+        return Ok(Json(json!({ "repo": null, "project_repo": null, "internal": true })));
+    }
     let project_repo = repo_of(&st, project).await?;
     let row: Option<(String, i64, String, Option<i64>, String)> = sqlx::query_as("SELECT repo, number, url, pr_number, pr_state FROM task_github WHERE task_id = ?").bind(task).fetch_optional(&st.db).await?;
     Ok(Json(match row {

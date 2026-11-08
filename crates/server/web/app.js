@@ -2067,6 +2067,7 @@ const openTask = guard(async (task) => {
   const ghBox = h("div", { class: "row" }), diffBox = h("div", {});
   const PR_LABEL = { open: "abierto", draft: "borrador", merged: "integrado ✅", closed: "cerrado sin integrar" };
   api("GET", `/api/tasks/${task.id}/github`).then((g) => {
+    if (g.internal) return;
     if (g.repo) {
       ghBox.append(h("a", { href: g.url, target: "_blank", rel: "noopener" }, `🐙 ${g.repo}#${g.number}`),
         g.pr && h("span", { class: "pill", title: "Pull Request que menciona este issue" }, `PR #${g.pr}: ${PR_LABEL[g.pr_state] || g.pr_state}`),
@@ -2800,7 +2801,8 @@ function appView() {
           can("owner") ? h("button", { class: "ghost", onclick: () => openGitSetup(S.project), title: "Abre el asistente: traer un repo de GitHub, crear uno nuevo o dejarlo solo en la máquina" }, "🐙 Crear o conectar")
             : h("button", { class: "ghost", onclick: () => requestRepo(S.project.id), title: "Les avisa a los owners del equipo para que creen el repositorio" }, "🙋 Pedir que lo creen")),
         (S.project.repo || S.gitInternal?.has(S.project.id)) && h("button", { class: "ghost", onclick: openIntegrar, title: "Revisar y juntar el trabajo que mandó el equipo (Pull Requests)  ·  git diff / git merge" }, "🔀 Integrar"),
-        S.project.repo && (repoUrl(S.project.repo)
+        S.gitInternal?.has(S.project.id) && h("span", { class: "pill", title: "El administrador del servidor dejó el código de este proyecto solo en el servidor: no hay enlaces a GitHub" }, "🗄 Solo en el servidor"),
+        S.project.repo && !S.gitInternal?.has(S.project.id) && (repoUrl(S.project.repo)
           ? h("a", { class: "repo-link", href: repoUrl(S.project.repo), target: "_blank", rel: "noopener", title: "Abrir el repositorio en una pestaña nueva" }, "🐙 " + S.project.repo.replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/\.git$/, "") + " ↗")
           : h("span", { title: "Repositorio" }, "🔗 " + S.project.repo))),
       S.terms ? termsView() : S.portfolio ? portfolioView() : S.project ? (S.view === "calendar" ? calendarView() : S.view === "gantt" ? ganttView() : S.view === "canvas" ? canvasView() : S.view === "activity" ? activityView() : h("div", { class: "board" }, STATUS.map(column)))
