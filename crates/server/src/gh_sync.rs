@@ -451,6 +451,9 @@ struct AgentPr {
     title: String,
     #[serde(default)]
     body: String,
+    /// Tarea a la que pertenece el trabajo (opcional): el revisor ve sus archivos junto a los cambios.
+    #[serde(default)]
+    task: Option<Id>,
 }
 
 /// El agente abre un Pull Request en nombre de una persona del equipo (por ejemplo desde su terminal: `cw enviar`).
@@ -466,8 +469,13 @@ async fn agent_pr(State(st): State<AppState>, user: AuthUser, Json(b): Json<Agen
     if branch.is_empty() || branch.len() > 120 || !branch.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '/' | '.')) || branch.contains("..") {
         return Err(AppError::bad("Nombre de rama no válido"));
     }
+    // la tarea solo vale si es de este proyecto
+    let task: Option<Id> = match b.task {
+        Some(t) => sqlx::query_scalar("SELECT id FROM tasks WHERE id = ? AND project_id = ?").bind(t).bind(b.project).fetch_optional(&st.db).await?,
+        None => None,
+    };
     if crate::gitmode::internal_for(&st, b.project) {
-        return crate::reviews::create(&st, b.project, team, &b.who, &branch, &b.title, &b.body).await;
+        return crate::reviews::create(&st, b.project, team, &b.who, &branch, &b.title, &b.body, task).await;
     }
     let g = crate::github::gh_p(&st, b.project)?;
     let repo = repo_of(&st, b.project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene repositorio de GitHub"))?;
@@ -491,6 +499,9 @@ async fn agent_pr(State(st): State<AppState>, user: AuthUser, Json(b): Json<Agen
         }
     };
     let (n, url) = (pr["number"].as_i64().unwrap_or(0), pr["html_url"].as_str().unwrap_or("").to_string());
+    if let Some(t) = task {
+        let _ = sqlx::query("INSERT INTO pr_tasks (project_id, number, task_id) VALUES (?, ?, ?) ON CONFLICT(project_id, number) DO UPDATE SET task_id = excluded.task_id").bind(b.project).bind(n).bind(t).execute(&st.db).await;
+    }
     tracing::info!("github: {} pidió el Pull Request #{n} ({branch}) del proyecto {}", b.who, b.project);
     // aviso a los owners para que lo revisen (botón «🔀 Integrar» del proyecto)
     let owners: Vec<Id> = sqlx::query_scalar("SELECT m.user_id FROM team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = ? AND m.role = 'owner' AND u.is_bot = 0 AND m.user_id != ?").bind(team).bind(uid).fetch_all(&st.db).await.unwrap_or_default();

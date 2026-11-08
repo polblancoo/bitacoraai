@@ -179,7 +179,8 @@ impl Pedidos {
                 let _ = std::fs::remove_file(dir.join(format!("{id}.go")));
                 let read = |ext: &str| std::fs::read_to_string(dir.join(format!("{id}.{ext}"))).unwrap_or_default().chars().take(4000).collect::<String>();
                 let (rama, titulo, cuerpo) = (read("rama"), read("titulo"), read("cuerpo"));
-                let res = self.enviar(&dir.join(format!("{id}.out")), rama.trim(), titulo.trim(), cuerpo.trim()).await;
+                let tarea: Option<i64> = read("tarea").trim().parse().ok().filter(|t| *t > 0);
+                let res = self.enviar(&dir.join(format!("{id}.out")), rama.trim(), titulo.trim(), cuerpo.trim(), tarea).await;
                 let _ = std::fs::write(dir.join(format!("{id}.fin")), if res { "ok" } else { "error" });
             }
         }
@@ -211,7 +212,7 @@ impl Pedidos {
         Ok(())
     }
 
-    async fn enviar(&self, out: &Path, rama: &str, titulo: &str, cuerpo: &str) -> bool {
+    async fn enviar(&self, out: &Path, rama: &str, titulo: &str, cuerpo: &str, tarea: Option<i64>) -> bool {
         let say = |s: &str| {
             if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(out) {
                 let _ = writeln!(f, "{s}");
@@ -283,7 +284,7 @@ impl Pedidos {
             }
         }
         say(if internal { "Avisando a quien revisa…" } else { "3/3 Pidiendo la revisión (Pull Request)…" });
-        match self.api.call(reqwest::Method::POST, "/api/agent/pr", Some(serde_json::json!({ "project": self.pid, "who": self.who, "branch": rama, "title": titulo, "body": cuerpo }))).await {
+        match self.api.call(reqwest::Method::POST, "/api/agent/pr", Some(serde_json::json!({ "project": self.pid, "who": self.who, "branch": rama, "title": titulo, "body": cuerpo, "task": tarea }))).await {
             Ok(v) => {
                 let url = v["url"].as_str().unwrap_or("");
                 say(&if url.is_empty() { "\x1b[32m✔ Listo. Quien revisa ya puede verlo en «🔀 Integrar» del proyecto.\x1b[0m".to_string() } else { format!("\x1b[32m✔ Listo. Quien revisa ya puede verlo: {url}\x1b[0m") });
@@ -683,12 +684,12 @@ mod tests {
         let p = Pedidos { api: Arc::new(Api { http: reqwest::Client::new(), cfg }), home: home.clone(), copy: copy.clone(), project_dir: proj.clone(), pid: 1, who: "Marta".into(), prefix: "marta".into() };
         let out = d.join("out");
         // sin servidor, el Pull Request no se abre (devuelve false) pero la rama ya tiene que estar subida
-        assert!(!p.enviar(&out, "marta/tema", "t", "").await);
+        assert!(!p.enviar(&out, "marta/tema", "t", "", None).await);
         assert!(sh(&gh, &["branch", "--list", "marta/tema"]).contains("marta/tema"), "salida: {}", std::fs::read_to_string(&out).unwrap_or_default());
         assert!(sh(&proj, &["for-each-ref", "refs/crewhelm"]).is_empty());
         // una rama ajena o con trucos no se acepta
-        assert!(!p.enviar(&d.join("out2"), "otra/cosa", "t", "").await);
-        assert!(!p.enviar(&d.join("out3"), "marta/../main", "t", "").await);
+        assert!(!p.enviar(&d.join("out2"), "otra/cosa", "t", "", None).await);
+        assert!(!p.enviar(&d.join("out3"), "marta/../main", "t", "", None).await);
         assert!(sh(&gh, &["branch", "--list", "otra/cosa"]).is_empty());
         let _ = std::fs::remove_dir_all(&d);
     }

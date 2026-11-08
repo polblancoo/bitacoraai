@@ -701,6 +701,9 @@ async function openIntegrar() {
               if (!f) return;
               await api("POST", `/api/projects/${p.id}/prs/${x.number}/close`, { comment: f.comment || "" }); toast("Devuelto"); load();
             }) }, "↩ Devolver"),
+            x.task && h("button", { class: "ghost", title: "Abre la tarea con los planos, fotos y documentos que se entregaron", onclick: guard(async () => {
+              const t = await api("GET", "/api/tasks/" + x.task.id); close(); openTask(t);
+            }) }, "📁 Archivos de la tarea", ` «${x.task.title}»`, x.task.files ? ` (${x.task.files})` : ""),
             x.url && h("a", { class: "btnlike", href: x.url, target: "_blank", rel: "noopener", title: "Abrir en GitHub" }, "🐙")),
           det);
       });

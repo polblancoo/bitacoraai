@@ -62,8 +62,10 @@ async fn list(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id
     for p in open.as_array().cloned().unwrap_or_default() {
         let n = p["number"].as_i64().unwrap_or(0);
         let d = api_get(&g, &token, &format!("/repos/{repo}/pulls/{n}")).await.unwrap_or(p.clone());
+        let task_id: Option<Id> = sqlx::query_scalar("SELECT task_id FROM pr_tasks WHERE project_id = ? AND number = ?").bind(project).bind(n).fetch_optional(&st.db).await?;
+        let task = match task_id { Some(t) => crate::taskfiles::task_card(&st, project, t).await, None => None };
         out.push(json!({
-            "number": n, "title": p["title"], "url": p["html_url"], "branch": p["head"]["ref"], "base": p["base"]["ref"], "draft": p["draft"],
+            "task": task, "number": n, "title": p["title"], "url": p["html_url"], "branch": p["head"]["ref"], "base": p["base"]["ref"], "draft": p["draft"],
             "by": by(&p), "created": p["created_at"], "files": d["changed_files"], "add": d["additions"], "del": d["deletions"],
             "commits": d["commits"], "mergeable": d["mergeable"], "state": d["mergeable_state"],
         }));

@@ -14,18 +14,18 @@ async fn name_of(st: &AppState, id: Id) -> String {
 }
 
 /// Un pedido nuevo (lo manda el agente cuando alguien usa «Enviar a revisión»). Si ya había uno abierto para esa rama, se actualiza.
-pub async fn create(st: &AppState, project: Id, team: Id, who: &str, branch: &str, title: &str, body: &str) -> Result<Json<Value>> {
+pub async fn create(st: &AppState, project: Id, team: Id, who: &str, branch: &str, title: &str, body: &str, task: Option<Id>) -> Result<Json<Value>> {
     let title: String = title.trim().chars().take(200).collect();
     let title = if title.is_empty() { branch.to_string() } else { title };
     let body: String = body.trim().chars().take(7000).collect();
     let open: Option<Id> = sqlx::query_scalar("SELECT id FROM reviews WHERE project_id = ? AND branch = ? AND status = 'open'").bind(project).bind(branch).fetch_optional(&st.db).await?;
     let id = match open {
         Some(id) => {
-            sqlx::query("UPDATE reviews SET title = ?, body = ?, author = ? WHERE id = ?").bind(&title).bind(&body).bind(who).bind(id).execute(&st.db).await?;
+            sqlx::query("UPDATE reviews SET title = ?, body = ?, author = ?, task_id = COALESCE(?, task_id) WHERE id = ?").bind(&title).bind(&body).bind(who).bind(task).bind(id).execute(&st.db).await?;
             id
         }
-        None => sqlx::query("INSERT INTO reviews (project_id, branch, title, body, author, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-            .bind(project).bind(branch).bind(&title).bind(&body).bind(who).bind(Utc::now().to_rfc3339()).execute(&st.db).await?.last_insert_rowid(),
+        None => sqlx::query("INSERT INTO reviews (project_id, branch, title, body, author, created_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+            .bind(project).bind(branch).bind(&title).bind(&body).bind(who).bind(Utc::now().to_rfc3339()).bind(task).execute(&st.db).await?.last_insert_rowid(),
     };
     let author: Option<Id> = sqlx::query_scalar("SELECT id FROM users WHERE username = ?").bind(who).fetch_optional(&st.db).await?;
     if let Some(a) = author {
@@ -59,12 +59,18 @@ pub async fn list(st: &AppState, user: &AuthUser, project: Id) -> Result<Json<Va
     let team = routes::team_of_project(st, project).await?;
     routes::require(st, team, user.id, Role::Viewer).await?;
     let can_merge = routes::require(st, team, user.id, Role::Owner).await.is_ok();
-    let rows = sqlx::query("SELECT id, branch, title, body, author, created_at FROM reviews WHERE project_id = ? AND status = 'open' ORDER BY id DESC LIMIT 30").bind(project).fetch_all(&st.db).await?;
+    let rows = sqlx::query("SELECT id, branch, title, body, author, created_at, task_id FROM reviews WHERE project_id = ? AND status = 'open' ORDER BY id DESC LIMIT 30").bind(project).fetch_all(&st.db).await?;
     let branches: Vec<String> = rows.iter().map(|r| r.get::<String, _>(1)).collect();
     // el estado real de cada rama lo mira el agente; si no está conectado se muestra la lista igual
     let info = if branches.is_empty() { None } else { dispatch(st, project, team, json!({ "action": "info", "branches": branches }), 60).await.ok() };
     let base = info.as_ref().and_then(|i| i["base"].as_str()).unwrap_or("").to_string();
     let find = |b: &str| info.as_ref().and_then(|i| i["branches"].as_array()).and_then(|a| a.iter().find(|x| x["branch"] == b)).cloned();
+    let mut cards = std::collections::HashMap::new();
+    for r in &rows {
+        if let Some(t) = r.get::<Option<Id>, _>(6) {
+            cards.insert(t, crate::taskfiles::task_card(st, project, t).await);
+        }
+    }
     let prs: Vec<Value> = rows.iter().map(|r| {
         let (id, branch, title): (Id, String, String) = (r.get(0), r.get(1), r.get(2));
         let i = find(&branch);
@@ -72,7 +78,7 @@ pub async fn list(st: &AppState, user: &AuthUser, project: Id) -> Result<Json<Va
         let state = match (&i, gone) { (None, _) => "unknown", (_, true) => "gone", (Some(x), _) => if x["mergeable"] == true { "clean" } else { "dirty" } };
         json!({ "number": id, "title": title, "url": "", "branch": branch, "base": base, "draft": false, "by": r.get::<String, _>(4), "created": r.get::<String, _>(5),
                 "files": i.as_ref().map(|x| x["files"].clone()), "add": i.as_ref().map(|x| x["add"].clone()), "del": i.as_ref().map(|x| x["del"].clone()),
-                "commits": i.as_ref().map(|x| x["commits"].clone()), "mergeable": if state == "dirty" { json!(false) } else if state == "clean" { json!(true) } else { Value::Null }, "state": state })
+                "commits": i.as_ref().map(|x| x["commits"].clone()), "task": r.get::<Option<Id>, _>(6).and_then(|t| cards.get(&t).cloned().flatten()), "mergeable": if state == "dirty" { json!(false) } else if state == "clean" { json!(true) } else { Value::Null }, "state": state })
     }).collect();
     Ok(Json(json!({ "repo": "este servidor (sin GitHub)", "internal": true, "can_merge": can_merge, "prs": prs })))
 }

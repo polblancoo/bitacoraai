@@ -504,3 +504,11 @@ CREATE TABLE IF NOT EXISTS reviews (
     note TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_reviews_project ON reviews(project_id, status);
+
+-- a qué tarea pertenece un pedido de revisión (para ver los archivos entregados junto a los cambios)
+CREATE TABLE IF NOT EXISTS pr_tasks (
+    project_id INTEGER NOT NULL,
+    number INTEGER NOT NULL,
+    task_id INTEGER NOT NULL,
+    PRIMARY KEY (project_id, number)
+);

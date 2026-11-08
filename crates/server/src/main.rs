@@ -117,6 +117,7 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
     sqlx::raw_sql(include_str!("schema.sql")).execute(db).await?;
     for alter in [
         "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE reviews ADD COLUMN task_id INTEGER",
         "ALTER TABLE users ADD COLUMN avatar TEXT",
         "ALTER TABLE tasks ADD COLUMN parent_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE",
         "ALTER TABLE team_members ADD COLUMN role TEXT NOT NULL DEFAULT 'member'",

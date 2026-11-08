@@ -205,6 +205,20 @@ cmd_guardar() {
     fi
     [ -z "$m" ] && m="Cambios de $WHO"
     git add -A
+    # archivos pesados (videos, planos, imágenes grandes): git no es el lugar; van por la carpeta de red o la carpeta de la tarea
+    local lim=${CW_MAX_MB:-50} f sz pesados=""
+    while IFS= read -r -d '' f; do
+        sz=$(stat -c %s -- "$f" 2>/dev/null || echo 0)
+        [ "$sz" -gt $((lim * 1024 * 1024)) ] && pesados="$pesados  $((sz / 1048576)) MB  $f\n"
+    done < <(git diff --cached --name-only -z)
+    if [ -n "$pesados" ]; then
+        amar "Estos archivos pesan más de $lim MB:"
+        printf '%b' "$pesados"
+        dim "Los videos, planos y fotos grandes conviene subirlos a la carpeta de la tarea o a la carpeta de red de CrewHelm: ahí quedan con sus versiones y quien revisa los ve. En git quedan para siempre en el historial."
+        local r
+        read -r -p "¿Guardarlos igual en tu rama? [s/N] " r
+        case "$r" in s|S) ;; *) git reset -q; rojo "No guardé nada. Sacá esos archivos de tu copia (o subilos a la carpeta de la tarea) y volvé a probar."; return 1 ;; esac
+    fi
     if git -c user.name="$WHO" -c user.email="$WHO@crewhelm.local" commit -q -m "$m"; then
         verde "✔ Guardado: $m"
         dim "→ Cuando termines:  cw enviar"
@@ -246,12 +260,19 @@ cmd_enviar() {
     read -r -p "Título para quien lo revisa [$def]: " t
     [ -z "$t" ] && t="$def"
     read -r -p "Explicá en pocas palabras qué cambia (opcional): " d
+    # tarea a la que pertenece el trabajo: quien revisa ve sus archivos (planos, fotos, documentos) junto a los cambios
+    local tk
+    tk=$(printf '%s' "$cur" | sed -n 's/.*tarea-\([0-9][0-9]*\).*/\1/p')
+    read -r -p "¿De qué tarea es? (el número # que ves en la tarea; Enter si no es de ninguna)${tk:+ [$tk]}: " t2
+    tk=${t2:-$tk}
+    case "$tk" in ''|*[!0-9]*) tk="" ;; esac
     mkdir -p "$PED"
     local id
     id="$(date +%s)$$"
     printf '%s' "$cur" > "$PED/$id.rama"
     printf '%s' "$t" > "$PED/$id.titulo"
     printf '%s' "$d" > "$PED/$id.cuerpo"
+    [ -n "$tk" ] && printf '%s' "$tk" > "$PED/$id.tarea"
     : > "$PED/$id.go"
     echo "Enviando…"
     local seen=0 i total

@@ -285,3 +285,42 @@ async fn publish(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>)
     flow::publish_final(&st, team, id, user.id, &author).await;
     Ok(Json(flow::finish(&st, team, id, user.id, format!("✅ {who} aprobó y publicó el trabajo de {author} en `.crewhelm/_tareas/{id}/final/`.")).await?))
 }
+
+/// Cuántos archivos entregó la gente en una tarea (carpeta de cada persona + `final`), para mostrarlo junto al pedido de revisión.
+fn count_dir(dir: &std::path::Path, depth: usize, left: &mut usize) -> usize {
+    if depth > 6 || *left == 0 { return 0; }
+    let Ok(rd) = std::fs::read_dir(dir) else { return 0 };
+    let mut n = 0;
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') { continue; }
+        *left = left.saturating_sub(1);
+        let Ok(ft) = e.file_type() else { continue };
+        if ft.is_symlink() { continue; }
+        if ft.is_dir() { n += count_dir(&e.path(), depth + 1, left); } else { n += 1; }
+        if *left == 0 { break; }
+    }
+    n
+}
+
+/// `{ id, title, files }` de la tarea de un pedido de revisión (solo si es del mismo proyecto).
+pub(crate) async fn task_card(st: &AppState, project: Id, task: Id) -> Option<Value> {
+    let title: Option<String> = sqlx::query_scalar("SELECT title FROM tasks WHERE id = ? AND project_id = ?").bind(task).bind(project).fetch_optional(&st.db).await.ok().flatten();
+    let title = title?;
+    let files = match crew_dir(st, task).await.filter(|d| d.is_dir()) {
+        Some(root) => {
+            let mut left = 2000usize;
+            let mut n = 0;
+            if let Ok(rd) = std::fs::read_dir(&root) {
+                for e in rd.flatten() {
+                    let name = e.file_name().to_string_lossy().into_owned();
+                    if name.starts_with('.') || name == "_tareas" { continue; }
+                    n += count_dir(&e.path().join(task.to_string()), 0, &mut left);
+                }
+            }
+            n + count_dir(&root.join("_tareas").join(task.to_string()).join("final"), 0, &mut left)
+        }
+        None => 0,
+    };
+    Some(json!({ "id": task, "title": title, "files": files }))
+}
