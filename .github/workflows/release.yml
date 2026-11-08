@@ -141,7 +141,8 @@ jobs:
           mkdir x && tar xzf tm-linux-x86_64.tar.gz -C x
           for b in tm-server bitacora tm-agent; do tar czf "$b-linux-x86_64.tar.gz" -C x "$b"; done
           rm -rf x
-          sha256sum * > SHA256SUMS
+          # los artefactos bajan en subcarpetas: la suma se calcula por nombre de archivo, que es como se publican
+          find . -type f ! -name SHA256SUMS | while read -r f; do echo "$(sha256sum "$f" | cut -d' ' -f1)  $(basename "$f")"; done > SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
