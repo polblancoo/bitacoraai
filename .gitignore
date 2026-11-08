@@ -5,3 +5,7 @@ target/
 node_modules/
 .env
 apps/desktop/src-tauri/gen/
+
+# Material comercial privado (no publicar)
+Marketing-vtas/
+Investigacion/

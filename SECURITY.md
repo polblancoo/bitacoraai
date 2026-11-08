@@ -3,11 +3,11 @@
 ## Reportar una vulnerabilidad / Reporting a vulnerability
 
 **No abras un issue público** con detalles de una vulnerabilidad. Usá el reporte privado de GitHub
-(*Security → Report a vulnerability*) o escribí al contacto que figura en el perfil del mantenedor.
+(*Security → Report a vulnerability*) o escribí a **CrewHelmSupport@gmail.com**.
 Incluí versión, pasos para reproducirla e impacto estimado.
 
 **Please do not open a public issue** for a vulnerability. Use GitHub's private reporting
-(*Security → Report a vulnerability*) or contact the maintainer listed on their profile.
+(*Security → Report a vulnerability*) or write to **CrewHelmSupport@gmail.com**.
 Include the version, reproduction steps and estimated impact.
 
 Respondemos en **5 días hábiles** y buscamos publicar una corrección en **90 días** o menos, con crédito si lo querés.

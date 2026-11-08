@@ -2,13 +2,38 @@
 
 <p align="center"><b>English</b> · <a href="https://github.com/polblancoo/crewhelm/blob/main/README.es.md">Español</a> · <a href="https://github.com/polblancoo/crewhelm/blob/main/README.pt.md">Português</a></p>
 
-# Rust TUI Manager
+# CrewHelm
+
+> *(formerly Rust TUI Manager)*
 
 ## 🎛️ A command board for your projects
 
 Run **several projects at once from a single place**, with **people and AI agents working on the same board**. A CTO, an operations manager or an agency owner sets up the projects, assigns resources (humans and AIs of different models), delegates each one to a lead and **sees how everything is going, moment by moment**.
 
 ![Command board: projects, AIs and the team's tasks](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-01-tablero.png)
+
+## ⭐ In 30 seconds
+
+**CrewHelm is the board where your coding AIs work as part of the team, with the risk under control: per-command permissions, an isolated sandbox, a budget per project and an audit trail of everything, on your own server.**
+
+1. **Create projects** and add people and AIs (Claude, Gemini, Codex, or your own open model).
+2. **Assign a task to an AI.** `tm-agent` runs it inside the project folder, comments, and leaves it in *Done*.
+3. **You watch and decide.** The AI asks for permission or help when it needs it; you see tokens, cost and hours per project.
+
+**Our strength is control.** Many teams today have each developer running an AI with their own keys and no record. CrewHelm gives you what that lacks:
+
+| Without control | With CrewHelm |
+|---|---|
+| Each person runs an AI with their own keys | One shared AI per team; the token is revoked in one click |
+| Nobody knows what the AI ran | Allowed and forbidden commands per AI, risk approvals, exportable audit |
+| The AI can reach the whole machine | Runs in a bubblewrap sandbox with filtered network |
+| A surprise invoice at month end | Quotas and caps per task, project and team |
+| Code and keys on someone else's cloud | **Self-hosted**: one binary + SQLite |
+
+**Who it is for:** software agencies and small dev teams that run several AIs for several clients; teams with sensitive data (health, legal, finance) that cannot use a cloud service; and CTOs who need a policy and a record for the AIs their people already use.
+**Who it is not for (yet):** a personal to-do app, or someone who wants a hosted service with nothing to install.
+
+*Honest status: version 0.7, a single maintainer, tested mostly with Claude Code. Local models and the Windows terminal are not tested yet.*
 
 ### Why it is different
 
@@ -58,7 +83,7 @@ Every project knows **where its work lives** (folder and repository); per-projec
 | Web client | [`crates/server/web`](crates/server/web) | Graphical interface served by `tm-server` at `/`: board, calendar, Gantt, whiteboard, inbox |
 | Shared models | [`crewhelm-core`](crates/core) | Types and events used by everything |
 
-> Version 0.1.x of `rust-tui-manager` was a local notes and snippets manager. That code still lives in [`legacy/`](legacy/) and in the 0.1.x releases of the crate.
+> Version 0.1.x of `rust-tui-manager` (the project's old name) was a local notes and snippets manager. That code remains in the git history and in the 0.1.x releases of the crate.
 
 ![Kanban board in the desktop client](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-board.png)
 
@@ -314,7 +339,6 @@ crates/server    axum + SQLite + WebSocket server
 crates/tui       terminal client
 crates/agent     tm-agent: puts an AI to work on assigned tasks
 apps/desktop     Tauri client (static frontend in ui/)
-legacy/          previous local manager (0.1.x)
 ```
 
 ## License

@@ -6,6 +6,6 @@ default-members = ["crates/core", "crates/server", "crates/tui", "crates/agent"]
 [workspace.package]
 version = "0.7.1"
 edition = "2021"
-authors = ["Pablo Blanco <CrewHelmSupport@gmail.com>"]
+authors = ["CrewHelm <CrewHelmSupport@gmail.com>"]
 license = "AGPL-3.0-only"
 repository = "https://github.com/polblancoo/crewhelm"

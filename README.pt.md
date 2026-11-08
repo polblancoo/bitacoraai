@@ -2,13 +2,38 @@
 
 <p align="center"><a href="https://github.com/polblancoo/crewhelm/blob/main/README.md">English</a> · <a href="https://github.com/polblancoo/crewhelm/blob/main/README.es.md">Español</a> · <b>Português</b></p>
 
-# Rust TUI Manager
+# CrewHelm
+
+> *(antes Rust TUI Manager)*
 
 ## 🎛️ Painel de comando para os seus projetos
 
 Dirija **vários projetos ao mesmo tempo, a partir de um só lugar**, com **pessoas e agentes de IA trabalhando no mesmo quadro**. Um CTO, uma gerente de operações ou uma dona de agência monta os projetos, atribui recursos (humanos e IAs de diferentes modelos), delega cada um a um líder e **vê como tudo vai andando, momento a momento**.
 
 ![Painel de comando: projetos, IAs e tarefas da equipe](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/guia-01-tablero.png)
+
+## ⭐ Em 30 segundos
+
+**O CrewHelm é o quadro onde suas IAs de código trabalham como parte da equipe, com o risco sob controle: permissões por comando, sandbox isolado, orçamento por projeto e auditoria de tudo, no seu próprio servidor.**
+
+1. **Você cria projetos** e adiciona pessoas e IAs (Claude, Gemini, Codex ou um modelo aberto próprio).
+2. **Atribui uma tarefa a uma IA.** O `tm-agent` a executa dentro da pasta do projeto, comenta e deixa em *Concluído*.
+3. **Você acompanha e decide.** A IA pede permissão ou ajuda quando precisa; você vê tokens, custo e horas por projeto.
+
+**Nossa força é o controle.** Hoje muitas equipes têm cada desenvolvedor usando uma IA com suas próprias chaves e sem registro. O CrewHelm dá o que isso não tem:
+
+| Sem controle | Com o CrewHelm |
+|---|---|
+| Cada pessoa usa uma IA com suas chaves | Uma IA compartilhada por equipe; o token se revoga com um clique |
+| Ninguém sabe o que a IA executou | Comandos permitidos e proibidos por IA, aprovação por risco, auditoria exportável |
+| A IA alcança a máquina toda | Roda em um sandbox (bubblewrap) com rede filtrada |
+| Surpresa na fatura no fim do mês | Cotas e limites por tarefa, projeto e equipe |
+| Código e chaves na nuvem de outra empresa | **Auto-hospedado**: um binário + SQLite |
+
+**Para quem é:** agências e equipes de desenvolvimento pequenas que rodam várias IAs para vários clientes; equipes com dados sensíveis (saúde, jurídico, finanças) que não podem usar um serviço em nuvem; e CTOs que precisam de uma política e de um registro das IAs que a equipe já usa.
+**Para quem não é (ainda):** um app de tarefas pessoal, nem quem quer um serviço já hospedado sem instalar nada.
+
+*Estado, sem rodeios: versão 0.7, um único mantenedor, testado principalmente com o Claude Code. Modelos locais e o terminal no Windows ainda não foram testados.*
 
 ### O que o torna diferente
 
@@ -58,7 +83,7 @@ Cada projeto sabe **onde vive o seu trabalho** (pasta e repositório); o líder 
 | Cliente web | [`crates/server/web`](crates/server/web) | Interface gráfica servida pelo `tm-server` em `/`: quadro, calendário, Gantt, lousa, caixa de entrada |
 | Modelos compartilhados | [`crewhelm-core`](crates/core) | Tipos e eventos usados por todos |
 
-> A versão 0.1.x do `rust-tui-manager` era um gerenciador local de notas e snippets. Esse código continua em [`legacy/`](legacy/) e nas versões 0.1.x do crate.
+> A versão 0.1.x do `rust-tui-manager` (o nome anterior do projeto) era um gerenciador local de notas e snippets. Esse código fica no histórico do git e nas versões 0.1.x do crate.
 
 ![Quadro kanban no cliente gráfico](https://raw.githubusercontent.com/polblancoo/crewhelm/main/docs/screenshots/desktop-board.png)
 
@@ -314,7 +339,6 @@ crates/server    servidor axum + SQLite + WebSocket
 crates/tui       cliente de terminal
 crates/agent     tm-agent: põe uma IA para trabalhar nas tarefas atribuídas
 apps/desktop     cliente Tauri (frontend estático em ui/)
-legacy/          gerenciador local anterior (0.1.x)
 ```
 
 ## Licença
