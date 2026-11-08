@@ -25,6 +25,8 @@ mod crypt;
 mod github;
 mod gh_sync;
 mod gitsetup;
+mod mailcfg;
+mod setup;
 mod prs;
 mod google;
 mod teampanel;
@@ -71,11 +73,11 @@ pub struct AppState {
     pub trust_proxy: bool,
     /// El propio servidor sirve HTTPS (TM_TLS_CERT / TM_TLS_KEY).
     pub tls: bool,
-    pub mailer: Option<Arc<notify::Mailer>>,
+    pub mailer: notify::MailerSlot,
     pub email_limiter: Arc<limits::RateLimiter<Id>>,
-    pub telegram: Option<Arc<telegram::Telegram>>,
-    pub google: Option<Arc<google::Google>>,
-    pub github: Option<Arc<github::Github>>,
+    pub telegram: notify::Slot<telegram::Telegram>,
+    pub google: notify::Slot<google::Google>,
+    pub github: notify::Slot<github::Github>,
     pub cred: Arc<crypt::Cred>,
 }
 
@@ -266,13 +268,15 @@ async fn main() -> anyhow::Result<()> {
         ws_conns: Default::default(),
         trust_proxy,
         tls: std::env::var("TM_TLS_CERT").is_ok() && std::env::var("TM_TLS_KEY").is_ok(),
-        mailer: notify::Mailer::from_env().map(Arc::new),
+        mailer: notify::MailerSlot::new(notify::Mailer::from_env().map(Arc::new)),
         email_limiter: Default::default(),
-        telegram: telegram::Telegram::from_env().await.map(Arc::new),
-        google: google::Google::from_env().map(Arc::new),
-        github: github::Github::from_env().map(Arc::new),
+        telegram: notify::Slot::new(telegram::Telegram::from_env().await.map(Arc::new)),
+        google: notify::Slot::new(google::Google::from_env().map(Arc::new)),
+        github: notify::Slot::new(github::Github::from_env().map(Arc::new)),
         cred,
     };
+    mailcfg::load(&state).await;
+    setup::load(&state).await;
     telegram::spawn_poller(state.clone());
     extras::spawn_reminders(state.clone());
     google::spawn_sync(state.clone());
@@ -284,7 +288,8 @@ async fn main() -> anyhow::Result<()> {
     digest::spawn(state.clone());
 
     let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(gh_sync::router()).merge(gitsetup::router())
-        .merge(prs::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(taskfiles::router()).merge(integrations::router()).merge(chat_tr::router()).merge(sysops::router()).merge(chat::router()).merge(chat_ai::router()).merge(flow::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
+        .merge(prs::router())
+        .merge(mailcfg::router()).merge(setup::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(taskfiles::router()).merge(integrations::router()).merge(chat_tr::router()).merge(sysops::router()).merge(chat::router()).merge(chat_ai::router()).merge(flow::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

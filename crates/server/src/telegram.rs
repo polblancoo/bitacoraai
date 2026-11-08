@@ -50,12 +50,8 @@ fn clean(e: reqwest::Error) -> String {
 impl Telegram {
     pub async fn from_env() -> Option<Self> {
         let token = std::env::var("TM_TELEGRAM_TOKEN").ok().filter(|t| !t.trim().is_empty())?;
-        let api = std::env::var("TM_TELEGRAM_API").unwrap_or_else(|_| "https://api.telegram.org".into());
-        let http = reqwest::Client::builder().timeout(Duration::from_secs(40)).build().ok()?;
-        let mut t = Self { token: token.trim().into(), api: api.trim_end_matches('/').into(), bot: String::new(), http };
-        match t.call::<Me>("getMe", serde_json::json!({})).await {
-            Ok(me) => {
-                t.bot = me.username.unwrap_or_default();
+        match Self::from_token(&token).await {
+            Ok(t) => {
                 tracing::info!("Telegram habilitado (bot @{})", t.bot);
                 Some(t)
             }
@@ -64,6 +60,16 @@ impl Telegram {
                 None
             }
         }
+    }
+
+    /// Valida el token con Telegram (getMe) y arma el cliente.
+    pub async fn from_token(token: &str) -> Result<Self, String> {
+        let api = std::env::var("TM_TELEGRAM_API").unwrap_or_else(|_| "https://api.telegram.org".into());
+        let http = reqwest::Client::builder().timeout(Duration::from_secs(40)).build().map_err(|e| e.to_string())?;
+        let mut t = Self { token: token.trim().into(), api: api.trim_end_matches('/').into(), bot: String::new(), http };
+        let me = t.call::<Me>("getMe", serde_json::json!({})).await?;
+        t.bot = me.username.unwrap_or_default();
+        Ok(t)
     }
 
     async fn call<T: for<'a> Deserialize<'a>>(&self, method: &str, body: serde_json::Value) -> Result<T, String> {
@@ -98,7 +104,6 @@ pub fn code_hash(code: &str) -> String {
 
 /// Atiende los mensajes que llegan al bot: `/start <código>` vincula, `/stop` desvincula.
 pub fn spawn_poller(st: AppState) {
-    let Some(tg) = st.telegram.clone() else { return };
     // solo avisos: no pide mensajes, así se puede compartir el bot con otro programa sin que compitan por getUpdates
     if std::env::var("TM_TELEGRAM_SEND_ONLY").is_ok_and(|v| v == "1") {
         tracing::info!("Telegram en modo solo envío (TM_TELEGRAM_SEND_ONLY=1): no se vincula por /start");
@@ -107,6 +112,11 @@ pub fn spawn_poller(st: AppState) {
     tokio::spawn(async move {
         let mut offset = 0i64;
         loop {
+            // el bot puede cambiar desde el asistente de configuración: se toma el vigente en cada vuelta
+            let Some(tg) = st.telegram.get() else {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            };
             let body = serde_json::json!({ "timeout": 25, "offset": offset, "allowed_updates": ["message"] });
             match tg.call::<Vec<Update>>("getUpdates", body).await {
                 Ok(updates) => {

@@ -159,3 +159,4 @@ fi
 
 [ "$SHELLTOOLS" = 1 ] && shell_tools
 printf '\n\033[1;32m¡Listo!\033[0m Abrí  \033[1mhttp://localhost:%s\033[0m  en el navegador: la guía de inicio te lleva paso a paso.\n' "$PORT"
+[ "$SERVICE" = 1 ] && echo "   Siguiente paso para quien administra: Configuración → «🚀 Primeros pasos» (asistentes de correo, Telegram, GitHub y Google, sin editar archivos)."

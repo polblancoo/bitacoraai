@@ -305,6 +305,7 @@ async function loadInbox(auto) {
   const [inbox, me] = await Promise.all([api("GET", "/api/inbox"), api("GET", "/api/me")]).catch(() => [null, null]);
   if (!inbox) return;
   S.inbox = inbox; S.me = me; S.unread = inbox.unread;
+  if (auto && me && !me.email_available && ["cto", "admin"].includes(me.server_role) && !S.mailHint) { S.mailHint = 1; setTimeout(() => toast("Este servidor todavía no manda correos. Configuración → «🚀 Primeros pasos» lo deja andando en un minuto."), 1500); }
   if (!auto || inbox.unread > 0) openInbox();
   else render();
 }
@@ -376,6 +377,7 @@ const openProfile = guard(async () => {
     h("div", { class: "modal" },
       h("h3", {}, `Perfil de ${me.username}`),
       !me.email_available && h("small", { class: "warn" }, "Este servidor no tiene el envío de emails configurado (TM_SMTP_*): vas a ver los avisos solo en la bandeja."),
+      !me.email_available && ["cto", "admin"].includes(me.server_role) && h("small", { class: "hint" }, "Sos administrador o CTO: Configuración → «🚀 Primeros pasos» tiene el asistente para dejarlo andando."),
       h("label", {}, "Email para recibir avisos de tareas y comentarios", email),
       h("div", { class: "row" },
         me.email && h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/email"); close(); openProfile(); }) }, "Quitar"),
@@ -1337,6 +1339,155 @@ function rolesPanel() {
   };
   load().catch((e) => box.replaceChildren(h("p", { class: "warn" }, e.message)));
   return box;
+}
+
+// asistente del correo saliente del servidor (SMTP): proveedor → cuenta → probar → guardar
+const MAIL_PRESETS = {
+  gmail: ["Gmail", "smtp.gmail.com", 465, "ssl", "Hace falta la verificación en 2 pasos y una «contraseña de aplicación» (16 letras): https://myaccount.google.com/apppasswords. La clave normal de Gmail no sirve. Gmail deja enviar unos 500 correos por día."],
+  outlook: ["Outlook / Microsoft 365", "smtp.office365.com", 587, "starttls", "El usuario es tu dirección completa. En Microsoft 365 el administrador tiene que habilitar «SMTP autenticado» para esa cuenta; las cuentas personales de Outlook.com piden una contraseña de aplicación."],
+  yahoo: ["Yahoo", "smtp.mail.yahoo.com", 465, "ssl", "Usá una «contraseña de aplicación» (Cuenta → Seguridad)."],
+  brevo: ["Brevo (ex Sendinblue)", "smtp-relay.brevo.com", 587, "starttls", "Usuario: el email de tu cuenta Brevo. Clave: la «clave SMTP» (SMTP y API → SMTP), no la contraseña de la web. Plan gratis: 300 correos por día."],
+  sendgrid: ["SendGrid", "smtp.sendgrid.net", 587, "starttls", "Usuario: la palabra apikey. Clave: una API Key con permiso «Mail Send». El remitente tiene que estar verificado en SendGrid."],
+  mailgun: ["Mailgun", "smtp.mailgun.org", 587, "starttls", "Usuario: postmaster@tu-dominio. Clave: la clave SMTP del dominio."],
+  ses: ["Amazon SES", "email-smtp.us-east-1.amazonaws.com", 587, "starttls", "Cambiá us-east-1 por tu región. Usuario y clave: las credenciales SMTP de SES (no las de IAM). El remitente tiene que estar verificado."],
+  otro: ["Otro (servidor propio, Postfix, hosting…)", "", 587, "starttls", "Pedile a tu proveedor el servidor SMTP de salida, el puerto y el tipo de seguridad. 465 = SSL/TLS, 587 = STARTTLS. «Sin cifrar» solo para un servidor dentro de tu red (por ejemplo localhost:25)."],
+};
+function mailPanel() {
+  const box = h("div", { class: "cfg-item" });
+  box.dataset.key = "srvmail";
+  const load = async () => {
+    const cur = await api("GET", "/api/admin/mail");
+    let pre = Object.keys(MAIL_PRESETS).find((k) => MAIL_PRESETS[k][1] && MAIL_PRESETS[k][1] === cur.host) || (cur.host ? "otro" : "gmail");
+    const sel = h("select", {}, Object.entries(MAIL_PRESETS).map(([k, v]) => h("option", { value: k, selected: k === pre }, v[0])));
+    const host = h("input", { value: cur.host || MAIL_PRESETS[pre][1], placeholder: "smtp.ejemplo.com", maxLength: 120, style: "width:100%" });
+    const port = h("input", { type: "number", min: 1, max: 65535, value: cur.port || MAIL_PRESETS[pre][2], style: "width:90px" });
+    const sec = h("select", {}, [["ssl", "SSL/TLS (puerto 465)"], ["starttls", "STARTTLS (puerto 587)"], ["none", "Sin cifrar (solo red propia)"]].map(([k, l]) => h("option", { value: k, selected: k === (cur.sec || MAIL_PRESETS[pre][3]) }, l)));
+    const user = h("input", { value: cur.user || "", placeholder: "tucuenta@gmail.com", autocomplete: "off", maxLength: 120, style: "width:100%" });
+    const pass = h("input", { type: "password", placeholder: cur.has_pass ? "(guardada: dejala vacía para conservarla)" : "contraseña de aplicación o clave SMTP", autocomplete: "new-password", maxLength: 200, style: "width:100%" });
+    const from = h("input", { value: cur.from || "", placeholder: "CrewHelm <tucuenta@gmail.com>", maxLength: 200, style: "width:100%" });
+    const to = h("input", { type: "email", value: S.me?.email || "", placeholder: "adónde mandar la prueba", maxLength: 120, style: "width:100%" });
+    const tip = h("small", { class: "hint" }, MAIL_PRESETS[pre][4]);
+    const out = h("div", { class: "mail-out" });
+    sel.onchange = () => { const p = MAIL_PRESETS[sel.value]; if (p[1] || sel.value === "otro") host.value = p[1]; port.value = p[2]; sec.value = p[3]; tip.textContent = p[4]; };
+    sec.onchange = () => { if (sec.value === "ssl") port.value = 465; else if (sec.value === "starttls") port.value = 587; };
+    user.oninput = () => { if (!from.value || from.dataset.auto) { from.dataset.auto = "1"; from.value = /@/.test(user.value) ? `CrewHelm <${user.value.trim()}>` : ""; } };
+    from.oninput = () => delete from.dataset.auto;
+    const body = (withTo) => ({ host: host.value.trim(), port: +port.value, sec: sec.value, user: user.value.trim(), pass: pass.value, from: from.value.trim(), to: withTo ? to.value.trim() : "" });
+    const run = (path, method, withTo) => guard(async () => {
+      out.replaceChildren(h("small", { class: "hint" }, "⏳ Conectando con el servidor de correo…"));
+      let r; try { r = await api(method, path, body(withTo)); } catch (e) { r = { ok: false, msg: e.message }; }
+      out.replaceChildren(h("p", { class: r.ok ? "ok" : "warn" }, (r.ok ? "✓ " : "✗ ") + r.msg));
+      if (r.ok && method === "PUT") { S.me = await api("GET", "/api/me"); toast("Correo activo"); S.setupRefresh?.(); stat.className = "ok"; stat.textContent = "✓ El servidor puede mandar correos (cuenta guardada: " + host.value.trim() + ")."; }
+    });
+    const label = (t, c) => h("label", {}, t, c);
+    const stat = h("p", { class: cur.active ? "ok" : "warn" }, cur.active ? `✓ El servidor puede mandar correos${cur.source === "app" ? ` (cuenta guardada: ${cur.host})` : cur.source === "env" ? " (configurado por variables de entorno)" : ""}.` : "✗ El servidor todavía no manda correos: sin esto nadie puede verificar su email ni recibir avisos por correo.");
+    box.replaceChildren(
+      stat,
+      h("p", { class: "hint" }, "CrewHelm solo ENVÍA correo (códigos de verificación, avisos, informes, invitaciones). No lee ninguna casilla, así que no hace falta POP3 ni IMAP: alcanza con una cuenta que permita enviar por SMTP."),
+      label("1. Proveedor", sel), tip,
+      label("2. Servidor SMTP de salida", host),
+      h("div", { class: "row" }, label("Puerto", port), label("Seguridad", sec)),
+      label("3. Usuario (casi siempre tu email)", user),
+      label("Clave", pass),
+      label("4. Remitente (lo que ve quien recibe)", from),
+      label("5. Probar: mandar un correo de prueba a", to),
+      h("div", { class: "row" },
+        h("button", { onclick: run("/api/admin/mail/test", "POST", true), title: "Prueba la cuenta y manda un correo. No guarda nada" }, "✉ Probar"),
+        h("button", { class: "primary", onclick: run("/api/admin/mail", "PUT", false), title: "Prueba la conexión; si anda, guarda la cuenta (clave cifrada) y la activa al instante" }, "💾 Guardar y activar"),
+        cur.source === "app" && h("button", { class: "danger", onclick: guard(async () => { if (await ask("¿Borrar la cuenta de correo guardada? El servidor deja de mandar correos (salvo que haya variables TM_SMTP_* en el servicio).", "Borrar")) { await api("DELETE", "/api/admin/mail"); toast("Cuenta borrada"); load(); } }) }, "Quitar cuenta")),
+      out,
+      h("small", { class: "hint" }, "La clave se guarda cifrada en la base y nunca se vuelve a mostrar. Mirá el manual (sección 12) para más detalles por proveedor."));
+  };
+  load().catch((e) => box.replaceChildren(h("p", { class: "warn" }, e.message)));
+  return box;
+}
+
+// ---------- Primeros pasos del servidor: lista de lo que falta + asistentes (correo, Telegram, GitHub, Google) ----------
+function wizPanel(key, path, cur, steps, fields, o = {}) {
+  const box = h("div", { class: "cfg-item" });
+  box.dataset.key = key;
+  const ins = Object.fromEntries(fields.map((f) => [f.k, h("input", { type: f.type || "text", value: f.value || "", placeholder: f.ph || "", autocomplete: f.type === "password" ? "new-password" : "off", maxLength: 300, style: "width:100%" })]));
+  const out = h("div", { class: "mail-out" });
+  const stat = h("p", { class: cur.active ? "ok" : "warn" }, cur.active ? `✓ Conectado${cur.source === "env" ? " (por variables de entorno)" : cur.source === "app" ? " (guardado en la app)" : ""}${o.extra ? o.extra(cur) : ""}.` : "✗ Todavía no está conectado.");
+  const save = guard(async () => {
+    out.replaceChildren(h("small", { class: "hint" }, "⏳ Comprobando con el proveedor…"));
+    let r; try { r = await api("PUT", path, Object.fromEntries(fields.map((f) => [f.k, ins[f.k].value.trim()]))); } catch (e) { r = { ok: false, msg: e.message }; }
+    out.replaceChildren(h("p", { class: r.ok ? "ok" : "warn" }, (r.ok ? "✓ " : "✗ ") + r.msg));
+    if (r.ok) { stat.className = "ok"; stat.textContent = "✓ Conectado (guardado en la app)."; toast("Conectado"); S.me = await api("GET", "/api/me"); S.setupRefresh?.(); }
+  });
+  const rows = fields.map((f) => h("label", {}, f.label, ins[f.k]));
+  box.append(stat, h("ol", { class: "wiz-steps" }, steps.map((t) => h("li", {}, t))), ...rows,
+    h("div", { class: "row" }, h("button", { class: "primary", onclick: save, title: "Comprueba los datos con el proveedor y, si andan, los guarda cifrados y los activa al instante" }, "💾 Probar y guardar"),
+      cur.source === "app" && h("button", { class: "danger", onclick: guard(async () => { if (await ask(o.clear || "¿Quitar esta conexión? Se desconecta del servidor (salvo que haya variables de entorno).", "Quitar")) { await api("DELETE", path); toast("Quitado"); S.setupRefresh?.(); box.replaceChildren(h("small", { class: "hint" }, "Quitado. Volvé a abrir esta pantalla para ver el estado.")); } }) }, "Quitar")),
+    out);
+  return box;
+}
+const extLink = (u) => h("a", { href: u, target: "_blank", rel: "noopener" }, u);
+function telegramPanel(cur) {
+  return wizPanel("srvtg", "/api/admin/setup/telegram", cur, [
+    h("span", {}, "En Telegram buscá ", extLink("https://t.me/BotFather"), " y mandale /newbot."),
+    "Elegí un nombre (lo que se ve) y un usuario que termine en «bot».",
+    "BotFather te responde con un token largo (123456789:AAF…). Copialo y pegalo acá.",
+  ], [{ k: "token", label: "Token del bot", type: "password", ph: "123456789:AAF…" }], { extra: (c) => (c.bot ? ` — bot @${c.bot}` : ""), clear: "¿Quitar el bot? Dejan de llegar avisos por Telegram a todo el mundo (cada persona tendría que volver a vincularse con otro bot)." });
+}
+function githubPanel(cur) {
+  return wizPanel("srvgh", "/api/admin/setup/github", cur, [
+    h("span", {}, "Entrá a ", extLink("https://github.com/settings/developers"), " → OAuth Apps → New OAuth App."),
+    `Nombre: CrewHelm. Homepage URL: ${location.origin}. Authorization callback URL: la misma dirección (no se usa).`,
+    "Después de crearla, tildá «Enable Device Flow» y guardá.",
+    "Copiá el Client ID (no hace falta el secreto) y pegalo acá. Así cada persona conecta SU cuenta de GitHub, con sus propios permisos.",
+  ], [{ k: "client_id", label: "Client ID", ph: "Ov23li…", value: cur.client_id || "" }, { k: "scope", label: "Permisos que se piden (opcional)", ph: "read:user repo", value: cur.scope || "" }], { clear: "¿Quitar GitHub? Nadie puede conectar su cuenta hasta volver a configurarlo." });
+}
+function googlePanel(cur) {
+  const red = cur.redirect || location.origin + "/api/google/callback";
+  const warn = /^https:|localhost|127\.0\.0\.1/.test(location.origin) ? null : h("p", { class: "warn" }, "Esta pantalla se abrió por HTTP: Google solo acepta direcciones HTTPS (o localhost). Primero poné HTTPS al servidor (Configuración → dirección con certificado) y volvé.");
+  const p = wizPanel("srvgg", "/api/admin/setup/google", cur, [
+    h("span", {}, "Entrá a ", extLink("https://console.cloud.google.com/apis/credentials"), ", elegí o creá un proyecto y habilitá «Google Calendar API»."),
+    "Credenciales → Crear credenciales → ID de cliente de OAuth → tipo «Aplicación web».",
+    `En «URI de redirección autorizados» poné exactamente: ${red}`,
+    "Copiá el ID de cliente y el secreto y pegalos acá.",
+  ], [{ k: "client_id", label: "ID de cliente", ph: "1234-abc.apps.googleusercontent.com", value: cur.client_id || "" },
+    { k: "secret", label: cur.has_secret ? "Secreto (guardado: dejalo vacío para conservarlo)" : "Secreto del cliente", type: "password", ph: "GOCSPX-…" },
+    { k: "redirect", label: "Dirección de redirección", value: red }], { clear: "¿Quitar Google Calendar? Se corta la sincronización de todas las personas." });
+  if (warn) p.prepend(warn);
+  return p;
+}
+function setupPanel() {
+  const box = h("div", { class: "cfg-item" });
+  box.dataset.key = "srvstart";
+  const wiz = h("div", { class: "wiz-list" });
+  const open = (id) => { const d = document.getElementById("wiz-" + id); if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); } };
+  const draw = async () => {
+    const [st, mail] = await Promise.all([api("GET", "/api/admin/setup"), api("GET", "/api/admin/mail")]);
+    const items = [
+      ["srvmail", "✉ Correo", st.mail, "Sin esto nadie verifica su email ni recibe avisos por correo.", true],
+      ["srvtg", "✈ Telegram", st.telegram, "Avisos al celular y comandos /tareas y /hecho.", false],
+      ["srvgh", "🐙 GitHub", st.github, "Cada persona conecta su cuenta para repositorios, issues y Pull Requests.", false],
+      ["srvgg", "📅 Google Calendar", st.google, "Las tareas con fecha aparecen en el calendario de cada persona.", false],
+    ];
+    const done = items.filter((i) => i[2].active).length;
+    wiz.replaceChildren(
+      h("p", { class: "hint" }, `Lo que le da vida al servidor. Solo el correo es casi imprescindible; lo demás es opcional. Hecho: ${done} de ${items.length}.`),
+      ...items.map(([k, label, it, why, must]) => h("div", { class: "cfg-line" },
+        h("span", { class: it.active ? "ok" : must ? "warn" : "hint" }, it.active ? "✓" : must ? "✗" : "○"),
+        h("span", { class: "grow", title: why }, h("b", {}, label), " ", h("small", { class: "hint" }, it.active ? (it.source === "env" ? "activo (variables de entorno)" : "activo") : why)),
+        h("button", { onclick: () => open(k) }, it.active ? "Ver / cambiar" : "Configurar"))),
+      h("div", { class: "cfg-line" }, h("span", { class: st.https ? "ok" : "hint" }, st.https ? "✓" : "○"), h("span", { class: "grow" }, h("b", {}, "🔒 HTTPS"), " ", h("small", { class: "hint" }, st.https ? "activo" : "Opcional en red local; necesario para Google y para usar el servidor por internet. Se configura al instalar el servidor (manual, sección 12 y siguientes).")), ""));
+    return { st, mail };
+  };
+  S.setupRefresh = () => draw().catch(() => {});
+  box.append(wiz);
+  draw().catch((e) => wiz.replaceChildren(h("p", { class: "warn" }, e.message)));
+  return box;
+}
+function setupWizards() {
+  const wrap = h("div", { class: "cfg-item" });
+  wrap.dataset.key = "srvwiz";
+  api("GET", "/api/admin/setup").then((st) => {
+    const d = (id, title, panel) => h("details", { id: "wiz-" + id, class: "wiz-d" }, h("summary", {}, title), panel);
+    wrap.append(d("srvmail", "✉ Correo del servidor", mailPanel()), d("srvtg", "✈ Telegram", telegramPanel(st.telegram)), d("srvgh", "🐙 GitHub", githubPanel(st.github)), d("srvgg", "📅 Google Calendar", googlePanel(st.google)));
+  }).catch((e) => wrap.append(h("p", { class: "warn" }, e.message)));
+  return wrap;
 }
 
 // límites de las terminales de las personas (los aplica el agente de cada máquina)
@@ -3118,6 +3269,7 @@ const openSettings = guard(async () => {
           }) }, "Guardar servidor y reiniciar sesión"))),
       can("admin") && S.team && sec("Integraciones", line(["Videollamada y otras herramientas del equipo", "integrations"], h("button", { onclick: go(integAdmin) }, "Administrar"))),
       ["cto", "admin"].includes(S.me?.server_role) && sec("Procesos", procPanel()),
+      ["cto", "admin"].includes(S.me?.server_role) && sec("Primeros pasos del servidor", setupPanel(), setupWizards()),
       ["cto", "admin"].includes(S.me?.server_role) && sec("Roles y límites del servidor", S.me?.server_role === "admin" && rolesPanel(), limitsPanel()),
       sec("Ayuda", line(["Manual con buscador e índice por temas", "manual"], h("button", { onclick: go(() => openManual()) }, "Abrir el manual")),
         line(["Atajos de teclado (también con ?)", "shortcuts"], h("button", { onclick: go(helpModal) }, "Ver atajos")),
@@ -3131,6 +3283,7 @@ const openSettings = guard(async () => {
     ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["integraciones", "🔌 Integraciones", ["integrations"]],
     ["procesos", "🖥 Procesos", ["procesos"]],
+    ["srvstart", "🚀 Primeros pasos", ["srvstart", "srvwiz", "srvmail", "srvtg", "srvgh", "srvgg"]],
     ["srvroles", "🛡 Roles y límites", ["srvroles", "srvlimits"]],
     ["licencia", "🏢 Licencia", ["license"]],
     ["prefs", "⚙ Preferencias y ayuda", ["lang", "view", "bars", "herdr", "server", "manual", "shortcuts", "guide"]],

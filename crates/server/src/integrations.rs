@@ -87,7 +87,7 @@ struct EmailIn {
 async fn invite_email(State(st): State<AppState>, user: AuthUser, headers: HeaderMap, Path((team, code)): Path<(Id, String)>, Json(b): Json<EmailIn>) -> Result<Json<Value>> {
     user.human_only()?;
     routes::require(&st, team, user.id, Role::Member).await?;
-    let mailer = st.mailer.clone().ok_or_else(|| AppError::bad("este servidor no tiene el correo configurado: copiá el enlace y mandalo vos"))?;
+    let mailer = st.mailer.get().ok_or_else(|| AppError::bad("este servidor no tiene el correo configurado: copiá el enlace y mandalo vos"))?;
     let to = b.to.trim().to_string();
     if to.len() > 120 || !to.contains('@') || to.chars().any(|c| c.is_whitespace() || c.is_control() || c == ',' || c == ';') {
         return Err(AppError::bad("escribí un solo email válido"));

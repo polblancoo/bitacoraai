@@ -159,7 +159,7 @@ pub async fn flush(st: &AppState, user: Id) {
     };
     let (tg_items, mail_items) = (pick(1), pick(2));
     if !tg_items.is_empty() {
-        if let Some(tg) = st.telegram.clone() {
+        if let Some(tg) = st.telegram.get() {
             let chat: Option<i64> = sqlx::query_scalar::<_, Option<i64>>("SELECT telegram_chat_id FROM users WHERE id = ?").bind(user).fetch_optional(&st.db).await.ok().flatten().flatten();
             if let Some(chat) = chat {
                 let msg = body(&tg_items);
@@ -170,7 +170,7 @@ pub async fn flush(st: &AppState, user: Id) {
         }
     }
     if !mail_items.is_empty() {
-        if let Some(mailer) = st.mailer.clone() {
+        if let Some(mailer) = st.mailer.get() {
             let to: Option<String> = sqlx::query_scalar("SELECT email FROM users WHERE id = ? AND email_verified = 1 AND email IS NOT NULL").bind(user).fetch_optional(&st.db).await.ok().flatten();
             if let Some(to) = to {
                 let subject = format!("{} novedades", mail_items.len());

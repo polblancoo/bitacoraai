@@ -47,6 +47,31 @@ impl Github {
         })
     }
 
+    pub fn from_parts(client_id: &str, scope: &str) -> Option<Self> {
+        let var = |k: &str| std::env::var(k).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+        Some(Self {
+            client_id: client_id.trim().into(),
+            scope: if scope.trim().is_empty() { "read:user repo".into() } else { scope.trim().into() },
+            base: var("TM_GITHUB_BASE").unwrap_or_else(|| "https://github.com".into()).trim_end_matches('/').into(),
+            api: var("TM_GITHUB_API").unwrap_or_else(|| "https://api.github.com".into()).trim_end_matches('/').into(),
+            http: reqwest::Client::builder().timeout(Duration::from_secs(20)).user_agent("rust-tui-manager").build().ok()?,
+        })
+    }
+
+    /// Pide un código de dispositivo: sirve para comprobar que el Client ID existe y tiene el «Device Flow» habilitado.
+    pub async fn check(&self) -> std::result::Result<(), String> {
+        let v = self.post_form("/login/device/code", &[("client_id", &self.client_id), ("scope", &self.scope)]).await.map_err(|e| format!("no pude hablar con GitHub: {e}"))?;
+        if v["device_code"].as_str().is_some() {
+            return Ok(());
+        }
+        Err(match v["error"].as_str().unwrap_or("") {
+            "device_flow_disabled" => "en la OAuth App de GitHub hay que tildar «Enable Device Flow» (Settings → Developer settings → OAuth Apps → tu app) y guardar".into(),
+            "incorrect_client_credentials" | "not_found" => "GitHub no reconoce ese Client ID: copialo de nuevo desde tu OAuth App".into(),
+            e if !e.is_empty() => format!("GitHub rechazó el pedido ({e})"),
+            _ => "respuesta inesperada de GitHub".into(),
+        })
+    }
+
     async fn post_form(&self, path: &str, form: &[(&str, &str)]) -> std::result::Result<Value, String> {
         let r = self.http.post(format!("{}{path}", self.base)).header("Accept", "application/json").form(form).send().await.map_err(|e| e.without_url().to_string())?;
         r.json().await.map_err(|e| e.without_url().to_string())
@@ -67,7 +92,7 @@ pub fn router() -> Router<AppState> {
 }
 
 pub(crate) fn gh(st: &AppState) -> Result<std::sync::Arc<Github>> {
-    st.github.clone().ok_or_else(|| AppError::bad("GitHub no está configurado en este servidor"))
+    st.github.get().ok_or_else(|| AppError::bad("GitHub no está configurado en este servidor"))
 }
 
 async fn login_of(st: &AppState, user: Id) -> Result<Option<String>> {

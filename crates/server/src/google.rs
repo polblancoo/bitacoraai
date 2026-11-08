@@ -67,6 +67,30 @@ impl Google {
         })
     }
 
+    pub fn from_parts(client_id: &str, secret: &str, redirect: &str) -> Option<Self> {
+        let var = |k: &str| std::env::var(k).ok().filter(|v| !v.trim().is_empty());
+        Some(Self {
+            client_id: client_id.trim().into(),
+            secret: secret.trim().into(),
+            redirect: redirect.trim().into(),
+            auth_url: var("TM_GOOGLE_AUTH_URL").unwrap_or_else(|| "https://accounts.google.com/o/oauth2/v2/auth".into()),
+            token_url: var("TM_GOOGLE_TOKEN_URL").unwrap_or_else(|| "https://oauth2.googleapis.com/token".into()),
+            api: var("TM_GOOGLE_API").unwrap_or_else(|| "https://www.googleapis.com/calendar/v3".into()),
+            http: reqwest::Client::builder().timeout(Duration::from_secs(20)).build().ok()?,
+            lock: Default::default(),
+        })
+    }
+
+    /// Canjea un código inventado: «invalid_grant» significa que Google aceptó el ID y el secreto; «invalid_client», que no.
+    pub async fn check(&self) -> std::result::Result<(), String> {
+        match self.token(&[("grant_type", "authorization_code"), ("code", "crewhelm-prueba"), ("redirect_uri", &self.redirect)]).await {
+            Ok(_) => Ok(()),
+            Err(e) if e == "invalid_grant" || e == "redirect_uri_mismatch" => Ok(()),
+            Err(e) if e == "invalid_client" => Err("Google no acepta ese ID de cliente o su secreto: copiá ambos de nuevo desde la consola de Google".into()),
+            Err(e) => Err(format!("Google respondió: {e}")),
+        }
+    }
+
     fn auth_link(&self, state: &str) -> Result<String> {
         reqwest::Url::parse_with_params(
             &self.auth_url,
@@ -109,7 +133,7 @@ pub fn router() -> Router<AppState> {
 }
 
 fn google(st: &AppState) -> Result<std::sync::Arc<Google>> {
-    st.google.clone().ok_or_else(|| AppError::bad("Google Calendar no está configurado en este servidor"))
+    st.google.get().ok_or_else(|| AppError::bad("Google Calendar no está configurado en este servidor"))
 }
 
 async fn is_linked(st: &AppState, user: Id) -> Result<bool> {
@@ -143,7 +167,7 @@ fn page(ok: bool, msg: &str) -> Response {
 
 /// Google redirige acá (sin cabecera de sesión): el `state` firmado identifica al usuario.
 async fn callback(State(st): State<AppState>, Query(p): Query<CallbackParams>) -> Response {
-    let Some(g) = st.google.clone() else { return page(false, "Google Calendar no está configurado") };
+    let Some(g) = st.google.get() else { return page(false, "Google Calendar no está configurado") };
     if let Some(e) = p.error {
         return page(false, &format!("Google respondió: {}", e.chars().take(60).filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == ' ').collect::<String>()));
     }
@@ -240,7 +264,7 @@ fn gone(status: reqwest::StatusCode) -> bool {
 
 /// Deja el calendario del usuario igual a sus tareas. Devuelve (creados, actualizados, borrados).
 pub async fn sync_user(st: &AppState, user: Id) -> std::result::Result<(usize, usize, usize), String> {
-    let g = st.google.clone().ok_or("Google no configurado")?;
+    let g = st.google.get().ok_or("Google no configurado")?;
     let _guard = g.lock.lock().await;
     let db_err = |e: sqlx::Error| e.to_string();
     let Some(refresh): Option<String> = sqlx::query_scalar::<_, String>("SELECT refresh_token FROM google_links WHERE user_id = ?").bind(user).fetch_optional(&st.db).await.map_err(db_err)?.and_then(|s| st.cred.open(&s)) else {
@@ -319,7 +343,7 @@ pub async fn sync_user(st: &AppState, user: Id) -> std::result::Result<(usize, u
 
 /// Borra del calendario todos los eventos creados para este usuario.
 async fn purge(st: &AppState, user: Id) -> std::result::Result<(), String> {
-    let g = st.google.clone().ok_or("Google no configurado")?;
+    let g = st.google.get().ok_or("Google no configurado")?;
     let _guard = g.lock.lock().await;
     let refresh: Option<String> = sqlx::query_scalar::<_, String>("SELECT refresh_token FROM google_links WHERE user_id = ?").bind(user).fetch_optional(&st.db).await.map_err(|e| e.to_string())?.and_then(|s| st.cred.open(&s));
     let Some(refresh) = refresh else { return Ok(()) };

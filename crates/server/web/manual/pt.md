@@ -185,6 +185,12 @@ Uma IA pode esbarrar em algo que não faz sozinha: um comando bloqueado, uma per
 
 Para o app enviar **emails** (códigos de verificação, atribuições, menções, lembretes) o **servidor** precisa de uma conta de email de saída. Quem administra o servidor configura uma só vez; os usuários só verificam o email em *Configurações → Meu email*.
 
+**O jeito mais fácil: o assistente.** Entre como CTO ou administrador em *Configurações → 🚀 Primeiros passos → ✉ E-mail*: escolha o provedor (Gmail, Outlook, Yahoo, Brevo, SendGrid, Mailgun, Amazon SES ou outro), digite usuário e senha, toque em **✉ Testar** (envia um e-mail de teste ao seu endereço) e depois **💾 Salvar e ativar**. Sem editar arquivos nem reiniciar: a senha é guardada criptografada e o servidor a usa na hora. Se algo falhar, o assistente explica o motivo (senha recusada, porta bloqueada, segurança errada…).
+
+> O CrewHelm só **envia** e-mail. Não lê nenhuma caixa, então **POP3 ou IMAP não são necessários**: basta uma conta que envie por SMTP.
+
+**Alternativa por arquivo** (servidores sem tela ou instalações por script). O que for salvo no assistente substitui estas variáveis.
+
 **Qual arquivo editar?** Se você usa o serviço do systemd (`tm-server.service`), crie **`~/.config/tm-server/mail.env`** (permissões `600`, nunca dentro do repositório) com estas quatro variáveis:
 
 ```
@@ -523,3 +529,15 @@ Quando a IA pergunta, o servidor também **cria uma tarefa de pedido** para uma 
 - Funciona com o script `run-claude.sh` (Claude Code). Se você usa **sua própria cópia** do script, adicione esta linha antes de `exec claude`: `[ "$TM_ALLOW_ALL" = "1" ] && ALLOW="Bash$(printf '\t')$ALLOW"`. O `tm-agent` passa `TM_ALLOW_ALL=1` quando a IA tem autorização total.
 - **Arquivos do agente (`whitelist.txt` / `blacklist.txt`).** Valem além das listas do app e não podem ser apagados por ele. A ficha da IA mostra um quadro **📄 Os arquivos do agente também valem** com o conteúdo; **Passar para o app** copia para as listas da IA (🚫 e ✅, onde dá para editar) e o agente deixa de ler os arquivos (`TM_LISTS_FROM_APP=1`). **Voltar a usar os arquivos** desfaz. Se você usa sua própria cópia do `run-claude.sh`, pegue a versão nova em `crates/server/assets/agents/run-claude.sh`.
 - **Autorizar sem rodeios.** Em um pedido 🙋 há **um botão principal**: **✅ Autorizar e deixar a IA seguir**. Autoriza para sempre tudo o que a IA pediu (comandos **e ferramentas** como `WebSearch`, `WebFetch` ou as de MCP), avisa a IA e a tarefa volta a rodar sozinha. Para uma IA não perguntar mais: **🔓 perfil confiável** (autorização total com uma lista curta de proibidos: `sudo`, `git push`, `git commit`, `rm -rf`, `git reset --hard`, `git clean`, `systemctl`, `dd`, `mkfs`, `cargo/npm publish`). Também na ficha da IA (**⚡ Perfil confiável**). Atenção: `mcp__servidor__*` permite todas as ferramentas de um servidor MCP; não existe permissão global para todos os servidores.
+
+## 26. Primeiros passos do servidor
+
+Em *Configurações → 🚀 Primeiros passos* (CTO e administrador) há uma lista do que falta ao servidor e um assistente para cada peça. Todos testam os dados com o provedor antes de salvar, guardam os segredos criptografados e valem na hora, sem editar arquivos nem reiniciar.
+
+- **✉ E-mail** (quase imprescindível): sem ele ninguém verifica o e-mail nem recebe avisos por e-mail. Veja a seção 12.
+- **✈ Telegram**: crie um bot com o @BotFather (`/newbot`), copie o token e cole. Depois cada pessoa se vincula em *Configurações → Telegram*.
+- **🐙 GitHub**: crie um *OAuth App* em github.com → Settings → Developer settings, marque *Enable Device Flow* e cole o *Client ID*. Assim cada pessoa conecta a própria conta.
+- **📅 Google Calendar**: habilite a *Google Calendar API* no console do Google, crie um *ID do cliente OAuth* (aplicativo da Web) com o endereço de redirecionamento que o assistente mostra e cole o ID e o segredo. O Google exige HTTPS (ou localhost).
+- **🔒 HTTPS**: escolhido ao instalar o servidor; a lista só mostra se está ativo.
+
+O que for salvo no assistente substitui as variáveis de ambiente (`TM_TELEGRAM_TOKEN`, `TM_GITHUB_CLIENT_ID`, `TM_GOOGLE_*`, `TM_SMTP_*`); *Remover* volta ao que houver no ambiente.

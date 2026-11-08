@@ -15,7 +15,76 @@ pub struct Mailer {
     from: Mailbox,
 }
 
+/// Ranura cambiable en caliente (correo, Telegram, GitHub, Google): los asistentes de configuración la reemplazan sin reiniciar.
+pub struct Slot<T>(std::sync::Arc<std::sync::RwLock<Option<std::sync::Arc<T>>>>);
+pub type MailerSlot = Slot<Mailer>;
+
+impl<T> Clone for Slot<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+impl<T> Default for Slot<T> {
+    fn default() -> Self {
+        Self::new(None)
+    }
+}
+impl<T> Slot<T> {
+    pub fn new(m: Option<std::sync::Arc<T>>) -> Self {
+        Self(std::sync::Arc::new(std::sync::RwLock::new(m)))
+    }
+    pub fn get(&self) -> Option<std::sync::Arc<T>> {
+        self.0.read().ok().and_then(|g| g.clone())
+    }
+    pub fn is_some(&self) -> bool {
+        self.get().is_some()
+    }
+    pub fn is_none(&self) -> bool {
+        self.get().is_none()
+    }
+    pub fn set(&self, m: Option<std::sync::Arc<T>>) {
+        if let Ok(mut g) = self.0.write() {
+            *g = m;
+        }
+    }
+}
+
 impl Mailer {
+    /// Arma el cliente con datos sueltos (lo que carga el asistente). `sec`: `ssl` (465), `starttls` (587) o `none` (sin cifrar, solo red propia).
+    pub fn from_parts(host: &str, port: u16, sec: &str, user: &str, pass: &str, from: &str) -> Result<Self, String> {
+        use lettre::transport::smtp::client::{Tls, TlsParameters};
+        let from: Mailbox = from.parse().map_err(|_| "el remitente no es válido: escribí un email (o «Nombre <email>»)".to_string())?;
+        let host = host.trim();
+        if host.is_empty() || host.contains(|c: char| c.is_whitespace() || c == '/' || c == '@') {
+            return Err("el servidor SMTP no es válido: va solo el nombre, por ejemplo smtp.gmail.com".into());
+        }
+        if sec == "none" && !user.is_empty() {
+            return Err("con «Sin cifrar» no se puede usar usuario y clave (viajarían en claro): elegí SSL/TLS o STARTTLS, o dejá el usuario vacío si es un servidor de tu red que no pide login".into());
+        }
+        let tls = || TlsParameters::new(host.to_string()).map_err(|e| format!("TLS: {e}"));
+        let mut b = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host).port(port);
+        b = match sec {
+            "ssl" => b.tls(Tls::Wrapper(tls()?)),
+            "starttls" => b.tls(Tls::Required(tls()?)),
+            "none" => b.tls(Tls::None),
+            _ => return Err("tipo de seguridad no válido".into()),
+        };
+        if !user.is_empty() {
+            b = b.credentials(Credentials::new(user.to_string(), pass.to_string()));
+        }
+        b = b.timeout(Some(Duration::from_secs(20)));
+        Ok(Self { transport: b.build(), from })
+    }
+
+    /// Comprueba que el servidor responde y acepta el usuario y la clave (sin mandar ningún correo).
+    pub async fn check(&self) -> Result<(), String> {
+        match self.transport.test_connection().await {
+            Ok(true) => Ok(()),
+            Ok(false) => Err("el servidor no respondió como SMTP".into()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
     /// `TM_SMTP_URL`: `smtps://usuario:clave@host:465`, `smtp://host:587?tls=required` o `smtp://localhost:2525`.
     pub fn from_env() -> Option<Self> {
         let url = std::env::var("TM_SMTP_URL").ok()?;
@@ -201,7 +270,7 @@ pub async fn notify_via(st: &AppState, user: Id, kind: &str, team: Option<Id>, t
     if deferred || silent {
         return;
     }
-    if let Some(tg) = st.telegram.clone().filter(|_| via_tg) {
+    if let Some(tg) = st.telegram.get().filter(|_| via_tg) {
         let chat: Option<i64> = sqlx::query_scalar::<_, Option<i64>>("SELECT telegram_chat_id FROM users WHERE id = ?")
             .bind(user)
             .fetch_optional(&st.db)
@@ -221,7 +290,7 @@ pub async fn notify_via(st: &AppState, user: Id, kind: &str, team: Option<Id>, t
         }
     }
 
-    let Some(mailer) = st.mailer.clone().filter(|_| via_mail) else { return };
+    let Some(mailer) = st.mailer.get().filter(|_| via_mail) else { return };
     let Ok(Some(row)) = sqlx::query("SELECT email FROM users WHERE id = ? AND email_verified = 1 AND email IS NOT NULL")
         .bind(user)
         .fetch_optional(&st.db)

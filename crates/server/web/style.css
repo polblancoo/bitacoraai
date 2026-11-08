@@ -1104,3 +1104,7 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 .diff { margin: 4px 0; } .diff summary { cursor: pointer; font-family: monospace; font-size: 12px; }
 .patch { max-height: 320px; overflow: auto; font-size: 11px; line-height: 1.35; background: var(--bg2, #1118); padding: 6px; border-radius: 6px; margin: 4px 0; }
 .patch .add, .add { color: #3fb950; } .patch .del, .del { color: #f85149; } .patch .hunk { color: #8b949e; }
+
+.ok{color:var(--green,#3fb950)}
+.mail-out{margin-top:6px;min-height:1.2em}
+.wiz-d{border:1px solid var(--border,#2a2e44);border-radius:8px;margin:8px 0;padding:4px 10px}.wiz-d>summary{cursor:pointer;font-weight:600;padding:6px 0}.wiz-steps{margin:6px 0 10px 18px;padding:0;font-size:.92em;line-height:1.5}.wiz-steps li{margin:3px 0}.wiz-list .cfg-line{align-items:center}

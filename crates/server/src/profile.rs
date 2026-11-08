@@ -45,7 +45,7 @@ async fn me(State(st): State<AppState>, user: AuthUser) -> Result<Json<Me>> {
         email_available: st.mailer.is_some(),
         telegram_linked: r.get::<Option<i64>, _>("telegram_chat_id").is_some(),
         telegram_available: st.telegram.is_some(),
-        telegram_bot: st.telegram.as_ref().map(|t| t.bot.clone()),
+        telegram_bot: st.telegram.get().map(|t| t.bot.clone()),
         server_role: r.get("server_role"),
     }))
 }
@@ -84,7 +84,7 @@ async fn avatars(State(st): State<AppState>, user: AuthUser) -> Result<Json<std:
 /// Solo los emails verificados reciben novedades: así nadie puede usar el servidor para
 /// escribirle a un tercero.
 async fn set_email(State(st): State<AppState>, user: AuthUser, Json(b): Json<SetEmail>) -> Result<StatusCode> {
-    let Some(mailer) = st.mailer.clone() else {
+    let Some(mailer) = st.mailer.get() else {
         return Err(AppError(StatusCode::SERVICE_UNAVAILABLE, "el servidor no tiene el envío de emails configurado".into()));
     };
     let email = b.email.trim().to_lowercase();
@@ -230,7 +230,7 @@ async fn delete_notification(State(st): State<AppState>, user: AuthUser, axum::e
 
 /// Genera un código de un solo uso (15 min) para vincular Telegram: el usuario se lo manda al bot.
 async fn telegram_link(State(st): State<AppState>, user: AuthUser) -> Result<Json<TelegramLink>> {
-    let Some(tg) = st.telegram.clone() else {
+    let Some(tg) = st.telegram.get() else {
         return Err(AppError(StatusCode::SERVICE_UNAVAILABLE, "el servidor no tiene Telegram configurado".into()));
     };
     st.user_limiter.hit(&format!("tg-code:{}", user.id), 5, Duration::from_secs(3600))?;

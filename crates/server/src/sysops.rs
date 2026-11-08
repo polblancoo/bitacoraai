@@ -25,7 +25,7 @@ pub async fn server_role(st: &AppState, user: &AuthUser) -> String {
     sqlx::query_scalar::<_, String>("SELECT server_role FROM users WHERE id = ?").bind(user.id).fetch_optional(&st.db).await.ok().flatten().unwrap_or_else(|| "user".into())
 }
 
-async fn need(st: &AppState, user: &AuthUser, admin_only: bool) -> Result<()> {
+pub(crate) async fn need(st: &AppState, user: &AuthUser, admin_only: bool) -> Result<()> {
     user.human_only()?;
     let r = server_role(st, user).await;
     if r == "admin" || (!admin_only && r == "cto") { Ok(()) } else { Err(AppError::forbidden()) }

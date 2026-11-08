@@ -185,6 +185,12 @@ An AI may hit something it cannot do alone: a blocked command, a permission, a d
 
 For the app to send **emails** (verification codes, assignments, mentions, reminders) the **server** needs an outgoing mail account. Whoever runs the server sets it up once; users just verify their email from *Settings → My email*.
 
+**Easiest way: the wizard.** Sign in as CTO or administrator and open *Settings → 🚀 First steps → ✉ Email*: pick your provider (Gmail, Outlook, Yahoo, Brevo, SendGrid, Mailgun, Amazon SES or other), enter user and password, press **✉ Test** (sends a test message to your address) and then **💾 Save and activate**. No files to edit and no restart: the password is stored encrypted and the server uses it immediately. If something fails the wizard says why (rejected password, blocked port, wrong security type…).
+
+> CrewHelm only **sends** email. It does not read any mailbox, so **POP3 or IMAP are not needed**: any account that can send through SMTP is enough.
+
+**File-based alternative** (headless servers or scripted installs). What you save in the wizard overrides these variables.
+
 **Which file do I edit?** If you use the systemd service (`tm-server.service`), create **`~/.config/tm-server/mail.env`** (permissions `600`, never inside the repository) with these four variables:
 
 ```
@@ -523,3 +529,15 @@ When the AI asks, the server also **creates a request task** for a person (the t
 - Works with the `run-claude.sh` script (Claude Code). If you use **your own copy** of the script, add this line before `exec claude`: `[ "$TM_ALLOW_ALL" = "1" ] && ALLOW="Bash$(printf '\t')$ALLOW"`. `tm-agent` passes `TM_ALLOW_ALL=1` when the AI has full authorization.
 - **Agent files (`whitelist.txt` / `blacklist.txt`).** They apply in addition to the app's lists and cannot be deleted from the app. The AI's profile shows a box **📄 The agent's files also apply** listing them; **Move to the app** copies them into the AI's lists (🚫 and ✅, where they can be edited) and the agent stops reading the files (`TM_LISTS_FROM_APP=1`). **Use the files again** undoes it. If you use your own copy of `run-claude.sh`, take the new version from `crates/server/assets/agents/run-claude.sh`.
 - **Authorize without the runaround.** A 🙋 request has **one main button**: **✅ Authorize and let the AI continue**. It permanently authorizes everything the AI asked for (commands **and tools** such as `WebSearch`, `WebFetch` or MCP ones), notifies it, and the task runs again by itself. To stop an AI from asking at all: **🔓 trusted profile** (full authorization with a short prohibited list: `sudo`, `git push`, `git commit`, `rm -rf`, `git reset --hard`, `git clean`, `systemctl`, `dd`, `mkfs`, `cargo/npm publish`). Also in the AI profile (**⚡ Trusted profile**). Note: `mcp__server__*` allows every tool of one MCP server; there is no global permission for all servers.
+
+## 26. Server first steps
+
+Under *Settings → 🚀 First steps* (CTO and administrator) there is a checklist of what the server still lacks and a wizard for each piece. All of them test the data against the provider before saving, store secrets encrypted and apply at once, with no file editing or restart.
+
+- **✉ Email** (nearly essential): without it nobody can verify their email or get email notices. See section 12.
+- **✈ Telegram**: create a bot with @BotFather (`/newbot`), copy the token and paste it. Then each person links from *Settings → Telegram*.
+- **🐙 GitHub**: create an *OAuth App* at github.com → Settings → Developer settings, tick *Enable Device Flow* and paste the *Client ID*. This way each person connects their own account.
+- **📅 Google Calendar**: enable the *Google Calendar API* in Google's console, create an *OAuth client ID* (web application) with the redirect address the wizard shows, and paste the ID and secret. Google requires HTTPS (or localhost).
+- **🔒 HTTPS**: chosen when installing the server; the list only shows whether it is active.
+
+What you save in the wizard overrides the environment variables (`TM_TELEGRAM_TOKEN`, `TM_GITHUB_CLIENT_ID`, `TM_GOOGLE_*`, `TM_SMTP_*`); *Remove* falls back to whatever is in the environment.
