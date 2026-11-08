@@ -165,7 +165,48 @@ struct Job {
     parent: Option<i64>,
 }
 
-async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path, mine: &std::path::Path, branch: Option<&str>) -> String {
+/// Archivos que una persona adjuntó a la tarea (documentos, fotos, videos): el servidor los guarda en
+/// `<carpeta del proyecto>/.crewhelm/<usuario>/<tarea>/`. Se copian al espacio propio de la tarea (`adjuntos/`)
+/// para que la IA los lea aunque trabaje en una copia aislada. Devuelve las rutas copiadas.
+fn gather_attachments(project_dir: &std::path::Path, task: i64, mine: &std::path::Path) -> Vec<std::path::PathBuf> {
+    const MAX_FILES: usize = 50;
+    const MAX_TOTAL: u64 = 200 * 1024 * 1024;
+    fn walk(dir: &std::path::Path, depth: u8, out: &mut Vec<std::path::PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            let Ok(ft) = e.file_type() else { continue };
+            if ft.is_symlink() { continue }
+            if ft.is_dir() { if depth < 3 { walk(&p, depth + 1, out) } } else if ft.is_file() { out.push(p) }
+        }
+    }
+    let mine_real = std::fs::canonicalize(mine).unwrap_or_else(|_| mine.to_path_buf());
+    let root = project_dir.join(".crewhelm");
+    let Ok(users) = std::fs::read_dir(&root) else { return Vec::new() };
+    let (mut copied, mut total) = (Vec::new(), 0u64);
+    let mut dirs: Vec<_> = users.flatten().map(|u| u.path()).collect();
+    dirs.sort();
+    for u in dirs {
+        let name = u.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let src = u.join(task.to_string());
+        if name.starts_with('.') || name.starts_with('_') || !src.is_dir() { continue }
+        if std::fs::canonicalize(&src).is_ok_and(|r| r == mine_real) { continue }
+        let mut files = Vec::new();
+        walk(&src, 0, &mut files);
+        files.sort();
+        for f in files {
+            let len = std::fs::metadata(&f).map(|m| m.len()).unwrap_or(0);
+            if copied.len() >= MAX_FILES || total + len > MAX_TOTAL { return copied }
+            let Ok(rel) = f.strip_prefix(&src) else { continue };
+            let dest = mine.join("adjuntos").join(&name).join(rel);
+            if let Some(d) = dest.parent() { if std::fs::create_dir_all(d).is_err() { continue } }
+            if std::fs::copy(&f, &dest).is_ok() { total += len; copied.push(dest) }
+        }
+    }
+    copied
+}
+
+async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path, mine: &std::path::Path, branch: Option<&str>, attachments: &[std::path::PathBuf]) -> String {
     let comments = api.get(&format!("/api/tasks/{}/comments", job.id)).await.unwrap_or(Value::Null);
     let notes: Vec<String> = comments
         .as_array()
@@ -183,8 +224,11 @@ async fn prompt_for(api: &Api, job: &Job, dir: &std::path::Path, mine: &std::pat
     let pr_note = branch
         .map(|b| format!("Trabajás en una copia aislada de esta tarea, en la rama `{b}`. No hagas `git commit` ni `git push`: cuando termines, el sistema guarda tus cambios en esa rama y la sube; la persona abre el Pull Request desde la tarea. Si no cambiaste archivos del repositorio, no se crea nada.\n\n"))
         .unwrap_or_default();
+    let att_note = if attachments.is_empty() { String::new() } else {
+        format!("Quien creó la tarea adjuntó estos archivos (documentos, fotos o videos): abrilos y analizalos antes de empezar.\n{}\n\n", attachments.iter().map(|p| format!("- {}", p.display())).collect::<Vec<_>>().join("\n"))
+    };
     format!(
-        "{term_note}{pr_note}Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout. Si lo que pedís es que una persona ejecute o permita un comando, escribilo dentro de la pregunta en un bloque de código (tres comillas invertidas, un comando por línea): la app lo muestra en un recuadro para copiar y permitir con un clic.\n\nTrabajá dentro de la carpeta de trabajo. Los archivos que generes y que no sean parte del código del repositorio (informes, presentaciones, datos, borradores) guardalos en tu carpeta de esta tarea: {}. Lo que quede ahí es lo que se entrega a la etapa siguiente, y al aprobarse la última etapa se copia a la carpeta final de la tarea. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
+        "{term_note}{att_note}{pr_note}Te asignaron una tarea en el tablero de comando.\n\nProyecto: {}\nRepositorio: {}\nCarpeta de trabajo: {}\n\nTarea #{}: {}\n\n{}\n\n{}\nSi necesitás una autorización, una respuesta o que una persona haga algo, ejecutá `tm-agent ask \"tu pregunta\"` (usa TM_TASK_ID y TM_TOKEN del entorno): avisa a las personas y devuelve su respuesta por stdout. Si lo que pedís es que una persona ejecute o permita un comando, escribilo dentro de la pregunta en un bloque de código (tres comillas invertidas, un comando por línea): la app lo muestra en un recuadro para copiar y permitir con un clic.\n\nTrabajá dentro de la carpeta de trabajo. Los archivos que generes y que no sean parte del código del repositorio (informes, presentaciones, datos, borradores) guardalos en tu carpeta de esta tarea: {}. Lo que quede ahí es lo que se entrega a la etapa siguiente, y al aprobarse la última etapa se copia a la carpeta final de la tarea. Al terminar, respondé con un resumen breve de lo que hiciste y de cualquier cosa que necesite revisión humana.",
         job.project,
         if job.repo.is_empty() { "(sin definir)" } else { &job.repo },
         dir.display(),
@@ -268,7 +312,9 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     let _ = std::fs::create_dir_all(&mine);
     let _ = std::fs::create_dir_all(dir.join(".crewhelm/_tareas").join(job.id.to_string()).join("final"));
     let _ = std::fs::write(dir.join(".crewhelm/.gitignore"), "*\n");
-    let prompt = prompt_for(api, job, &work.dir, &mine, work.branch.as_deref()).await;
+    let attachments = gather_attachments(&dir, job.id, &mine);
+    if !attachments.is_empty() { api.say(job.id, &format!("📎 Recibí {} archivo(s) adjunto(s); los leo antes de empezar.", attachments.len())).await; }
+    let prompt = prompt_for(api, job, &work.dir, &mine, work.branch.as_deref(), &attachments).await;
 
     // Lista de comandos prohibidos que un admin edita desde la app (ficha de la IA).
     let deny = api.get(&format!("/api/me/deny?task={}", job.id)).await.ok().and_then(|v| v["deny"].as_str().map(String::from)).unwrap_or_default();
@@ -762,5 +808,29 @@ mod tests {
         let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
         assert_eq!(expand_home("~/Backups"), home.join("Backups"));
         assert_eq!(expand_home("/tmp/x"), PathBuf::from("/tmp/x"));
+    }
+
+    #[test]
+    fn adjuntos_de_la_tarea_se_copian_al_espacio_de_la_ia() {
+        let base = std::env::temp_dir().join(format!("tm-adj-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let c = base.join(".crewhelm");
+        std::fs::create_dir_all(c.join("ana/7/sub")).unwrap();
+        std::fs::create_dir_all(c.join("ana/8")).unwrap();
+        std::fs::create_dir_all(c.join("_tareas/7/final")).unwrap();
+        std::fs::create_dir_all(c.join("claude/7")).unwrap();
+        std::fs::write(c.join("ana/7/foto.png"), b"png").unwrap();
+        std::fs::write(c.join("ana/7/sub/nota.txt"), b"hola").unwrap();
+        std::fs::write(c.join("ana/8/otra-tarea.txt"), b"no").unwrap();
+        std::fs::write(c.join("_tareas/7/final/entrega.txt"), b"no").unwrap();
+        let mine = c.join("claude/7");
+        std::fs::write(mine.join("mio.txt"), b"no").unwrap();
+        let got = gather_attachments(&base, 7, &mine);
+        assert_eq!(got.len(), 2, "{got:?}");
+        assert!(got.iter().all(|p| p.starts_with(mine.join("adjuntos/ana"))));
+        assert_eq!(std::fs::read(mine.join("adjuntos/ana/sub/nota.txt")).unwrap(), b"hola");
+        // segunda vuelta: lo ya copiado vive en la carpeta de la IA y no se vuelve a copiar encima de sí mismo
+        assert_eq!(gather_attachments(&base, 7, &mine).len(), 2);
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

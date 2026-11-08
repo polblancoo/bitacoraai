@@ -1878,9 +1878,25 @@ function taskForm(status, assignable) {
     const rvOpts = [["", "Nadie: al terminar pasa a Hecha"], ...(assignable.some((m) => m.id === meId) ? [] : [[meId, "Yo (quien la pide)"]]), ...assignable.map((m) => [m.id, m.id === meId ? "Yo (quien la pide)" : label(m.username)])];
     const rv = sel(rvOpts, ""), more = h("input", { type: "checkbox" });
     const note = h("div", { class: "tf-note" });
+    // documentos, fotos o videos para que quien haga la tarea (persona o IA) los analice: se guardan en la carpeta de la tarea
+    const MAXF = 25 * 1024 * 1024, files = [];
+    const fkb = (n) => (n < 1048576 ? Math.max(1, Math.round(n / 1024)) + " KB" : (n / 1048576).toFixed(1) + " MB");
+    const fileIn = h("input", { type: "file", multiple: true, style: "display:none" });
+    const fileList = h("div", { class: "tf-flist" });
+    const drawFiles = () => { notes?.(); fileList.replaceChildren(...files.map((f, i) => h("div", { class: "tf-frow" + (f.size > MAXF ? " bad" : "") },
+      h("span", { class: "grow" }, (f.type.startsWith("image/") ? "🖼 " : f.type.startsWith("video/") ? "🎞 " : "📄 ") + f.name),
+      h("small", {}, f.size > MAXF ? fkb(f.size) + " · supera 25 MB, no se sube" : fkb(f.size)),
+      h("button", { class: "ghost", type: "button", title: "Quitar", onclick: () => { files.splice(i, 1); drawFiles(); } }, "✕")))); };
+    const addFiles = (list) => { for (const f of list) if (!files.some((x) => x.name === f.name && x.size === f.size)) files.push(f); drawFiles(); };
+    fileIn.onchange = () => { addFiles([...fileIn.files]); fileIn.value = ""; };
+    const drop = h("div", { class: "tf-drop", title: "Se guardan en la carpeta de la tarea, dentro de la carpeta del proyecto. Hasta 25 MB cada uno",
+      onclick: () => fileIn.click(), ondragover: (e) => { e.preventDefault(); drop.classList.add("over"); }, ondragleave: () => drop.classList.remove("over"),
+      ondrop: (e) => { e.preventDefault(); drop.classList.remove("over"); addFiles([...(e.dataTransfer?.files || [])]); } },
+      "📎 Adjuntar documentos, fotos o videos (hacé clic o arrastrá acá)", fileIn);
     const notes = () => {
       const m = S.members.find((x) => String(x.id) === as.value), out = [];
       if (m?.bot) out.push([S.project.work_dir ? "🤖 " + m.username + " trabaja en 📁 " + S.project.work_dir : "🤖 El proyecto no tiene carpeta de trabajo: la IA usa una por defecto y la crea si no existe", !S.project.work_dir]);
+      if (files.length && !S.project.work_dir) out.push(["📎 El proyecto no tiene carpeta de trabajo: definila en ⚙ Proyecto para que se guarden los adjuntos", true]);
       if (!as.value) out.push(["Sin responsable: queda en el tablero sin dueño", false]);
       if (rv.value && !as.value) out.push(["Para el flujo elegí quién la hace: esa persona o IA trabaja y el revisor aprueba", true]);
       if (rv.value && as.value && rv.value === as.value) out.push(["Quien la hace y quien la revisa es la misma persona", true]);
@@ -1893,7 +1909,7 @@ function taskForm(status, assignable) {
     const submit = () => {
       if (!title.value.trim()) { title.focus(); return; }
       if (rv.value && !as.value) { as.focus(); return; }
-      done({ reviewer: rv.value, more: more.checked, title: title.value.trim(), description: desc.value.trim(), status: st.value, priority: pr.value, assignee: as.value, start: start.value, due: due.value, recurrence: rec.value });
+      done({ reviewer: rv.value, more: more.checked, title: title.value.trim(), description: desc.value.trim(), status: st.value, priority: pr.value, assignee: as.value, start: start.value, due: due.value, recurrence: rec.value, files });
     };
     const fld = (lbl, key, el, tip) => h("label", { title: tip }, h("span", {}, lbl, key && h("kbd", {}, key)), el);
     const jump = { e: st, p: pr, r: as, f: start, v: due, t: title, d: desc };
@@ -1907,6 +1923,7 @@ function taskForm(status, assignable) {
         h("h3", {}, "Nueva tarea"),
         fld("Título", "Alt+T", title, FIELD_TIPS.title),
         fld("Instrucción / prompt para quien la haga", "Alt+D", desc, FIELD_TIPS.desc),
+        drop, fileList,
         h("div", { class: "tf-row" }, fld("Estado", "Alt+E", st, FIELD_TIPS.status), fld("Prioridad", "Alt+P", pr, FIELD_TIPS.prio), fld("Responsable", "Alt+R", as, FIELD_TIPS.who)),
         h("div", { class: "tf-row" }, fld("Empieza", "Alt+F", start, FIELD_TIPS.start), fld("Vence", "Alt+V", due, FIELD_TIPS.due), fld("Repetición", "", rec, FIELD_TIPS.rec)),
         h("div", { class: "tf-row tf-flow" }, fld("Revisa al terminar (responsable final)", "", rv, FIELD_TIPS.review),
@@ -1928,6 +1945,17 @@ const createTask = guard(async (status) => {
     t = await api("PUT", `/api/tasks/${t.id}/flow`, { steps: [{ assignee_id: +f.assignee, kind: "work", instruction: "" }, { assignee_id: +f.reviewer, kind: "review", instruction: "" }] });
   } else if (f.status !== "todo") t = await api("PATCH", `/api/tasks/${t.id}`, { status: f.status });
   upsert(t); render();
+  // adjuntos: van a la carpeta de la tarea (la IA los recibe en su espacio de trabajo al empezar)
+  if (f.files?.length) {
+    const ok = f.files.filter((x) => x.size <= 25 * 1024 * 1024), big = f.files.length - ok.length;
+    let sent = 0;
+    for (const file of ok) {
+      toast(`⏳ Subiendo adjunto ${sent + 1} de ${ok.length}: ${file.name}`);
+      try { await apiRaw("POST", `/api/tasks/${t.id}/folder/upload?name=${encodeURIComponent(file.name)}`, file); sent++; } catch (x) { toast(`${file.name}: ${x.message}`, true); }
+    }
+    if (sent) toast(`📎 ${sent} adjunto(s) guardados en la carpeta de la tarea`);
+    if (big) toast(`${big} archivo(s) superan los 25 MB y no se subieron: usá la carpeta de red (Configuración → Carpeta de red)`, true);
+  }
   if (f.more && f.reviewer) { loadFlows?.(); openTask(t); }
 });
 const patchTask = guard(async (id, patch) => { upsert(await api("PATCH", `/api/tasks/${id}`, patch)); render(); });
