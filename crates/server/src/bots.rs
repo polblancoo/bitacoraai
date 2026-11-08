@@ -207,9 +207,17 @@ async fn update_bot(State(st): State<AppState>, user: AuthUser, Path(uid): Path<
 }
 
 /// La IA lee su propia lista de comandos prohibidos (la edita un admin desde la app).
-async fn my_deny(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+async fn my_deny(State(st): State<AppState>, user: AuthUser, axum::extract::Query(q): axum::extract::Query<DenyQ>) -> Result<Json<Value>> {
     let own: String = sqlx::query_scalar("SELECT deny FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
-    Ok(Json(json!({ "deny": join_lines(&general(&st, "cmd_deny").await, &own) })))
+    // además de las listas, la política de riesgo del servidor (borrar, publicar, desplegar…); con `task`, lo ya aprobado para esa tarea la libera
+    let task = q.task.filter(|_| user.bot);
+    let risk = crate::risk::deny_rules(&st, user.id, task).await.join("\n");
+    Ok(Json(json!({ "deny": join_lines(&join_lines(&general(&st, "cmd_deny").await, &own), &risk) })))
+}
+
+#[derive(Deserialize)]
+struct DenyQ {
+    task: Option<Id>,
 }
 
 /// La IA lee su lista permanente de comandos permitidos (se agrega con «/permitir siempre …» o desde el pedido).

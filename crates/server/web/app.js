@@ -599,6 +599,9 @@ const createTeam = guard(async () => {
 });
 // Integrar: revisar y juntar (o devolver) el trabajo que el equipo manda con «Enviar a revisión» (Pull Requests de GitHub)
 const PR_STATE = { clean: ["✅ Listo para integrar", "ok"], has_hooks: ["✅ Listo para integrar", "ok"], unstable: ["⚠ Las pruebas no pasan", "bad"], dirty: ["⛔ Tiene conflictos: la persona debe actualizar su copia y volver a enviar", "bad"], blocked: ["⛔ GitHub lo bloquea (falta una aprobación o regla)", "bad"], behind: ["Desactualizado respecto de la rama principal", ""], draft: ["Borrador", ""] };
+const diffView = (f) => h("details", { class: "diff" }, h("summary", {}, `${f.name}  `, h("span", { class: "add" }, "+" + f.add), " ", h("span", { class: "del" }, "−" + f.del), f.status === "added" ? " (nuevo)" : f.status === "removed" ? " (borrado)" : ""),
+    f.binary ? h("small", { class: "hint" }, "Archivo que no se puede mostrar como texto (imagen, documento…).")
+      : h("pre", { class: "patch" }, ...f.patch.split("\n").map((l) => h("div", { class: l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : l.startsWith("@@") ? "hunk" : "" }, l || " ")), f.cut && h("div", { class: "hint" }, "… (se muestra solo el principio; el resto está en GitHub)")));
 async function openIntegrar() {
   const p = S.project; if (!p) return;
   const close = () => document.getElementById("integrar")?.remove();
@@ -607,9 +610,6 @@ async function openIntegrar() {
     h("div", { class: "modal wide" }, h("h3", {}, "🔀 Integrar trabajo de «" + p.name + "»", h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: close, title: "Cerrar" }, "✕")), body));
   document.getElementById("integrar")?.remove(); document.body.append(modal);
   const squash = h("input", { type: "checkbox" });
-  const diffView = (f) => h("details", { class: "diff" }, h("summary", {}, `${f.name}  `, h("span", { class: "add" }, "+" + f.add), " ", h("span", { class: "del" }, "−" + f.del), f.status === "added" ? " (nuevo)" : f.status === "removed" ? " (borrado)" : ""),
-    f.binary ? h("small", { class: "hint" }, "Archivo que no se puede mostrar como texto (imagen, documento…).")
-      : h("pre", { class: "patch" }, ...f.patch.split("\n").map((l) => h("div", { class: l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : l.startsWith("@@") ? "hunk" : "" }, l || " ")), f.cut && h("div", { class: "hint" }, "… (se muestra solo el principio; el resto está en GitHub)")));
   const load = async () => {
     try {
       const r = await api("GET", `/api/projects/${p.id}/prs`);
@@ -1909,12 +1909,18 @@ const openTask = guard(async (task) => {
     upsert(st); newSub.value = ""; drawSubs(); render();
   }));
   // si la tarea viene de un issue de GitHub: enlace y botón para cerrarlo allá
-  const ghBox = h("div", { class: "row" });
+  const ghBox = h("div", { class: "row" }), diffBox = h("div", {});
   const PR_LABEL = { open: "abierto", draft: "borrador", merged: "integrado ✅", closed: "cerrado sin integrar" };
   api("GET", `/api/tasks/${task.id}/github`).then((g) => {
     if (g.repo) {
       ghBox.append(h("a", { href: g.url, target: "_blank", rel: "noopener" }, `🐙 ${g.repo}#${g.number}`),
-        g.pr && h("span", { class: "pill", title: "Pull Request que menciona este issue" }, `PR #${g.pr}: ${PR_LABEL[g.pr_state] || g.pr_state}`));
+        g.pr && h("span", { class: "pill", title: "Pull Request que menciona este issue" }, `PR #${g.pr}: ${PR_LABEL[g.pr_state] || g.pr_state}`),
+        g.pr && h("button", { class: "ghost", title: "Qué archivos y líneas cambió la IA en esta tarea  ·  git diff main...rama", onclick: guard(async () => {
+          if (diffBox.childElementCount) { diffBox.replaceChildren(); return; }
+          diffBox.replaceChildren(h("small", { class: "hint" }, "⏳ Cargando cambios…"));
+          const d = await api("GET", `/api/tasks/${task.id}/diff`);
+          diffBox.replaceChildren(...(d.files.length ? d.files.map(diffView) : [h("small", { class: "hint" }, "Sin cambios de archivos.")]));
+        }) }, "👁 Ver cambios"));
     } else if (!g.project_repo) return;
     ghBox.append(h("span", { class: "spacer" }));
     if (!can("member")) return;
@@ -2164,7 +2170,7 @@ const openTask = guard(async (task) => {
             h("label", { title: FIELD_TIPS.who }, "Responsable", who), h("label", { title: FIELD_TIPS.start }, "Empieza", start),
             h("label", { title: FIELD_TIPS.due }, "Vence", due), h("label", { title: FIELD_TIPS.rec }, "Repetición", rec), h("small", { class: "hint" }, whoHint)),
           can("member") && budgetBox(cur(), title, desc),
-          ghBox,
+          ghBox, diffBox,
           flowBox(cur()),
           folderBox(cur()),
           h("h3", {}, "Etiquetas"), labelBox, newLabel,
@@ -2715,6 +2721,7 @@ const CFG_HELP = {
   lang: ["Idioma", "Cambia el idioma de la app para vos (español, inglés o portugués). Los demás del equipo siguen con el suyo.", null],
   license: ["Licencia", "La app es software libre (AGPL-3.0): podés usarla gratis cumpliendo esa licencia. Si tu empresa prefiere no cumplirla, existe una licencia comercial anual. Acá ves el estado y, si sos la primera persona registrada, podés comprarla.", null],
   guide: ["Guía de inicio", "Un asistente corto con dibujos que te lleva a dejar todo andando: equipo, proyecto e IA. Se abre solo la primera vez y la podés repetir cuando quieras.", null],
+  risk: ["Aprobación por riesgo", "Elegí por tipo de acción (borrar, publicar, desplegar, instalar, administrar el sistema) si las IAs la hacen solas, si necesitan que una persona la apruebe o si está prohibida. En «Pedir», la IA se detiene y te avisa; al aprobar con /permitir un comando de esa categoría, queda habilitado para esa tarea (si elegís «siempre», para esa IA). Lo prohibido siempre gana. Rige desde la próxima ejecución, y cada cambio queda en la auditoría.", null],
   cmds: ["Comandos para todas las IAs", "Son los comandos que cualquier IA del servidor puede usar sin pedir permiso (permitidos) y los que nunca puede usar (prohibidos). Se suman a la lista propia de cada IA, que está en su ficha. Lo prohibido siempre gana. Un comando se escribe así: git clone, cargo build o Bash(npm test:*).", "Solo la primera persona registrada edita estas listas. Los archivos whitelist.txt y blacklist.txt del agente son la base; estas listas se suman a ellas."],
   digest: ["Cómo recibís los avisos", "Resumen: los avisos por Telegram y email llegan juntos en un solo mensaje, una vez por día a la hora que elijas o cada 1, 2, 3, 6 o 12 horas. Uno por uno: cada aviso sale al momento. 🔕 Silencioso: no te llega nada por Telegram ni email (ni siquiera los pedidos 🙋 de las IAs). ⏸ Pausar: silencio por un rato (1 hora a 1 semana) y después vuelve solo a como lo tenías. La bandeja de la app siempre se actualiza al instante. Fuera del silencio, los pedidos de ayuda de una IA (🙋) salen siempre al momento.", null],
   reports: ["Informes automáticos", "Un resumen diario o semanal del equipo: qué terminaron las personas y las IAs, cuánto gastaron las IAs y qué quedó trabado. Te llega a la bandeja y, si querés, por Telegram y email.", null],
@@ -3228,6 +3235,13 @@ const openSettings = guard(async () => {
               }) }, "Crear ejemplo")];
             })())),
       sec("Licencia",
+        ["admin", "cto"].includes(S.me?.server_role) && line(["Aprobación por riesgo: qué pueden hacer las IAs solas y qué necesita tu visto bueno", "risk"], h("button", { onclick: guard(async () => {
+          const r = await api("GET", "/api/admin/risk");
+          const f = await form("Aprobación por riesgo", r.cats.map((c) => ({ name: c.key, label: `${c.name} (${c.what})`, type: "select", value: c.mode,
+            options: [["libre", "Libre: la IA lo hace sola"], ["pedir", "Pedir: una persona lo aprueba con /permitir"], ["prohibido", "Prohibido: nunca"]] })), "Guardar");
+          if (!f) return;
+          await api("PUT", "/api/admin/risk", { modes: Object.fromEntries(r.cats.map((c) => [c.key, f[c.key]])) }); toast("Política de riesgo guardada: rige desde la próxima ejecución de cada IA");
+        }) }, "Configurar")),
         S.me?.server_role === "admin" && line(["Comandos permitidos y prohibidos para todas las IAs", "cmds"], h("button", { onclick: guard(async () => {
           const g = await api("GET", "/api/commands");
           if (!g.can_edit) { toast("Solo la primera persona registrada edita las listas generales. Cada IA tiene la suya en su ficha."); return; }
@@ -3286,7 +3300,7 @@ const openSettings = guard(async () => {
     ["cuenta", "👤 Cuenta", ["user", "inbox", "logout", "logoutAll"]],
     ["conexiones", "🔔 Avisos y conexiones", ["email", "telegram", "digest", "github", "google", "reports"]],
     ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export", "audit"]],
-    ["ias", "🤖 IAs", ["agents", "cmds"]],
+    ["ias", "🤖 IAs", ["agents", "cmds", "risk"]],
     ["integraciones", "🔌 Integraciones", ["integrations"]],
     ["procesos", "🖥 Procesos", ["procesos"]],
     ["srvstart", "🚀 Primeros pasos", ["srvstart", "srvwiz", "srvmail", "srvtg", "srvgh", "srvgg"]],

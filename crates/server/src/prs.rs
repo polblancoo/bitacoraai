@@ -21,6 +21,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/projects/{id}/prs", get(list))
         .route("/api/projects/{id}/prs/{n}/files", get(files))
+        .route("/api/tasks/{id}/diff", get(task_diff))
         .route("/api/projects/{id}/prs/{n}/merge", post(merge))
         .route("/api/projects/{id}/prs/{n}/close", post(close))
 }
@@ -69,15 +70,27 @@ async fn list(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id
 
 async fn files(State(st): State<AppState>, user: AuthUser, Path((project, n)): Path<(Id, i64)>) -> Result<Json<Value>> {
     let (g, token, repo, _) = ctx(&st, project, &user, Role::Viewer).await?;
-    let v = api_get(&g, &token, &format!("/repos/{repo}/pulls/{n}/files?per_page=60")).await?;
+    Ok(Json(json!({ "files": pr_files(&g, &token, &repo, n).await? })))
+}
+
+/// Los cambios del Pull Request de una tarea, para revisarlos sin salir de la tarea.
+async fn task_diff(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id>) -> Result<Json<Value>> {
+    let project: Id = sqlx::query_scalar("SELECT project_id FROM tasks WHERE id = ?").bind(task).fetch_optional(&st.db).await?.ok_or_else(AppError::forbidden)?;
+    let pr: Option<Option<i64>> = sqlx::query_scalar("SELECT pr_number FROM task_github WHERE task_id = ?").bind(task).fetch_optional(&st.db).await?;
+    let Some(Some(n)) = pr else { return Ok(Json(json!({ "pr": null, "files": [] }))) };
+    let (g, token, repo, _) = ctx(&st, project, &user, Role::Viewer).await?;
+    Ok(Json(json!({ "pr": n, "repo": repo, "files": pr_files(&g, &token, &repo, n).await? })))
+}
+
+async fn pr_files(g: &Github, token: &str, repo: &str, n: i64) -> Result<Vec<Value>> {
+    let v = api_get(g, token, &format!("/repos/{repo}/pulls/{n}/files?per_page=60")).await?;
     let mut budget = 150_000usize;
-    let list: Vec<Value> = v.as_array().cloned().unwrap_or_default().into_iter().map(|f| {
+    Ok(v.as_array().cloned().unwrap_or_default().into_iter().map(|f| {
         let patch = f["patch"].as_str().unwrap_or("");
         let cut: String = patch.chars().take(8000.min(budget)).collect();
         budget = budget.saturating_sub(cut.len());
         json!({ "name": f["filename"], "status": f["status"], "add": f["additions"], "del": f["deletions"], "patch": cut, "cut": cut.len() < patch.len(), "binary": f["patch"].is_null() })
-    }).collect();
-    Ok(Json(json!({ "files": list })))
+    }).collect())
 }
 
 #[derive(Deserialize)]

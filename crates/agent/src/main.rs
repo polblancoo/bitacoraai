@@ -267,7 +267,7 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     let prompt = prompt_for(api, job, &work.dir, &mine, work.branch.as_deref()).await;
 
     // Lista de comandos prohibidos que un admin edita desde la app (ficha de la IA).
-    let deny = api.get("/api/me/deny").await.ok().and_then(|v| v["deny"].as_str().map(String::from)).unwrap_or_default();
+    let deny = api.get(&format!("/api/me/deny?task={}", job.id)).await.ok().and_then(|v| v["deny"].as_str().map(String::from)).unwrap_or_default();
     // Comandos permitidos: los permanentes de la IA («/permitir siempre») y los de «una vez» de esta tarea, que se consumen al empezar.
     publish_lists(api).await;
     let mut allow = me_allow.as_ref().and_then(|v| v["allow"].as_str().map(String::from)).unwrap_or_default();
