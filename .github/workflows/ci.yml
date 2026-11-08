@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest, macos-latest]
+        os: [ubuntu-22.04]  # servidor y agente: solo Linux; Windows y macOS son cliente (app de escritorio, en release.yml)
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

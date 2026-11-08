@@ -1,8 +1,9 @@
 name: Release
 
 # Al publicar un tag vX.Y.Z genera: .msi/.exe (Windows), .dmg (macOS Intel y ARM),
-# .deb, .rpm y AppImage (Linux) del escritorio, más los binarios tm-server,
-# bitacora (TUI) y tm-agent de cada sistema. Todo se adjunta a un release en borrador.
+# .deb, .rpm y AppImage (Linux) de la app de escritorio. Los binarios tm-server,
+# bitacora (TUI) y tm-agent solo se publican para Linux x86_64: en Windows y macOS
+# BitacoraAI es únicamente cliente (la app de escritorio). Todo va a un release en borrador.
 on:
   push:
     tags: ["v*"]
@@ -95,15 +96,6 @@ jobs:
         include:
           - label: linux-x86_64
             os: ubuntu-22.04
-            ext: ""
-          - label: windows-x86_64
-            os: windows-latest
-            ext: ".exe"
-          - label: macos-arm64
-            os: macos-latest
-            ext: ""
-          - label: macos-x86_64
-            os: macos-13
             ext: ""
     steps:
       - uses: actions/checkout@v4
