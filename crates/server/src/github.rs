@@ -92,6 +92,9 @@ pub fn router() -> Router<AppState> {
 }
 
 pub(crate) fn gh(st: &AppState) -> Result<std::sync::Arc<Github>> {
+    if crate::gitmode::internal(st) {
+        return Err(AppError::bad(crate::gitmode::BLOCKED_MSG));
+    }
     st.github.get().ok_or_else(|| AppError::bad("GitHub no está configurado en este servidor"))
 }
 
@@ -102,7 +105,7 @@ async fn login_of(st: &AppState, user: Id) -> Result<Option<String>> {
 async fn status(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
     user.human_only()?;
     let login = login_of(&st, user.id).await?;
-    Ok(Json(json!({ "available": st.github.is_some(), "linked": login.is_some(), "login": login })))
+    Ok(Json(json!({ "available": st.github.is_some() && !crate::gitmode::internal(&st), "blocked": crate::gitmode::internal(&st), "linked": login.is_some(), "login": login })))
 }
 
 /// Pide el código que la persona escribe en github.com/login/device.

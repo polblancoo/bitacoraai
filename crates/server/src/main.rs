@@ -43,6 +43,7 @@ mod audit;
 mod risk;
 mod dav;
 mod twofa;
+mod gitmode;
 mod ws;
 
 use axum::{
@@ -82,6 +83,8 @@ pub struct AppState {
     pub telegram: notify::Slot<telegram::Telegram>,
     pub google: notify::Slot<google::Google>,
     pub github: notify::Slot<github::Github>,
+    /// «Todo en el servidor»: el administrador cortó GitHub (nada del código sale de acá). Ver gitmode.rs.
+    pub git_internal: Arc<std::sync::atomic::AtomicBool>,
     pub cred: Arc<crypt::Cred>,
 }
 
@@ -281,9 +284,11 @@ async fn main() -> anyhow::Result<()> {
         telegram: notify::Slot::new(telegram::Telegram::from_env().await.map(Arc::new)),
         google: notify::Slot::new(google::Google::from_env().map(Arc::new)),
         github: notify::Slot::new(github::Github::from_env().map(Arc::new)),
+        git_internal: Default::default(),
         cred,
     };
     mailcfg::load(&state).await;
+    gitmode::load(&state).await;
     setup::load(&state).await;
     telegram::spawn_poller(state.clone());
     extras::spawn_reminders(state.clone());
@@ -297,7 +302,7 @@ async fn main() -> anyhow::Result<()> {
 
     let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(gh_sync::router()).merge(gitsetup::router())
         .merge(prs::router())
-        .merge(mailcfg::router()).merge(setup::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(audit::router()).merge(risk::router()).merge(tls::router()).merge(twofa::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(taskfiles::router()).merge(integrations::router()).merge(chat_tr::router()).merge(sysops::router()).merge(chat::router()).merge(chat_ai::router()).merge(flow::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
+        .merge(mailcfg::router()).merge(setup::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(audit::router()).merge(risk::router()).merge(tls::router()).merge(twofa::router()).merge(gitmode::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(taskfiles::router()).merge(integrations::router()).merge(chat_tr::router()).merge(sysops::router()).merge(chat::router()).merge(chat_ai::router()).merge(flow::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

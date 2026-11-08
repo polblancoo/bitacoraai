@@ -301,6 +301,7 @@ async function authenticate(user, pass) {
 
 async function boot(first) {
   S.teams = await api("GET", "/api/teams");
+  api("GET", "/api/setup").then((r) => { if (S.gitMode !== r.git_mode) { S.gitMode = r.git_mode; render(); } }).catch(() => {});
   await selectTeam(S.teams.find((t) => t.id === S.team?.id) || S.teams[0] || null);
   loadAvatars();
   connectWs();
@@ -1426,7 +1427,14 @@ function rolesPanel() {
         }) }), ` ${lbl} · ${c.enrolled} de ${c.total} lo tienen activo`);
       }),
       pol.pending.length > 0 && h("small", { class: "warn" }, "Faltan: " + pol.pending.join(", ")));
-    box.replaceChildren(polBox, h("p", { class: "hint" }, "Usuario: usa la app. CTO: además ve «Procesos», fija los límites de las terminales y ve el uso por persona. Administrador: todo, incluido cambiar estos roles. No cambia los roles dentro de cada equipo."),
+    const gm = await api("GET", "/api/admin/git-mode").catch(() => null);
+    const gitBox = gm && h("div", { class: "cfg-item" }, h("b", {}, "🗄 Dónde vive el código"),
+      h("small", { class: "hint" }, "Para consultorios, clínicas y estudios jurídicos: con «Todo en el servidor» se corta GitHub (cuenta, repositorios, issues, Pull Requests) y las IAs con cápsula ya no llegan a github.com ni gitlab.com. Si querés usar GitHub, dejalo permitido." + (gm.can_edit ? "" : " Solo el administrador del servidor lo cambia.")),
+      h("select", { disabled: !gm.can_edit, onchange: guard(async (e) => {
+        if (e.target.value === "interno" && !(await ask("¿Cortar GitHub en todo el servidor? Los repositorios que ya estaban en GitHub dejan de sincronizarse y nadie podrá subir ahí.", "Cortar GitHub"))) { load(); return; }
+        await api("PUT", "/api/admin/git-mode", { mode: e.target.value }); S.gitMode = e.target.value; toast(e.target.value === "interno" ? "GitHub desactivado: todo queda en el servidor" : "GitHub permitido"); load();
+      }) }, h("option", { value: "github", selected: gm.mode === "github" }, "GitHub permitido"), h("option", { value: "interno", selected: gm.mode === "interno" }, "Todo en el servidor (nada sale a GitHub)")));
+    box.replaceChildren(gitBox, polBox, h("p", { class: "hint" }, "Usuario: usa la app. CTO: además ve «Procesos», fija los límites de las terminales y ve el uso por persona. Administrador: todo, incluido cambiar estos roles. No cambia los roles dentro de cada equipo."),
       ...us.map((u) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, u.username),
         h("select", { onchange: async (e) => { try { await api("PUT", `/api/admin/users/${u.id}/role`, { role: e.target.value }); toast("Rol actualizado"); } catch (x) { toast(x.message, true); } load(); } },
           Object.entries(ROLE_LBL).map(([k, v]) => h("option", { value: k, selected: u.role === k }, v)))
@@ -2677,7 +2685,7 @@ function appView() {
         S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
         S.project && !S.portfolio && !S.terms && can("admin") && S.hold && h("button", { class: S.hold.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA termina queda «⏳ esperando tu próximo paso» (En curso) y vos lo pasás a Hecho; al comentarlo, la IA lo retoma. Apagado: pasa directo a Hecho.", onclick: toggleHold }, "⏳ Continuación: " + (S.hold.enabled ? "sí" : "no")),
         S.project && !S.portfolio && !S.terms && can("admin") && S.reviews && h("button", { class: S.reviews.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA da por terminado queda «en revisión» hasta que una persona lo apruebe (planes Equipo y Empresa)", onclick: toggleReview }, "🔎 Revisión: " + (S.reviews.enabled ? "sí" : "no")),
-        S.project && !S.portfolio && !S.terms && can("member") && h("button", { onclick: githubProject, title: "GitHub: traer issues como tareas, estado de PR y pruebas, ajustes del proyecto" }, "🐙 GitHub" + ({ success: " ✅", failure: " ❌", pending: " ⏳" }[S.ghCi] || "")),
+        S.project && !S.portfolio && !S.terms && can("member") && S.gitMode !== "interno" && h("button", { onclick: githubProject, title: "GitHub: traer issues como tareas, estado de PR y pruebas, ajustes del proyecto" }, "🐙 GitHub" + ({ success: " ✅", failure: " ❌", pending: " ⏳" }[S.ghCi] || "")),
         S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
         S.team && h("button", { class: S.chatOpen ? "on" : "", onclick: toggleChat, title: "Comunicación del equipo: mensajes, archivos, traducción y videollamadas" }, "💬 Comunicación" + (CHAT.total > 0 && !S.chatOpen ? ` (${CHAT.total})` : "")),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Alt+K t)" }, "👥 Equipo"),
@@ -3312,7 +3320,7 @@ const openSettings = guard(async () => {
           ? h("button", { class: "danger", onclick: guard(async () => { await api("DELETE", "/api/me/telegram"); close(); openSettings(); }) }, "Desvincular")
           : h("button", { onclick: () => { close(); linkTelegram(); } }, "Vincular"))),
         line(["Cómo recibís los avisos (Telegram y email)", "digest"], npMode, npEvery, npHour, npPause),
-        (can("admin") || gh.linked) && line([`GitHub: ${!gh.available ? "el servidor no tiene GitHub configurado" : gh.linked ? "✓ conectado como @" + gh.login : "sin conectar"}`, "github"], gh.available && (gh.linked
+        (can("admin") || gh.linked) && line([`GitHub: ${!gh.available ? (gh.blocked ? "desactivado por el administrador: todo queda en el servidor" : "el servidor no tiene GitHub configurado") : gh.linked ? "✓ conectado como @" + gh.login : "sin conectar"}`, "github"], gh.available && (gh.linked
           ? h("button", { class: "danger", onclick: guard(async () => { if (!(await ask("¿Desconectar tu cuenta de GitHub?"))) return; await api("DELETE", "/api/github"); close(); openSettings(); }) }, "Desconectar")
           : h("button", { onclick: () => { close(); linkGithub(); } }, "Conectar"))),
         (gc.available || gc.linked) && line([`Google Calendar: ${gcState}`, "google"], gc.available && (gc.linked

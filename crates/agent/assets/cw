@@ -57,6 +57,7 @@ Comandos de cw (todos se pueden usar sin saber git):
   cw enviar      mandar tu trabajo para que lo revisen (abre el Pull Request)
   cw ramas       ver tus ramas
   cw cambiar     pasar a otra de tus ramas
+  cw recuperar   volver a traer un archivo (borrado, roto o de una versión anterior)
   cw espacio     cuánto lugar usás en tu espacio y qué lo ocupa
 
 Orden normal:  rama → (editás archivos) → guardar → enviar
@@ -309,6 +310,68 @@ cmd_cambiar() {
     fi
 }
 
+# nombre de archivo ya existente → lo deja a un costado antes de pisarlo
+respaldar() {
+    local f="$1" r
+    [ -e "$f" ] || return 0
+    r="$f.antes-de-recuperar-$(date +%H%M%S)"
+    cp -p "$f" "$r" && dim "  (lo que había quedó guardado como $r)"
+}
+
+# cw recuperar [archivo]  — trae de vuelta un archivo desde lo guardado en tu rama o desde el proyecto
+cmd_recuperar() {
+    copia
+    traer_base
+    local b f="$*" cur
+    b=$(principal)
+    cur=$(git branch --show-current)
+    if [ -z "$f" ]; then
+        echo "Archivos que tenés borrados o modificados sin guardar:"
+        git status -s | grep -E '^( D|D | M|M |MM|AM)' | sed 's/^/  /'
+        echo
+        echo "Y los que alguna vez borraste (se pueden traer de vuelta):"
+        git log --diff-filter=D --name-only --format= -n 30 2>/dev/null | sort -u | head -15 | sed 's/^/  /'
+        echo
+        read -r -p "¿Qué archivo querés recuperar? (ruta, ej: contratos/modelo.docx): " f
+    fi
+    f="${f#./}"
+    [ -z "$f" ] && return 1
+    case "$f" in /*|*..*) rojo "Escribí la ruta dentro del proyecto (sin / al inicio ni ..)."; return 1 ;; esac
+    # opciones: 1) lo último guardado en esta rama, 2…) versiones anteriores, última) la del proyecto
+    local refs=() desc=() h
+    while IFS='|' read -r h d; do
+        refs+=("$h"); desc+=("$d")
+    done < <(git log -n 12 --format='%h|%ar — %s (%an)' -- "$f" 2>/dev/null)
+    local base_ref="refs/remotes/base/$b"
+    if git rev-parse -q --verify "$base_ref" >/dev/null 2>&1 && git cat-file -e "$base_ref:$f" 2>/dev/null; then
+        refs+=("$base_ref"); desc+=("la versión actual del proyecto («$b»)")
+    fi
+    if [ ${#refs[@]} -eq 0 ]; then
+        rojo "No encontré «$f» en lo guardado. Revisá el nombre (mayúsculas, carpetas) con:  git log --oneline --name-only | grep -i parte-del-nombre"
+        return 1
+    fi
+    echo "Versiones de «$f»:"
+    local i
+    for i in "${!refs[@]}"; do
+        printf '  %d) %s\n' $((i + 1)) "${desc[$i]}"
+    done
+    local n=1
+    read -r -p "¿Cuál traigo? [1] " n
+    n=${n:-1}
+    case "$n" in *[!0-9]*|"") rojo "Escribí el número."; return 1 ;; esac
+    local r="${refs[$((n - 1))]}"
+    [ -z "$r" ] && { rojo "Ese número no está en la lista."; return 1; }
+    # si la versión elegida es de un guardado donde el archivo ya estaba borrado, se usa el anterior
+    if ! git cat-file -e "$r:$f" 2>/dev/null; then
+        r="$r~1"
+        git cat-file -e "$r:$f" 2>/dev/null || { rojo "En esa versión el archivo ya no existía. Elegí una anterior."; return 1; }
+    fi
+    respaldar "$f"
+    mkdir -p "$(dirname "$f")"
+    git show "$r:$f" > "$f" && verde "✔ Recuperado: $f" || { rojo "No pude recuperarlo."; return 1; }
+    dim "→ Si querés dejarlo así en tu rama:  cw guardar"
+}
+
 c="${1:-ayuda}"
 [ $# -gt 0 ] && shift
 case "$c" in
@@ -322,5 +385,6 @@ case "$c" in
     enviar|pr) cmd_enviar ;;
     ramas) cmd_ramas ;;
     cambiar) cmd_cambiar ;;
+    recuperar|restaurar) cmd_recuperar "$@" ;;
     *) rojo "No conozco «$c»."; cmd_ayuda; exit 1 ;;
 esac

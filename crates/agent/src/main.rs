@@ -235,11 +235,15 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     // aislamiento de esta IA (ficha en la app), destinos de red permitidos y si el proyecto abre Pull Requests
     let me_allow = api.get("/api/me/allow").await.ok();
     let ai_pr = !job.repo.is_empty() && api.get(&format!("/api/projects/{}/github/settings", job.project_id)).await.ok().and_then(|v| v["ai_pr"].as_bool()).unwrap_or(false);
-    let iso = iso::Settings::resolve(
+    let mut iso = iso::Settings::resolve(
         me_allow.as_ref().and_then(|v| v["isolation"].as_str()).unwrap_or(""),
         ai_pr,
         me_allow.as_ref().and_then(|v| v["net_allow"].as_str()).unwrap_or(""),
     );
+    // «todo en el servidor»: sin github.com ni gitlab.com en la red de la cápsula
+    if me_allow.as_ref().and_then(|v| v["no_github"].as_bool()).unwrap_or(false) {
+        iso.allow_hosts.retain(|h| !matches!(h.as_str(), "github.com" | "githubusercontent.com" | "gitlab.com"));
+    }
     let me_name = api.get("/api/me").await.ok().and_then(|v| v["username"].as_str().map(String::from)).unwrap_or_else(|| "ia".into());
     // si el aislamiento está pedido y no se puede cumplir, la tarea no corre sin él (falla cerrado)
     let claimed_at = claimed["updated_at"].as_str().map(String::from);
