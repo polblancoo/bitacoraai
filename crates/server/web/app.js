@@ -301,7 +301,7 @@ async function authenticate(user, pass) {
 
 async function boot(first) {
   S.teams = await api("GET", "/api/teams");
-  api("GET", "/api/setup").then((r) => { if (S.gitMode !== r.git_mode) { S.gitMode = r.git_mode; render(); } }).catch(() => {});
+  loadGitMode();
   await selectTeam(S.teams.find((t) => t.id === S.team?.id) || S.teams[0] || null);
   loadAvatars();
   connectWs();
@@ -1529,18 +1529,48 @@ function telegramPanel(cur) {
     "BotFather te responde con un token largo (123456789:AAF…). Copialo y pegalo acá.",
   ], [{ k: "token", label: "Token del bot", type: "password", ph: "123456789:AAF…" }], { extra: (c) => (c.bot ? ` — bot @${c.bot}` : ""), clear: "¿Quitar el bot? Dejan de llegar avisos por Telegram a todo el mundo (cada persona tendría que volver a vincularse con otro bot)." });
 }
-// política del servidor sobre dónde vive el código (paso «Código y GitHub»): el administrador edita, el CTO mira
+// dónde vive el código, por proyecto (paso «Código y GitHub»): el administrador edita, el CTO mira
+const loadGitMode = async () => {
+  const r = await api("GET", "/api/git-mode").catch(() => null);
+  if (!r) return;
+  S.gitMode = r.default; S.gitInternal = new Set(r.internal);
+  render();
+};
 function gitPolicyPanel() {
   const box = h("div", { class: "cfg-item gitpol" });
+  let scope = "all";
   const load = async () => {
     const gm = await api("GET", "/api/admin/git-mode").catch(() => null);
-    const gitBox = gm && h("div", { class: "cfg-item" }, h("b", {}, "🗄 Dónde vive el código"),
-      h("small", { class: "hint" }, "Para consultorios, clínicas y estudios jurídicos: con «Todo en el servidor» se corta GitHub (cuenta, repositorios, issues, Pull Requests) y las IAs con cápsula ya no llegan a github.com ni gitlab.com. Si lo dejás permitido, cada proyecto elige: solo servidor, o servidor + GitHub para colaboraciones abiertas (en el asistente de repositorio del proyecto)." + (gm.can_edit ? "" : " Solo el administrador del servidor lo cambia.")),
-      h("select", { disabled: !gm.can_edit, onchange: guard(async (e) => {
-        if (e.target.value === "interno" && !(await ask("¿Cortar GitHub en todo el servidor? Los repositorios que ya estaban en GitHub dejan de sincronizarse y nadie podrá subir ahí.", "Cortar GitHub"))) { load(); return; }
-        await api("PUT", "/api/admin/git-mode", { mode: e.target.value }); S.gitMode = e.target.value; toast(e.target.value === "interno" ? "GitHub desactivado: todo queda en el servidor" : "GitHub permitido"); load();
-      }) }, h("option", { value: "github", selected: gm.mode === "github" }, "GitHub permitido"), h("option", { value: "interno", selected: gm.mode === "interno" }, "Todo en el servidor (nada sale a GitHub)")));
-    box.replaceChildren(gitBox || h("span", {}));
+    if (!gm) return box.replaceChildren();
+    const sel = scope === "all" ? null : gm.projects.find((p) => String(p.id) === scope);
+    if (scope !== "all" && !sel) scope = "all";
+    const cur = !sel ? gm.default : sel.own ? sel.mode : "heredar";
+    const tag = (m) => (m === "interno" ? "🗄 solo servidor" : "🐙 GitHub permitido");
+    const apply = guard(async (mode) => {
+      const goesInternal = mode === "interno" || (mode === "heredar" && gm.default === "interno");
+      const isInternal = sel ? sel.mode === "interno" : gm.default === "interno";
+      if (goesInternal && !isInternal) {
+        const withGh = sel ? !!sel.github : gm.projects.some((p) => p.github && !p.own);
+        if (!(await ask(withGh ? "¿Dejar el código solo en el servidor y no usar más GitHub? Antes se baja a la carpeta del servidor todo lo que ya está en GitHub (ramas y etiquetas). Si no se puede, no se corta nada." : "¿Dejar el código solo en el servidor y no usar más GitHub?", "Todo en el servidor"))) { load(); return; }
+      }
+      const r = await api("PUT", "/api/admin/git-mode", { mode, project: sel ? sel.id : undefined });
+      const rep = r.report || {};
+      toast(rep.branches !== undefined || rep.mirrored ? "Listo: se bajó todo lo de GitHub al servidor y el código queda solo en el servidor" : goesInternal ? "Listo: el código queda solo en el servidor" : "Listo: GitHub permitido");
+      await loadGitMode(); load();
+    });
+    const modes = sel
+      ? [["heredar", "Igual que el valor por defecto"], ["github", "GitHub permitido"], ["interno", "Todo en el servidor (nada sale a GitHub)"]]
+      : [["github", "GitHub permitido"], ["interno", "Todo en el servidor (nada sale a GitHub)"]];
+    const list = h("div", { class: "gp-list" }, gm.projects.length ? gm.projects.map((p) => h("div", { class: "cfg-line", style: "cursor:pointer", onclick: () => { scope = String(p.id); load(); } },
+      h("span", { class: "grow" }, h("b", {}, p.name), " ", h("small", { class: "hint" }, p.team + (p.github ? " · GitHub: " + p.github : ""))),
+      h("span", { class: "pill" }, tag(p.mode), p.own ? "" : " ", p.own ? "" : "(por defecto)"))) : h("small", { class: "hint" }, "Todavía no hay proyectos."));
+    box.replaceChildren(h("b", {}, "🗄 Dónde vive el código"),
+      h("small", { class: "hint" }, "Para consultorios, clínicas y estudios jurídicos: con «Todo en el servidor» se corta GitHub en ese proyecto (repositorios, issues, Pull Requests) y las IAs con cápsula ya no llegan a github.com ni gitlab.com. Si el proyecto ya estaba en GitHub, primero se baja todo al servidor. Elegí un proyecto o el valor por defecto para todos." + (gm.can_edit ? "" : " Solo el administrador del servidor lo cambia.")),
+      h("label", {}, "Aplicar a", " ", h("select", { onchange: (e) => { scope = e.target.value; load(); } },
+        h("option", { value: "all", selected: scope === "all" }, "Todos los proyectos (valor por defecto)"),
+        ...gm.projects.map((p) => h("option", { value: String(p.id), selected: String(p.id) === scope }, p.team + " · " + p.name)))),
+      h("select", { disabled: !gm.can_edit, onchange: (e) => apply(e.target.value) }, modes.map(([v, l]) => h("option", { value: v, selected: v === cur }, l))),
+      list);
   };
   load().catch(() => {});
   return box;
@@ -2695,7 +2725,7 @@ function appView() {
         S.team && !S.portfolio && !S.terms && h("button", { onclick: openReports, title: "Recibir un resumen diario o semanal: qué hicieron las IAs, cuánto gastaron y qué quedó trabado" }, "📊 Informes"),
         S.project && !S.portfolio && !S.terms && can("admin") && S.hold && h("button", { class: S.hold.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA termina queda «⏳ esperando tu próximo paso» (En curso) y vos lo pasás a Hecho; al comentarlo, la IA lo retoma. Apagado: pasa directo a Hecho.", onclick: toggleHold }, "⏳ Continuación: " + (S.hold.enabled ? "sí" : "no")),
         S.project && !S.portfolio && !S.terms && can("admin") && S.reviews && h("button", { class: S.reviews.enabled ? "primary" : "", title: "Con esto encendido, lo que una IA da por terminado queda «en revisión» hasta que una persona lo apruebe (planes Equipo y Empresa)", onclick: toggleReview }, "🔎 Revisión: " + (S.reviews.enabled ? "sí" : "no")),
-        S.project && !S.portfolio && !S.terms && can("member") && S.gitMode !== "interno" && h("button", { onclick: githubProject, title: "GitHub: traer issues como tareas, estado de PR y pruebas, ajustes del proyecto" }, "🐙 GitHub" + ({ success: " ✅", failure: " ❌", pending: " ⏳" }[S.ghCi] || "")),
+        S.project && !S.portfolio && !S.terms && can("member") && !S.gitInternal?.has(S.project.id) && h("button", { onclick: githubProject, title: "GitHub: traer issues como tareas, estado de PR y pruebas, ajustes del proyecto" }, "🐙 GitHub" + ({ success: " ✅", failure: " ❌", pending: " ⏳" }[S.ghCi] || "")),
         S.project && !S.portfolio && !S.terms && can("admin") && h("button", { onclick: editProject, title: "Nombre, carpeta de trabajo y repositorio del proyecto" }, "⚙ Proyecto"),
         S.team && h("button", { class: S.chatOpen ? "on" : "", onclick: toggleChat, title: "Comunicación del equipo: mensajes, archivos, traducción y videollamadas" }, "💬 Comunicación" + (CHAT.total > 0 && !S.chatOpen ? ` (${CHAT.total})` : "")),
         S.team && h("button", { class: S.panel ? "on" : "", onclick: togglePanel, title: "Panel del equipo: miembros, roles, invitaciones y ajustes (Alt+K t)" }, "👥 Equipo"),
@@ -3834,8 +3864,8 @@ function gitBox(pid) {
   let ghi = null; api("GET", "/api/github").then((i) => { ghi = i; }).catch(() => {});
   const draw = (st, err) => {
     const parts = [];
-    const gOk = !!(ghi && ghi.available && ghi.linked), gOff = !!(ghi && ghi.blocked);
-    parts.push(h("p", { class: "hint" }, "🗄 El código siempre vive en tu servidor. 🐙 GitHub es opcional y por proyecto: sirve para colaboraciones abiertas, sin dejar de tener tu copia propia." + (gOff ? " El administrador lo desactivó: solo servidor." : "")));
+    const gOff = !!S.gitInternal?.has(pid), gOk = !!(ghi && ghi.available && ghi.linked) && !gOff;
+    parts.push(h("p", { class: "hint" }, "🗄 El código siempre vive en tu servidor. 🐙 GitHub es opcional y por proyecto: sirve para colaboraciones abiertas, sin dejar de tener tu copia propia." + (gOff ? " El administrador lo desactivó para este proyecto: solo servidor." : "")));
     if (ghi && ghi.available && !ghi.linked && !gOff) parts.push(h("div", { class: "gitopt" }, h("b", {}, "🔑 Falta conectar tu cuenta de GitHub"), h("small", { class: "hint" }, "Para traer o crear un repositorio hace falta tu cuenta (se usa solo mientras se hace, no se guarda en la carpeta). «Solo en esta máquina» no la necesita."),
       h("button", { onclick: () => { document.getElementById("git-setup")?.remove(); linkGithub(); } }, "Conectar mi GitHub")));
     if (ghi && !ghi.available && !gOff) parts.push(h("p", { class: "hint" }, "Este servidor no tiene GitHub configurado: el proyecto puede vivir solo en el servidor."));

@@ -4,7 +4,7 @@
 use crate::{
     auth::AuthUser,
     error::{AppError, Result},
-    github::{api_get, api_json, api_send, gh, repo_of, token_of, Github},
+    github::{api_get, api_json, api_send, repo_of, token_of, Github},
     gitsetup, routes, AppState,
 };
 use axum::{
@@ -31,7 +31,7 @@ async fn ctx(st: &AppState, project: Id, user: &AuthUser, need: Role) -> Result<
     user.human_only()?;
     let team = routes::team_of_project(st, project).await?;
     routes::require(st, team, user.id, need).await?;
-    let g = gh(st)?;
+    let g = crate::github::gh_p(st, project)?;
     let repo = repo_of(st, project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene repositorio de GitHub"))?;
     let owner: Option<Id> = sqlx::query_scalar("SELECT owner_user FROM project_github_cfg WHERE project_id = ?").bind(project).fetch_optional(&st.db).await?;
     let token = match token_of(st, owner.unwrap_or(user.id)).await {

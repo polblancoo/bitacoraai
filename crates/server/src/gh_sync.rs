@@ -4,7 +4,7 @@
 use crate::{
     auth::AuthUser,
     error::{AppError, Result},
-    github::{api_get, api_json, gh, repo_of, token_of},
+    github::{api_get, api_json, repo_of, token_of},
     routes, AppState,
 };
 use axum::{
@@ -191,7 +191,7 @@ async fn open_folder(
 /// Un recorrido completo: issues cerrados, Pull Requests, comentarios, tareas por publicar, pruebas y commits.
 pub async fn sync_project(st: &AppState, project: Id) -> Result<Value> {
     let Some(cfg) = load(st, project).await? else { return Ok(json!({})) };
-    let g = gh(st)?;
+    let g = crate::github::gh_p(st, project)?;
     let repo = repo_of(st, project).await?.ok_or_else(|| AppError::bad("sin repositorio"))?;
     let token = token_of(st, cfg.owner).await?;
     let team = routes::team_of_project(st, project).await?;
@@ -396,7 +396,7 @@ async fn publish_task(State(st): State<AppState>, user: AuthUser, Path(task): Pa
     if sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM task_github WHERE task_id = ?").bind(task).fetch_one(&st.db).await? > 0 {
         return Err(AppError::bad("Esta tarea ya está enlazada a un issue"));
     }
-    let g = gh(&st)?;
+    let g = crate::github::gh_p(&st, t.project_id)?;
     let repo = repo_of(&st, t.project_id).await?.ok_or_else(|| AppError::bad("El proyecto no tiene repositorio de GitHub"))?;
     let token = token_of(&st, user.id).await?;
     Ok(Json(publish(&st, &g, &token, &repo, task, &t.title, &t.description).await?))
@@ -414,7 +414,7 @@ async fn open_pr(State(st): State<AppState>, user: AuthUser, Path(task): Path<Id
     let team = routes::team_of_task(&st, task).await?;
     routes::ensure_writer(&st, team, user.id).await?;
     let t = routes::fetch_task(&st, task).await?;
-    let g = gh(&st)?;
+    let g = crate::github::gh_p(&st, t.project_id)?;
     let repo = repo_of(&st, t.project_id).await?.ok_or_else(|| AppError::bad("El proyecto no tiene repositorio de GitHub"))?;
     let token = token_of(&st, user.id).await?;
     let branch = body.map(|b| b.0.branch).unwrap_or_default();
@@ -466,7 +466,7 @@ async fn agent_pr(State(st): State<AppState>, user: AuthUser, Json(b): Json<Agen
     if branch.is_empty() || branch.len() > 120 || !branch.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '/' | '.')) || branch.contains("..") {
         return Err(AppError::bad("Nombre de rama no válido"));
     }
-    let g = gh(&st)?;
+    let g = crate::github::gh_p(&st, b.project)?;
     let repo = repo_of(&st, b.project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene repositorio de GitHub"))?;
     let cfg = load(&st, b.project).await?.ok_or_else(|| AppError::bad("El proyecto no tiene GitHub conectado en CrewHelm"))?;
     let token = token_of(&st, cfg.owner).await?;

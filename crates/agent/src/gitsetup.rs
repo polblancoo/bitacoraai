@@ -396,6 +396,37 @@ async fn run_job(p: &Value) -> Result<Value, String> {
         }
         "status" => return Ok(status(&dir).await),
         "recover" => return recover(p, &dir).await,
+        "mirror" => {
+            // «todo en el servidor»: se baja todo lo que el proyecto tiene en GitHub (ramas y etiquetas) y se le quita la subida;
+            // al volver a permitir GitHub se la devuelve
+            if !dir.join(".git").exists() {
+                return Ok(json!({ "skipped": true, "why": "la carpeta todavía no es un repositorio" }));
+            }
+            if git(&dir, &["config", "--get", "remote.origin.url"]).await.unwrap_or_default().is_empty() {
+                return Ok(json!({ "skipped": true, "why": "no tiene origen en GitHub" }));
+            }
+            if p["lock"].as_bool() == Some(false) {
+                let _ = git(&dir, &["config", "--unset-all", "remote.origin.pushurl"]).await;
+                return Ok(json!({ "unlocked": true }));
+            }
+            git(&dir, &["fetch", "-q", "--tags", "origin", "+refs/heads/*:refs/remotes/origin/*"]).await.map_err(|e| format!("no pude bajar de GitHub: {e}"))?;
+            let remotes = git(&dir, &["for-each-ref", "--format=%(refname:lstrip=3)", "refs/remotes/origin"]).await.unwrap_or_default();
+            let locals = git(&dir, &["for-each-ref", "--format=%(refname:short)", "refs/heads"]).await.unwrap_or_default();
+            let have: std::collections::HashSet<&str> = locals.lines().collect();
+            let (mut total, mut created) = (0, 0);
+            for b in remotes.lines().filter(|b| !b.is_empty() && *b != "HEAD" && safe_branch(b)).take(500) {
+                total += 1;
+                if !have.contains(b) && git(&dir, &["branch", "-q", b, &format!("refs/remotes/origin/{b}")]).await.is_ok() {
+                    created += 1;
+                }
+            }
+            let tags = git(&dir, &["tag", "--list"]).await.unwrap_or_default().lines().count();
+            let commits: i64 = git(&dir, &["rev-list", "--all", "--count"]).await.unwrap_or_default().trim().parse().unwrap_or(0);
+            // sin subida: un `git push` desde cualquier terminal falla (el origen queda solo para leer)
+            git(&dir, &["config", "remote.origin.pushurl", "crewhelm-sin-subida:todo-en-el-servidor"]).await?;
+            return Ok(json!({ "branches": total, "created": created, "tags": tags, "commits": commits }));
+        }
+
         "sync" => {
             // después de integrar un Pull Request: la carpeta del proyecto se pone al día con GitHub (solo si se puede sin pisar nada)
             if !dir.join(".git").exists() {
@@ -597,6 +628,47 @@ mod tests {
         std::fs::write(d.join(".git/hooks/post-checkout"), "#!/bin/sh\ntouch /tmp/cw-hook-pwned\n").unwrap();
         let _ = sgit(&d, true, &["switch", "-q", "-c", "otra"]).await;
         assert!(!std::path::Path::new("/tmp/cw-hook-pwned").exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[tokio::test]
+    async fn bajar_todo_y_cortar_github() {
+        let d = std::env::temp_dir().join(format!("cw-mirror-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let g = |dir: &Path, a: &[&str]| {
+            let o = std::process::Command::new("git").arg("-C").arg(dir).args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "protocol.file.allow=always"]).args(a).output().unwrap();
+            assert!(o.status.success(), "{a:?}: {}", String::from_utf8_lossy(&o.stderr));
+        };
+        // «GitHub»: repositorio con dos ramas y una etiqueta
+        let (gh, work) = (d.join("gh"), d.join("work"));
+        std::fs::create_dir_all(&gh).unwrap();
+        g(&gh, &["init", "-q", "-b", "main"]);
+        std::fs::write(gh.join("a"), "1").unwrap();
+        g(&gh, &["add", "-A"]);
+        g(&gh, &["commit", "-qm", "uno"]);
+        g(&gh, &["branch", "ana/otra"]);
+        g(&gh, &["tag", "v1"]);
+        std::process::Command::new("git").args(["clone", "-q"]).arg(&gh).arg(&work).status().unwrap();
+        // alguien sube una rama nueva a GitHub después del clon
+        g(&gh, &["branch", "bob/nueva"]);
+        let dir = work.to_string_lossy().to_string();
+        let r = run_job(&json!({ "mode": "mirror", "dir": dir, "lock": true })).await.unwrap();
+        assert!(r["created"].as_i64().unwrap() >= 2, "{r}");
+        assert_eq!(r["tags"], 1);
+        let b = git(&work, &["branch", "--list"]).await.unwrap();
+        assert!(b.contains("bob/nueva") && b.contains("ana/otra"), "{b}");
+        // sin subida a GitHub
+        assert!(git(&work, &["push", "-q", "origin", "main"]).await.is_err());
+        // al permitir GitHub otra vez se devuelve la subida
+        run_job(&json!({ "mode": "mirror", "dir": dir, "lock": false })).await.unwrap();
+        assert!(git(&work, &["config", "--get", "remote.origin.pushurl"]).await.is_err());
+        // carpeta sin origen: no hace nada
+        let sola = d.join("sola");
+        std::fs::create_dir_all(&sola).unwrap();
+        g(&sola, &["init", "-q"]);
+        let r = run_job(&json!({ "mode": "mirror", "dir": sola.to_string_lossy(), "lock": true })).await.unwrap();
+        assert_eq!(r["skipped"], true);
         let _ = std::fs::remove_dir_all(&d);
     }
 }

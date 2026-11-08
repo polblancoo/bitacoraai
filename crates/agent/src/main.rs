@@ -233,7 +233,7 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
         }
     };
     // aislamiento de esta IA (ficha en la app), destinos de red permitidos y si el proyecto abre Pull Requests
-    let me_allow = api.get("/api/me/allow").await.ok();
+    let me_allow = api.get(&format!("/api/me/allow?project={}", job.project_id)).await.ok();
     let ai_pr = !job.repo.is_empty() && api.get(&format!("/api/projects/{}/github/settings", job.project_id)).await.ok().and_then(|v| v["ai_pr"].as_bool()).unwrap_or(false);
     let mut iso = iso::Settings::resolve(
         me_allow.as_ref().and_then(|v| v["isolation"].as_str()).unwrap_or(""),

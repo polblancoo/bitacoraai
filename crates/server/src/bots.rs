@@ -221,12 +221,17 @@ struct DenyQ {
 }
 
 /// La IA lee su lista permanente de comandos permitidos (se agrega con «/permitir siempre …» o desde el pedido).
-async fn my_allow(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
+#[derive(Deserialize)]
+struct AllowQ {
+    project: Option<Id>,
+}
+
+async fn my_allow(State(st): State<AppState>, user: AuthUser, axum::extract::Query(q): axum::extract::Query<AllowQ>) -> Result<Json<Value>> {
     let own: String = sqlx::query_scalar("SELECT allow FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
     let (full, from_app, isolation): (i64, i64, String) = sqlx::query_as("SELECT full_access, lists_from_app, isolation FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await?;
     Ok(Json(json!({
         "allow": join_lines(&general(&st, "cmd_allow").await, &own), "full": full != 0, "from_app": from_app != 0,
-        "isolation": isolation, "net_allow": general(&st, "net_allow").await, "no_github": crate::gitmode::internal(&st),
+        "isolation": isolation, "net_allow": general(&st, "net_allow").await, "no_github": match q.project { Some(p) => crate::gitmode::internal_for(&st, p), None => crate::gitmode::internal(&st) },
     })))
 }
 

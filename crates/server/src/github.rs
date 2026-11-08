@@ -91,11 +91,17 @@ pub fn router() -> Router<AppState> {
         .route("/api/tasks/{id}/github/close", post(close_issue))
 }
 
+/// GitHub configurado en el servidor (para conectar la cuenta de cada persona).
 pub(crate) fn gh(st: &AppState) -> Result<std::sync::Arc<Github>> {
-    if crate::gitmode::internal(st) {
+    st.github.get().ok_or_else(|| AppError::bad("GitHub no está configurado en este servidor"))
+}
+
+/// GitHub para un proyecto: se corta si el proyecto guarda todo en el servidor.
+pub(crate) fn gh_p(st: &AppState, project: Id) -> Result<std::sync::Arc<Github>> {
+    if crate::gitmode::internal_for(st, project) {
         return Err(AppError::bad(crate::gitmode::BLOCKED_MSG));
     }
-    st.github.get().ok_or_else(|| AppError::bad("GitHub no está configurado en este servidor"))
+    gh(st)
 }
 
 async fn login_of(st: &AppState, user: Id) -> Result<Option<String>> {
@@ -105,7 +111,7 @@ async fn login_of(st: &AppState, user: Id) -> Result<Option<String>> {
 async fn status(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
     user.human_only()?;
     let login = login_of(&st, user.id).await?;
-    Ok(Json(json!({ "available": st.github.is_some() && !crate::gitmode::internal(&st), "blocked": crate::gitmode::internal(&st), "linked": login.is_some(), "login": login })))
+    Ok(Json(json!({ "available": st.github.is_some(), "blocked": false, "linked": login.is_some(), "login": login })))
 }
 
 /// Pide el código que la persona escribe en github.com/login/device.
@@ -321,6 +327,9 @@ async fn set_project_repo(State(st): State<AppState>, user: AuthUser, Path(proje
     let team = crate::routes::team_of_project(&st, project).await?;
     crate::routes::ensure_writer(&st, team, user.id).await?;
     let repo = clean_repo(&b.repo);
+    if !repo.is_empty() && crate::gitmode::internal_for(&st, project) {
+        return Err(AppError::bad(crate::gitmode::BLOCKED_MSG));
+    }
     if repo.is_empty() {
         sqlx::query("DELETE FROM project_github WHERE project_id = ?").bind(project).execute(&st.db).await?;
         return Ok(Json(json!({ "repo": null })));
@@ -341,7 +350,7 @@ async fn list_issues(State(st): State<AppState>, user: AuthUser, Path(project): 
     user.human_only()?;
     let team = crate::routes::team_of_project(&st, project).await?;
     crate::routes::ensure_writer(&st, team, user.id).await?;
-    let g = gh(&st)?;
+    let g = gh_p(&st, project)?;
     let repo = repo_of(&st, project).await?.ok_or_else(|| AppError::bad("Este proyecto no tiene repositorio: indicá el dueño/repo primero"))?;
     let token = token_of(&st, user.id).await?;
     let v = api_get(&g, &token, &format!("/repos/{repo}/issues?state=open&per_page=50")).await?;
@@ -382,7 +391,7 @@ async fn import_issues(State(st): State<AppState>, user: AuthUser, Path(project)
     if b.numbers.is_empty() || b.numbers.len() > IMPORT_MAX {
         return Err(AppError::bad("Elegí entre 1 y 30 issues por vez"));
     }
-    let g = gh(&st)?;
+    let g = gh_p(&st, project)?;
     let repo = repo_of(&st, project).await?.ok_or_else(|| AppError::bad("Este proyecto no tiene repositorio"))?;
     let token = token_of(&st, user.id).await?;
     let mut created = 0;
@@ -419,7 +428,7 @@ async fn sync_issues(State(st): State<AppState>, user: AuthUser, Path(project): 
     user.human_only()?;
     let team = crate::routes::team_of_project(&st, project).await?;
     crate::routes::ensure_writer(&st, team, user.id).await?;
-    let g = gh(&st)?;
+    let g = gh_p(&st, project)?;
     let token = token_of(&st, user.id).await?;
     let rows: Vec<(Id, String, i64)> = sqlx::query_as(
         "SELECT g.task_id, g.repo, g.number FROM task_github g JOIN tasks t ON t.id = g.task_id WHERE t.project_id = ? AND t.status != 'done' LIMIT 100",
@@ -459,7 +468,8 @@ async fn close_issue(State(st): State<AppState>, user: AuthUser, Path(task): Pat
     user.human_only()?;
     let team = crate::routes::team_of_task(&st, task).await?;
     crate::routes::ensure_writer(&st, team, user.id).await?;
-    let g = gh(&st)?;
+    let project: Id = sqlx::query_scalar("SELECT project_id FROM tasks WHERE id = ?").bind(task).fetch_one(&st.db).await?;
+    let g = gh_p(&st, project)?;
     let token = token_of(&st, user.id).await?;
     let (repo, n): (String, i64) = sqlx::query_as("SELECT repo, number FROM task_github WHERE task_id = ?")
         .bind(task)

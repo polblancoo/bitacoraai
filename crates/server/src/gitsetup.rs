@@ -4,7 +4,7 @@
 use crate::{
     auth::AuthUser,
     error::{AppError, Result},
-    github::{gh, token_of, valid_repo},
+    github::{token_of, valid_repo},
     routes, term, AppState,
 };
 use axum::{
@@ -67,7 +67,7 @@ async fn setup(State(st): State<AppState>, user: AuthUser, Path(project): Path<I
     match b.mode.as_str() {
         "status" | "local" => {}
         "clone" | "attach" | "new" => {
-            let g = gh(&st)?;
+            let g = crate::github::gh_p(&st, project)?;
             let token = token_of(&st, user.id).await?;
             let repo = crate::github::clean_repo(&b.repo);
             if b.mode != "new" && !valid_repo(&repo) {
