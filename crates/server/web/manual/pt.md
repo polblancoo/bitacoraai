@@ -564,3 +564,14 @@ O que for salvo no assistente substitui as variáveis de ambiente (`TM_TELEGRAM_
 - **O Windows exige HTTPS**: use o «Endereço seguro» e instale o certificado próprio do servidor (link na mesma ajuda); com um certificado real (Let's Encrypt ou o da empresa) não é preciso. O endereço HTTP serve no macOS e Linux numa rede confiável.
 - Cada envio, movimento ou exclusão fica na auditoria (`carpeta_de_red`).
 - Funciona para projetos cuja pasta de trabalho está na máquina do servidor.
+
+## 30. Arquivos da tarefa: pastas, versões, links e o perfil de design
+
+Na janela de uma tarefa, *📂 Pasta da tarefa* (aberta por padrão nos perfis sem partes técnicas) permite:
+
+- **Enviar vários arquivos ou uma pasta inteira**, também **arrastando-os** para a área pontilhada (até 25 MB cada; para os maiores, use a pasta de rede da seção 29). As subpastas são mantidas.
+- **Ver sem baixar** (👁) imagens e textos.
+- **🕘 Versões**: cada vez que um arquivo é salvo por cima, a anterior é mantida (as últimas 20). Qualquer pessoa da equipe pode baixá-las; só o dono do arquivo pode *Voltar a esta*, e a atual também fica guardada. É o mesmo histórico que a pasta de rede cria.
+- **🔗 Adicionar link**: um link para Drive, Figma, Dropbox ou um vídeo na nuvem como entregável, sem enviar nada. Abre com um clique.
+
+**Perfil 🎨 Design e audiovisual** (*Configurações → Equipe e projeto → Perfil de uso*): colunas *Brief / Em produção / Entregue*, sem partes técnicas, com uma campanha de exemplo. **Para quem programa**: trabalhe no seu editor num clone local e envie com `git`/`cw enviar` (seção 22); a pasta de rede (seção 29) também serve para abrir o projeto no editor.

@@ -567,7 +567,18 @@ Lo guardado en el asistente reemplaza a las variables de entorno (`TM_TELEGRAM_T
 
 - **Quién escribe dónde**: dentro de la carpeta con tu nombre (`<tu usuario>/…`). Todo el equipo lee todo; `_tareas/<n>/final/` es solo lectura. Los lectores no escriben.
 - **Versiones**: si guardás encima de un archivo, lo movés o lo borrás, CrewHelm guarda antes la versión anterior (las últimas 20 por archivo, en `.crewhelm/.versions/`).
-- **No se suben programas ejecutables** (`.exe`, `.bat`, `.sh`-tipo instaladores, etc.).
+- **No se suben programas ejecutables** (`.exe`, `.bat`, `.msi`, `.ps1`, `.jar`, etc.).
 - **Windows exige HTTPS**: usá la «Dirección segura» e instalá el certificado propio del servidor (enlace en la misma ayuda); con un certificado real (Let's Encrypt o el de tu empresa) no hace falta. La dirección HTTP sirve en macOS y Linux dentro de una red de confianza.
 - Cada subida, movimiento o borrado queda en la auditoría (`carpeta_de_red`).
 - Funciona con proyectos cuya carpeta de trabajo está en la máquina del servidor.
+
+## 30. Archivos de la tarea: carpetas, versiones, enlaces y perfil de diseño
+
+En la ventana de una tarea, *📂 Carpeta de la tarea* (abierta de entrada en los perfiles sin partes técnicas) permite:
+
+- **Subir varios archivos o una carpeta entera**, también **arrastrándolos** a la zona punteada (hasta 25 MB cada uno; para los más grandes, la carpeta de red de la sección 29). Las subcarpetas se conservan.
+- **Ver sin descargar** (👁) imágenes y textos.
+- **🕘 Versiones**: cada vez que se guarda encima de un archivo, queda la anterior (las últimas 20). Cualquiera del equipo puede descargarlas; solo el dueño del archivo puede *Volver a esta*, y la actual queda guardada también. Es la misma historia que arma la carpeta de red.
+- **🔗 Agregar enlace**: un enlace a Drive, Figma, Dropbox o un video en la nube como entregable, sin subir nada. Se abre con un clic.
+
+**Perfil 🎨 Diseño y audiovisual** (*Configuración → Equipo y proyecto → Perfil de uso*): columnas *Brief / En producción / Entregado*, sin partes técnicas, con un ejemplo de campaña. **Para quien programa**: trabajá con tu editor sobre un clon local y enviá con `git`/`cw enviar` (sección 22); la carpeta de red (sección 29) también sirve para abrir el proyecto desde el editor.

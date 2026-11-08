@@ -564,3 +564,14 @@ What you save in the wizard overrides the environment variables (`TM_TELEGRAM_TO
 - **Windows requires HTTPS**: use the «Secure address» and install the server's own certificate (link in the same help); with a real certificate (Let's Encrypt or your company's) it isn't needed. The HTTP address works on macOS and Linux on a trusted network.
 - Every upload, move or delete is logged in the audit (`carpeta_de_red`).
 - It works for projects whose working folder is on the server machine.
+
+## 30. Task files: folders, versions, links and the design profile
+
+In a task's window, *📂 Task folder* (open by default in profiles without technical parts) lets you:
+
+- **Upload several files or a whole folder**, also by **dragging** them onto the dotted area (up to 25 MB each; for bigger ones use the network folder from section 29). Subfolders are kept.
+- **View without downloading** (👁) images and text.
+- **🕘 Versions**: every time a file is saved over, the previous one is kept (the last 20). Anyone on the team can download them; only the file's owner can *Restore this one*, and the current one is kept too. It's the same history the network folder builds.
+- **🔗 Add link**: a link to Drive, Figma, Dropbox or a cloud video as a deliverable, without uploading anything. It opens with one click.
+
+**🎨 Design and audiovisual profile** (*Settings → Team and project → Usage profile*): columns *Brief / In production / Delivered*, no technical parts, with a sample campaign. **For programmers**: work in your editor on a local clone and send with `git`/`cw enviar` (section 22); the network folder (section 29) also lets you open the project from your editor.

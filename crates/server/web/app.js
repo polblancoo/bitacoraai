@@ -10,6 +10,7 @@ const STATUS = [
 const PROFILES = {
   dev: { name: "💻 Desarrollo de software", desc: "Tablero Por hacer / En curso / Hecho, terminales y carpeta del código.", labels: ["Por hacer", "En curso", "Hecho"], tech: true },
   content: { name: "📣 Contenido y redes", desc: "Borrador / En producción / Publicado, con el calendario como vista inicial. Sin partes técnicas.", labels: ["Borrador", "En producción", "Publicado"], tech: false, view: "calendar" },
+  design: { name: "🎨 Diseño y audiovisual", desc: "Brief / En producción / Entregado: archivos, versiones y aprobación de entregables, con carpeta de red para guardar desde Photoshop, Premiere o DaVinci. Sin partes técnicas.", labels: ["Brief", "En producción", "Entregado"], tech: false },
   factory: { name: "🏭 Fábrica de apps", desc: "Varias apps en paralelo: Backlog / En construcción / Entregado.", labels: ["Backlog", "En construcción", "Entregado"], tech: true },
   office: { name: "🏛️ Oficina y estudios (administración, contabilidad, abogacía)", desc: "Pendiente / En trámite / Cerrado, con calendario de vencimientos y sin partes técnicas.", labels: ["Pendiente", "En trámite", "Cerrado"], tech: false, view: "calendar" },
   other: { name: "🏢 Otros / equipo general", desc: "Por hacer / En curso / Hecho, sin partes técnicas.", labels: ["Por hacer", "En curso", "Hecho"], tech: false },
@@ -208,8 +209,8 @@ function sniff(buf) {
 }
 const TEXT_EXT = /\.(txt|md|csv|log|json|ini|yml|yaml|toml|rs|js|py|sh)$/i;
 const isPreviewable = (name) => /\.(png|jpe?g|gif|webp)$/i.test(name) || TEXT_EXT.test(name);
-async function loadPreview(id, name) {
-  const buf = await (await apiRaw("GET", `/api/attachments/${id}`)).arrayBuffer();
+async function loadPreview(id, name, path) {
+  const buf = await (await apiRaw("GET", path || `/api/attachments/${id}`)).arrayBuffer();
   const mime = sniff(buf);
   if (mime) return { kind: "image", url: URL.createObjectURL(new Blob([buf], { type: mime })) };
   if (TEXT_EXT.test(name)) {
@@ -218,7 +219,7 @@ async function loadPreview(id, name) {
   return null;
 }
 async function openPreviewRaw(a) {
-  const p = await loadPreview(a.id, a.name);
+  const p = await loadPreview(a.id, a.name, a.path);
   if (!p) throw new Error("este archivo no se puede mostrar: descargalo");
   document.getElementById("preview-modal")?.remove();
   const close = () => { document.getElementById("preview-modal")?.remove(); if (p.url) URL.revokeObjectURL(p.url); };
@@ -226,7 +227,7 @@ async function openPreviewRaw(a) {
     h("div", { class: "modal wide", onkeydown: (e) => e.key === "Escape" && (e.stopPropagation(), close()) },
       h("h3", {}, a.name),
       p.kind === "image" ? h("img", { class: "preview-img", src: p.url, alt: a.name }) : h("pre", { class: "preview-text" }, p.text + (p.cut ? "\n… (se muestra el inicio)" : "")),
-      h("div", { class: "row" }, h("button", { onclick: guard(() => saveFile(`/api/attachments/${a.id}`, a.name)) }, "Descargar"), h("button", { class: "primary", onclick: close }, "Cerrar")))));
+      h("div", { class: "row" }, h("button", { onclick: guard(() => saveFile(a.path || `/api/attachments/${a.id}`, a.name)) }, "Descargar"), h("button", { class: "primary", onclick: close }, "Cerrar")))));
 }
 
 const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
@@ -2252,29 +2253,85 @@ function folderBox(task) {
     try {
       const r = await api("GET", `/api/tasks/${task.id}/folder?path=${encodeURIComponent(path)}`);
       const parts = path ? path.split("/") : [];
-      const up = guard(async (e) => {
-        const f = e.target.files[0]; if (!f) return;
-        if (f.size > 25 * 1024 * 1024) return toast("Máximo 25 MB por archivo", true);
-        await apiRaw("POST", `/api/tasks/${task.id}/folder/upload?name=${encodeURIComponent(f.name)}`, f);
-        toast("Archivo subido a tu carpeta"); show(path);
+      const up = guard(async (e) => { const fs = [...e.target.files]; e.target.value = ""; await sendFiles(fs.map((f) => ({ f, dir: (f.webkitRelativePath || "").split("/").slice(0, -1).join("/") }))); });
+      const sendFiles = async (list) => {
+        if (!list.length) return;
+        const big = list.filter((x) => x.f.size > 25 * 1024 * 1024), ok = list.filter((x) => x.f.size <= 25 * 1024 * 1024);
+        if (big.length) toast(`${big.length} archivo(s) superan los 25 MB: para esos usá la carpeta de red (Configuración → Carpeta de red)`, true);
+        let n = 0, fail = 0;
+        for (const { f, dir } of ok) {
+          prog.textContent = `⏳ Subiendo ${++n} de ${ok.length}: ${f.name}`;
+          try { await apiRaw("POST", `/api/tasks/${task.id}/folder/upload?name=${encodeURIComponent(f.name)}&dir=${encodeURIComponent(dir || "")}`, f); } catch (x) { fail++; toast(`${f.name}: ${x.message}`, true); }
+        }
+        prog.textContent = "";
+        if (n - fail) toast(`${n - fail} archivo(s) subidos a tu carpeta`);
+        show(path);
+      };
+      // carpetas arrastradas: se recorren con la API de entradas del navegador
+      const walk = async (entry, dir, out) => {
+        if (entry.isFile) { out.push({ f: await new Promise((res, rej) => entry.file(res, rej)), dir }); return; }
+        const rd = entry.createReader();
+        for (;;) { const batch = await new Promise((res, rej) => rd.readEntries(res, rej)); if (!batch.length) break; for (const c of batch) await walk(c, (dir ? dir + "/" : "") + entry.name, out); }
+      };
+      const drop = guard(async (e) => {
+        e.preventDefault(); zone.classList.remove("over");
+        if (!can("member")) return;
+        const out = [];
+        for (const it of [...e.dataTransfer.items]) { const en = it.webkitGetAsEntry?.(); if (en) await walk(en, "", out); }
+        await sendFiles(out);
+      });
+      const addLink = guard(async () => {
+        const f = await form("Agregar un enlace", [{ name: "title", label: "Nombre (ej.: Diseño en Figma)", max: 80 }, { name: "url", label: "Dirección (https://…)", max: 500 }], "Agregar"); if (!f) return;
+        if (!/^https?:\/\/\S+$/i.test(f.url.trim())) throw new Error("la dirección tiene que empezar con http:// o https://");
+        const nm = (f.title.trim() || "enlace").replace(/[\\/:*?"<>|]/g, "_").slice(0, 100) + ".url";
+        await apiRaw("POST", `/api/tasks/${task.id}/folder/upload?name=${encodeURIComponent(nm)}`, new Blob([`[InternetShortcut]\nURL=${f.url.trim()}\n`]));
+        toast("Enlace agregado a tu carpeta"); show(path);
+      });
+      const openLink = guard(async (p) => {
+        const t = await (await apiRaw("GET", `/api/tasks/${task.id}/folder/file?path=${encodeURIComponent(p)}`)).text();
+        const u = (t.match(/^URL=(https?:\/\/\S+)/m) || [])[1]; if (!u) throw new Error("el enlace no es válido");
+        window.open(u, "_blank", "noopener,noreferrer");
+      });
+      const mine = (p) => p.split("/")[0] === S.user.username.replace(/[^\p{L}\p{N}_-]/gu, "_");
+      const showVersions = guard(async (p, name) => {
+        const vs = await api("GET", `/api/tasks/${task.id}/folder/versions?path=${encodeURIComponent(p)}`);
+        const close = () => document.getElementById("ver-modal")?.remove();
+        document.body.append(h("div", { class: "overlay", id: "ver-modal", onmousedown: (e) => e.target.id === "ver-modal" && close() },
+          h("div", { class: "modal" }, h("h3", {}, "🕘 Versiones de " + name),
+            h("small", { class: "hint" }, "Cada vez que se guarda encima o se borra, queda la versión anterior (las últimas 20)."),
+            ...(vs.length ? vs.map((v) => h("div", { class: "row" }, h("span", {}, new Date(v.ms).toLocaleString()), h("small", {}, kb(v.size)), h("span", { class: "spacer" }),
+              h("button", { class: "ghost", onclick: guard(() => saveFile(`/api/tasks/${task.id}/folder/version?path=${encodeURIComponent(p)}&ts=${v.ts}`, name)) }, "Descargar"),
+              mine(p) && can("member") && h("button", { onclick: guard(async () => { if (!(await ask("¿Volver a esta versión? La actual queda guardada como versión.", "Volver"))) return; await api("POST", `/api/tasks/${task.id}/folder/restore?path=${encodeURIComponent(p)}&ts=${v.ts}`); close(); toast("Versión restaurada"); show(path); }) }, "Volver a esta"))) : [h("small", { class: "hint" }, "Todavía no hay versiones anteriores: es la única.")]),
+            h("div", { class: "actions" }, h("button", { class: "ghost", onclick: close }, "Cerrar")))));
       });
       const publish = guard(async () => {
         if (!(await ask("¿Aprobar y publicar? Se copia el trabajo del responsable a la carpeta final y la tarea pasa a Hecha.", "Aprobar y publicar"))) return;
         upsert(await api("POST", `/api/tasks/${task.id}/publish`)); toast("Publicado en final/ y tarea Hecha"); closeModal(); render();
       });
+      const prog = h("small", { class: "hint" }), zone = h("div", { class: "dropzone", ondragover: (e) => { if (can("member")) { e.preventDefault(); zone.classList.add("over"); } }, ondragleave: () => zone.classList.remove("over"), ondrop: drop },
+        can("member") && h("small", { class: "hint" }, "Arrastrá archivos o carpetas acá para subirlos a tu carpeta"), can("member") && !showTech() && h("small", { class: "hint" }, "Para archivos grandes o para guardar desde tus programas: Configuración → Carpeta de red"), prog);
       body.replaceChildren(
         h("div", { class: "files-path" }, h("a", { onclick: () => show("") }, "📂 tarea"), ...parts.flatMap((p, i) => [" / ", h("a", { onclick: () => show(parts.slice(0, i + 1).join("/")) }, p)])),
         !r.exists ? h("small", { class: "hint" }, r.reason) : h("div", { class: "files-list" }, path && h("div", { class: "files-row", onclick: () => show(parts.slice(0, -1).join("/")) }, "⬆ .."),
-          r.entries.map((e) => h("div", { class: "files-row", title: e.dir ? "Abrir carpeta" : "Descargar", onclick: () => (e.dir ? show(join(path, e.name)) : saveFile(`/api/tasks/${task.id}/folder/file?path=${encodeURIComponent(join(path, e.name))}`, e.name).catch((x) => toast(x.message, true))) },
-            h("span", {}, (e.dir ? (e.name === "final" && !path ? "✅ " : "📁 ") : "📄 ") + e.name), h("small", {}, e.dir ? "" : kb(e.size)))),
+          r.entries.map((e) => { const fp = join(path, e.name), isUrl = /\.url$/i.test(e.name), api_ = `/api/tasks/${task.id}/folder/file?path=${encodeURIComponent(fp)}`;
+            return h("div", { class: "files-row", title: e.dir ? "Abrir carpeta" : isUrl ? "Abrir el enlace" : "Descargar", onclick: () => (e.dir ? show(fp) : isUrl ? openLink(fp) : saveFile(api_, e.name).catch((x) => toast(x.message, true))) },
+              h("span", {}, (e.dir ? (e.name === "final" && !path ? "✅ " : "📁 ") : isUrl ? "🔗 " : "📄 ") + (isUrl ? e.name.replace(/\.url$/i, "") : e.name)),
+              h("span", { class: "row" }, !e.dir && h("small", {}, kb(e.size)),
+                !e.dir && isPreviewable(e.name) && h("button", { class: "ghost", title: "Ver sin descargar", onclick: (ev) => { ev.stopPropagation(); openPreview({ name: e.name, path: api_ }); } }, "👁"),
+                !e.dir && path && !path.startsWith("final") && h("button", { class: "ghost", title: "Versiones anteriores de este archivo", onclick: (ev) => { ev.stopPropagation(); showVersions(fp, e.name); } }, "🕘"))); }),
           !r.entries.length && h("small", { class: "hint" }, "Carpeta vacía")),
+        zone,
         h("div", { class: "row" },
-          can("member") && h("label", { class: "ghost-btn", title: "Sube un archivo a TU carpeta de esta tarea (para quien trabaja desde otra máquina o con su IA local). No se permiten programas ejecutables." }, "⬆ Subir a mi carpeta", h("input", { type: "file", hidden: true, onchange: up })),
+          can("member") && h("label", { class: "ghost-btn", title: "Sube archivos a TU carpeta de esta tarea (hasta 25 MB cada uno; para los más grandes, la carpeta de red). No se permiten programas ejecutables." }, "⬆ Subir archivos", h("input", { type: "file", multiple: true, hidden: true, onchange: up })),
+          can("member") && h("label", { class: "ghost-btn", title: "Sube una carpeta entera con sus subcarpetas" }, "📁 Subir carpeta", h("input", { type: "file", webkitdirectory: true, hidden: true, onchange: up })),
+          can("member") && h("button", { class: "ghost", title: "Agrega un enlace (Drive, Figma, Dropbox…) como entregable, sin subir nada", onclick: addLink }, "🔗 Agregar enlace"),
           h("span", { class: "spacer" }),
           canDecide() && h("button", { class: "primary", title: "Decide quien creó la tarea (o un admin): copia el trabajo del responsable a final/ y pasa la tarea a Hecha", onclick: publish }, "✅ Aprobar y publicar")));
     } catch (e) { body.replaceChildren(h("small", { class: "hint" }, e.message)); }
   }
   const d = h("details", { class: "desc-box", title: "Cada responsable trabaja en su carpeta; lo aprobado queda en final/. Todos los del equipo pueden mirar y descargar; cada uno escribe solo en la suya.", ontoggle: (e) => e.target.open && show("") }, h("summary", {}, "📂 Carpeta de la tarea"), body);
+  // en perfiles sin partes técnicas (diseño, contenido, oficina) los archivos son lo principal: se muestra abierta
+  if (!showTech()) { d.open = true; show(""); }
   return d;
 }
 

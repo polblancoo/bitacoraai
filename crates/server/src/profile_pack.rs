@@ -13,7 +13,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tm_core::{Id, NewProject, NewTask, NewTeam, Role, Status};
 
-const PROFILES: [&str; 5] = ["dev", "content", "factory", "office", "other"];
+const PROFILES: [&str; 6] = ["dev", "content", "design", "factory", "office", "other"];
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -29,6 +29,7 @@ async fn is_example(st: &AppState, team: Id) -> bool {
 fn profile_name(profile: &str) -> &'static str {
     match profile {
         "content" => "Contenido y redes",
+        "design" => "Diseño y audiovisual",
         "factory" => "Fábrica de apps",
         "office" => "Oficina y estudios",
         "other" => "Equipo general",
@@ -81,6 +82,18 @@ fn example_for(profile: &str) -> Vec<Ex> {
                 ("Traducir el post al inglés y al portugués", "Mismo tono de marca en los tres idiomas.", Todo, 1, Some(4)),
                 ("Diseñar la imagen del post", "Medidas para feed y stories.", Todo, 1, Some(5)),
                 ("Publicar el post aprobado", "Se programa la fecha y se comenta el enlace acá.", Done, 1, None),
+            ],
+        }],
+        "design" => vec![Ex {
+            project: "Ejemplo · Campaña de lanzamiento",
+            color: "#f7768e",
+            tasks: &[
+                ("👋 Arrastrame a «En producción»", "Esto es un ejemplo. Guardá tus archivos desde tus programas en la carpeta de red y mirá la carpeta de cada pieza. «Eliminar ejemplo» en Configuración lo borra todo.", Todo, 2, None),
+                ("Brief de la campaña", "Objetivo, público, tono y formatos. Subí el brief a tu carpeta de la tarea.", Done, 2, None),
+                ("Logo y paleta de colores", "Subí las versiones desde Illustrator o Figma; cada vez que guardes queda la versión anterior.", Doing, 2, Some(3)),
+                ("Edición del video de 30 segundos", "Entregá el export final y el enlace al proyecto en la nube (Premiere, DaVinci).", Todo, 2, Some(6)),
+                ("Banners para redes (feed y stories)", "Medidas 1080×1080 y 1080×1920.", Todo, 1, Some(5)),
+                ("Revisión y aprobación del cliente", "Quien creó la tarea revisa y aprueba: lo aprobado pasa a final/.", Todo, 1, Some(8)),
             ],
         }],
         "factory" => vec![

@@ -1108,3 +1108,8 @@ aside h2 > button.sec-toggle .ic { margin-right: 7px; }
 .ok{color:var(--green,#3fb950)}
 .mail-out{margin-top:6px;min-height:1.2em}
 .wiz-d{border:1px solid var(--border,#2a2e44);border-radius:8px;margin:8px 0;padding:4px 10px}.wiz-d>summary{cursor:pointer;font-weight:600;padding:6px 0}.wiz-steps{margin:6px 0 10px 18px;padding:0;font-size:.92em;line-height:1.5}.wiz-steps li{margin:3px 0}.wiz-list .cfg-line{align-items:center}
+
+.dropzone { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 12px; text-align: center; transition: background .15s; }
+.dropzone.over { background: var(--bg2); border-color: var(--accent, #6aa7ff); }
+.files-row .row { gap: 6px; align-items: center; }
+.tfolder .row { flex-wrap: wrap; }
