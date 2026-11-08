@@ -12,7 +12,8 @@
 | Git difícil para no programadores | **Resuelta**: barra de botones con tooltips de git, comando `cw`, PR sin cuenta de GitHub, asistente de repositorio |
 | Instalar en la máquina de otra persona | **Parcial**: `install.sh --client` (solo Linux) e invitación lista para pegar |
 | Instaladores macOS/Windows, sandbox ahí | Sin hacer |
-| `tm-mcp`, auditoría exportable, corte duro de presupuesto, SSO, Postgres | Sin hacer |
+| Auditoría exportable, corte duro de presupuesto y alertas al 80 % | **Cerradas (2026-11-08)**: CSV/JSON del equipo, corte antes de cada ejecución y aviso al 80 % |
+| `tm-mcp`, SSO, Postgres | Sin hacer |
 
 ## 2. FODA de CrewHelm (hoy)
 
@@ -33,7 +34,7 @@
 **Debilidades**
 - Sin tracción: un autor, sin comunidad ni referencias públicas; repositorio privado (el instalador público hoy da 404).
 - Aislamiento solo en Linux con bwrap; en macOS/Windows no hay equivalente. Los límites de memoria/CPU dependen de systemd; la cuota de disco no es un tope duro.
-- Sin auditoría exportable, sin SSO, sin 2FA, sin revisión de seguridad externa.
+- Sin SSO, sin 2FA, sin revisión de seguridad externa.
 - SQLite limita escala y alta disponibilidad.
 - Mensaje amplio (tareas, procesos, código, contenido).
 - La mayor parte de lo nuevo se probó con repos y usuarios de prueba; falta uso real sostenido de varios miembros.
@@ -49,9 +50,9 @@
 
 | # | Función | Hoy | Quién la tiene | Por qué agregarla | Prioridad |
 |---|---|---|---|---|---|
-| 1 | **Auditoría exportable** (quién/qué IA ejecutó qué, aprobaciones, costo; CSV/JSON) | Hay rastro en la app, sin exportar | Devin y Copilot (empresa) | Es el argumento de venta ante regulación; convierte «gobierno» en algo demostrable | Alta |
+| 1 | ✅ **Auditoría exportable** (quién/qué IA ejecutó qué, aprobaciones, costo; CSV/JSON) | Hecha | Devin y Copilot (empresa) | Es el argumento de venta ante regulación; convierte «gobierno» en algo demostrable | Alta |
 | 2 | **`tm-mcp` terminado y publicado** | En desarrollo | Vibe Kanban, Plane, OpenHands | Canal de descubrimiento más barato; deja que otras IAs usen CrewHelm | Alta |
-| 3 | **Presupuesto con corte duro y alertas al 80 %** | Cuotas y estimación, sin freno | Ninguno lo junta con tablero | Evita sorpresas de gasto; refuerza «costos por IA» | Alta |
+| 3 | ✅ **Presupuesto con corte duro y alertas al 80 %** | Hecho | Ninguno lo junta con tablero | Evita sorpresas de gasto; refuerza «costos por IA» | Alta |
 | 4 | **Seguridad: 2FA, `SECURITY.md`, revisión externa** | Pendiente | Todos los SaaS serios | Sin esto no se puede vender a empresas; un incidente sería fatal para un proyecto joven | Alta |
 | 5 | **Diffs dentro de la tarea** (hoy solo en 🔀 Integrar) | A nivel proyecto | Vibe Kanban, Devin | La IA entrega por tarea; revisar donde se trabaja ahorra pasos | Media |
 | 6 | **Aprobaciones por riesgo** (borrar, desplegar, gastar sobre X) | Solo listas de comandos | Ninguno claro | Acerca el control a lo que una empresa realmente teme | Media |

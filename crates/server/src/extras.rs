@@ -167,6 +167,10 @@ pub async fn log_project_task(st: &AppState, project: Id, user: Id, text: String
         .bind(task)
         .execute(&st.db)
         .await;
+    // copia permanente para la auditoría exportable (la lista de actividad se recorta a 500)
+    if let Ok(Some(team)) = sqlx::query_scalar::<_, Id>("SELECT team_id FROM projects WHERE id = ?").bind(project).fetch_optional(&st.db).await {
+        crate::audit::record(st, team, Some(project), task, user, "accion", &text).await;
+    }
     let _ = sqlx::query("DELETE FROM activity WHERE project_id = ? AND id NOT IN (SELECT id FROM activity WHERE project_id = ? ORDER BY id DESC LIMIT 500)")
         .bind(project)
         .bind(project)
@@ -462,7 +466,7 @@ struct ExportParams {
 }
 
 /// Escapa una celda CSV y neutraliza fórmulas (`=`, `+`, `-`, `@`) para que no se ejecuten en una planilla.
-fn csv_cell(s: &str) -> String {
+pub(crate) fn csv_cell(s: &str) -> String {
     let s = if s.starts_with(['=', '+', '-', '@', '\t', '\r']) { format!("'{s}") } else { s.to_string() };
     if s.contains([',', '"', '\n', '\r']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s }
 }

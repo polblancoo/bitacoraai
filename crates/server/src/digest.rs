@@ -55,7 +55,7 @@ pub async fn prefs(st: &AppState, user: Id) -> Prefs {
 
 /// Los pedidos de ayuda de una IA (🙋) y los informes (que ya tienen su propio horario) no esperan al resumen.
 pub fn instant_kind(kind: &str, text: &str) -> bool {
-    kind == "report" || text.contains('🙋')
+    kind == "report" || kind == "budget" || text.contains('🙋')
 }
 
 async fn get_prefs(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {

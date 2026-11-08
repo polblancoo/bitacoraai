@@ -541,3 +541,9 @@ Under *Settings → 🚀 First steps* (CTO and administrator) there is a checkli
 - **🔒 HTTPS**: chosen when installing the server; the list only shows whether it is active.
 
 What you save in the wizard overrides the environment variables (`TM_TELEGRAM_TOKEN`, `TM_GITHUB_CLIENT_ID`, `TM_GOOGLE_*`, `TM_SMTP_*`); *Remove* falls back to whatever is in the environment.
+
+## 27. Audit and spending limits
+
+**Exportable audit** (*Settings → Team and project → Audit log*, admins and owners only): downloads the team's full timeline as CSV or JSON, with optional from / to dates. It includes who (person or AI) did what and when, permissions given to AIs, reviews and returns, limit and quota changes, every AI run with its model, tokens and cost, and chat activity. It is never trimmed over time, and every download is recorded in the same log. In the CSV, cells starting with `=`, `+`, `-` or `@` are neutralised so a spreadsheet won't execute them.
+
+**Spending limits**: a task can have a token limit, and the project and the team a monthly quota. When the limit is used up the AI **does not start** another run (hard stop) until someone raises it. At **80 %** and when it runs out, owners and admins get an instant alert (inbox, Telegram and email) and it is logged in the audit as `alerta_presupuesto`. A run already in progress finishes; the stop applies before the next one.

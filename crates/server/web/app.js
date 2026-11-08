@@ -2735,6 +2735,7 @@ const CFG_HELP = {
   project: ["Proyecto", "Un proyecto agrupa las tareas del equipo (tablero, calendario, Gantt y pizarra). Creá uno con «Nuevo proyecto».", null],
   perfil: ["Perfil de uso", "Prepara la interfaz según para qué usan el equipo: cambia los nombres de las columnas y oculta lo técnico (terminales, carpeta del código) si no hace falta. «Cargar ejemplo» crea un proyecto de muestra con tareas; «Eliminar ejemplo» lo borra entero y deja todo limpio. No toca tus proyectos reales.", null],
   duplicate: ["Usar como plantilla", "Crea un proyecto nuevo copiando las tareas, etiquetas y dependencias del actual, para repetir un proceso sin armarlo de cero.", null],
+  audit: ["Auditoría del equipo", "Descarga el registro completo del equipo en CSV o JSON: quién (persona o IA) hizo qué y cuándo, permisos dados a las IAs, revisiones, cambios de tope, cada ejecución de IA con modelo, tokens y costo, y los movimientos del chat. No se recorta con el tiempo. Podés acotar por fechas. Solo administradores y dueños, y cada descarga queda anotada.", null],
   export: ["Exportar", "Descarga todas las tareas del proyecto en CSV (para planilla) o JSON (para copia de seguridad o scripts).", null],
   integrations: ["Integraciones", "Sumá herramientas externas (por ejemplo una videollamada con Jitsi) como botones en la barra de arriba. Con el asistente queda lista en tres pasos, con salida a internet o con tu propio servidor. Las configura un administrador y las usa todo el equipo.", null],
   bars: ["Posición de los botones", "Elegí si los botones del proyecto (Programadas, Consumo, GitHub, Proyecto, Equipo…) y las vistas con el buscador (Tablero, Calendario, Gantt…) van arriba o abajo de la pantalla. Se guarda solo en este dispositivo.", null],
@@ -3167,6 +3168,11 @@ const openSettings = guard(async () => {
         S.project && can("member") && line(["Usar como plantilla (copia tareas, etiquetas y dependencias)", "duplicate"], h("button", { onclick: go(duplicateProject) }, "Duplicar")),
         S.project && line(["Exportar las tareas", "export"], h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
           h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
+      S.team && can("admin") && sec("Auditoría", (() => {
+        const f = h("input", { type: "date", title: "Desde (vacío = desde el principio)" }), t = h("input", { type: "date", title: "Hasta (vacío = hasta hoy)" });
+        const dl = (fmt) => guard(() => saveFile(`/api/teams/${S.team.id}/audit/export?format=${fmt}&from=${f.value}&to=${t.value}`, `auditoria-${S.team.name}.${fmt}`));
+        return line(["Registro de auditoría (quién hizo qué, permisos, gasto de las IAs)", "audit"], f, t, h("button", { onclick: dl("csv") }, "CSV"), h("button", { onclick: dl("json") }, "JSON"));
+      })()),
       S.team && sec(`Equipo «${S.team.name}»`,
         line([`Tu rol: ${ROLES.find(([r]) => r === myRole())?.[1]}`, "role"]),
         can("member") && line(["Enviar un mensaje al equipo", "message"], h("button", { onclick: go(sendTeamMessage) }, "Escribir")),
@@ -3279,7 +3285,7 @@ const openSettings = guard(async () => {
   const TABS = [
     ["cuenta", "👤 Cuenta", ["user", "inbox", "logout", "logoutAll"]],
     ["conexiones", "🔔 Avisos y conexiones", ["email", "telegram", "digest", "github", "google", "reports"]],
-    ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export"]],
+    ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export", "audit"]],
     ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["integraciones", "🔌 Integraciones", ["integrations"]],
     ["procesos", "🖥 Procesos", ["procesos"]],

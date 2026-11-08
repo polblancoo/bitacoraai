@@ -541,3 +541,9 @@ Em *Configurações → 🚀 Primeiros passos* (CTO e administrador) há uma lis
 - **🔒 HTTPS**: escolhido ao instalar o servidor; a lista só mostra se está ativo.
 
 O que for salvo no assistente substitui as variáveis de ambiente (`TM_TELEGRAM_TOKEN`, `TM_GITHUB_CLIENT_ID`, `TM_GOOGLE_*`, `TM_SMTP_*`); *Remover* volta ao que houver no ambiente.
+
+## 27. Auditoria e limites de gasto
+
+**Auditoria exportável** (*Configurações → Equipe e projeto → Registro de auditoria*, só administradores e donos): baixa em CSV ou JSON a linha do tempo completa da equipe, com datas opcionais (de / até). Inclui quem (pessoa ou IA) fez o quê e quando, as permissões dadas às IAs, revisões e devoluções, mudanças de limite e de cota, cada execução de IA com modelo, tokens e custo, e a atividade do chat. Não é cortada com o tempo, e cada download fica registrado no mesmo registro. No CSV, as células que começam com `=`, `+`, `-` ou `@` são neutralizadas para que a planilha não as execute.
+
+**Limites de gasto**: uma tarefa pode ter um limite de tokens, e o projeto e a equipe uma cota mensal. Com o limite esgotado, a IA **não inicia** outra execução (corte duro) até que alguém o aumente. Ao chegar a **80 %** e quando se esgota, donos e administradores recebem um aviso na hora (caixa de entrada, Telegram e e-mail) e fica na auditoria como `alerta_presupuesto`. Uma execução em andamento termina; o corte vale antes da próxima.

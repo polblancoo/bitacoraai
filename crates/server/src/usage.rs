@@ -94,7 +94,80 @@ async fn record_run(State(st): State<AppState>, user: AuthUser, Path(task): Path
         .bind(i64::from(r.ok))
         .execute(&st.db)
         .await?;
+    let this = c(r.input_tokens) + c(r.output_tokens) + c(r.cache_create);
+    budget_alerts(&st, task, project, this).await;
     Ok(Json(json!({ "ok": true })))
+}
+
+/// Avisa a los dueños y administradores cuando un tope (tarea, proyecto o equipo) cruza el 80 % o se agota con esta ejecución.
+/// El corte duro ya lo hace `budget_check`: la IA no arranca otra ejecución con el tope agotado.
+async fn budget_alerts(st: &AppState, task: Id, project: Id, this: i64) {
+    let Ok(team) = project_team(st, project).await else { return };
+    let ms = month_start();
+    let Ok((budget, pq, title, pname)): std::result::Result<(i64, i64, String, String), _> =
+        sqlx::query_as("SELECT t.token_budget, p.token_quota, t.title, p.name FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = ?").bind(task).fetch_one(&st.db).await
+    else { return };
+    let tq: i64 = sqlx::query_scalar("SELECT token_quota FROM teams WHERE id = ?").bind(team).fetch_one(&st.db).await.unwrap_or(0);
+    let mut hits: Vec<String> = Vec::new();
+    let mut scopes: Vec<(String, i64, i64)> = Vec::new();
+    if budget > 0 {
+        scopes.push((format!("la tarea «{title}»"), sums(st, "task_id = ?", &[task.to_string()]).await.map(|x| x.0).unwrap_or(0), budget));
+    }
+    if pq > 0 {
+        scopes.push((format!("el proyecto «{pname}» (este mes)"), sums(st, "project_id = ? AND started_at >= ?", &[project.to_string(), ms.clone()]).await.map(|x| x.0).unwrap_or(0), pq));
+    }
+    if tq > 0 {
+        scopes.push(("el equipo (este mes)".to_string(), sums(st, "project_id IN (SELECT id FROM projects WHERE team_id = ?) AND started_at >= ?", &[team.to_string(), ms]).await.map(|x| x.0).unwrap_or(0), tq));
+    }
+    for (what, now, limit) in scopes {
+        if let Some(msg) = crossed(now, this, limit) {
+            hits.push(format!("{what}: {msg} ({now} de {limit} tokens)"));
+        }
+    }
+    if hits.is_empty() {
+        return;
+    }
+    let admins: Vec<Id> = sqlx::query_scalar("SELECT m.user_id FROM team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = ? AND m.role IN ('owner', 'admin') AND u.is_bot = 0")
+        .bind(team)
+        .fetch_all(&st.db)
+        .await
+        .unwrap_or_default();
+    for h in hits {
+        crate::audit::record(st, team, Some(project), Some(task), 0, "alerta_presupuesto", &h).await;
+        for a in &admins {
+            crate::notify::notify(st, *a, "budget", Some(team), Some(task), format!("💰 {h}")).await;
+        }
+    }
+}
+
+/// Qué umbral cruzó esta ejecución: pasó del 80 % o llegó al tope. `now` ya incluye `this`.
+fn crossed(now: i64, this: i64, limit: i64) -> Option<&'static str> {
+    if limit <= 0 {
+        return None;
+    }
+    let before = now - this;
+    if before < limit && now >= limit {
+        Some("agotó su tope: no arranca otra ejecución hasta que lo subas")
+    } else if before * 100 < limit * 80 && now * 100 >= limit * 80 {
+        Some("llegó al 80 % del tope")
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::crossed;
+
+    #[test]
+    fn umbrales() {
+        assert_eq!(crossed(70, 10, 100), None);
+        assert_eq!(crossed(80, 10, 100), Some("llegó al 80 % del tope"));
+        assert_eq!(crossed(85, 5, 100), None, "ya estaba pasado el 80 %");
+        assert_eq!(crossed(100, 10, 100), Some("agotó su tope: no arranca otra ejecución hasta que lo subas"));
+        assert_eq!(crossed(130, 60, 100), Some("agotó su tope: no arranca otra ejecución hasta que lo subas"));
+        assert_eq!(crossed(500, 10, 0), None);
+    }
 }
 
 /// Antes de empezar, la IA pregunta si quedan tokens: tope de la tarea, cuota del proyecto y cuota del equipo.
@@ -146,6 +219,7 @@ async fn set_budget(State(st): State<AppState>, user: AuthUser, Path(task): Path
     let project = task_project(&st, task).await?;
     routes::require(&st, project_team(&st, project).await?, user.id, Role::Member).await?;
     sqlx::query("UPDATE tasks SET token_budget = ? WHERE id = ?").bind(b.tokens.clamp(0, MAX_TOKENS)).bind(task).execute(&st.db).await?;
+    crate::extras::log_task(&st, task, user.id, format!("fijó el tope de la tarea en {} tokens", b.tokens.clamp(0, MAX_TOKENS))).await;
     Ok(Json(json!({ "budget": b.tokens.clamp(0, MAX_TOKENS) })))
 }
 
@@ -216,6 +290,7 @@ async fn set_project_quota(State(st): State<AppState>, user: AuthUser, Path(proj
     user.human_only()?;
     routes::require(&st, project_team(&st, project).await?, user.id, Role::Admin).await?;
     sqlx::query("UPDATE projects SET token_quota = ? WHERE id = ?").bind(b.tokens.clamp(0, MAX_TOKENS)).bind(project).execute(&st.db).await?;
+    crate::extras::log(&st, project, user.id, format!("fijó la cuota mensual del proyecto en {} tokens", b.tokens.clamp(0, MAX_TOKENS))).await;
     Ok(Json(json!({ "quota": b.tokens.clamp(0, MAX_TOKENS) })))
 }
 
@@ -223,5 +298,6 @@ async fn set_team_quota(State(st): State<AppState>, user: AuthUser, Path(team): 
     user.human_only()?;
     routes::require(&st, team, user.id, Role::Owner).await?;
     sqlx::query("UPDATE teams SET token_quota = ? WHERE id = ?").bind(b.tokens.clamp(0, MAX_TOKENS)).bind(team).execute(&st.db).await?;
+    crate::audit::record(&st, team, None, None, user.id, "accion", &format!("fijó la cuota mensual del equipo en {} tokens", b.tokens.clamp(0, MAX_TOKENS))).await;
     Ok(Json(json!({ "quota": b.tokens.clamp(0, MAX_TOKENS) })))
 }

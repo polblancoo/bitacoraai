@@ -466,3 +466,16 @@ CREATE TABLE IF NOT EXISTS user_ssh_keys (
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
     UNIQUE (user_id, key)
 );
+
+-- Auditoría permanente (no se recorta como `activity`): quién hizo qué y cuándo, para exportar
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    team_id INTEGER NOT NULL,
+    project_id INTEGER,
+    task_id INTEGER,
+    user_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_team ON audit_log(team_id, at);
