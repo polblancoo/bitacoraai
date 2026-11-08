@@ -7,13 +7,13 @@
 ## Estructura en disco (modo servidor, `TM_WORKSPACE=/home/crewhelm`)
 ```
 /home/crewhelm/
-  homeCrewHelm/<persona o IA>/            espacio personal: sesión del CLI, memoria, intermedios
+  homeBitacora/<persona o IA>/            espacio personal: sesión del CLI, memoria, intermedios
     <proyecto>/<tarea>/                   lo intermedio de una tarea (no entregable)
   proyectos/<proyecto>/
     tareas/<tarea>/                       copia de trabajo aislada de la tarea (rama tm/tarea-N)
 ```
-Sin `TM_WORKSPACE` (instalación actual) todo sigue como antes: la copia de trabajo vive en `<carpeta del proyecto>/.crewhelm/wt/tarea-N`
-y lo intermedio en `<carpeta del proyecto>/.crewhelm/<usuario>/<tarea>`.
+Sin `TM_WORKSPACE` (instalación actual) todo sigue como antes: la copia de trabajo vive en `<carpeta del proyecto>/.bitacora/wt/tarea-N`
+y lo intermedio en `<carpeta del proyecto>/.bitacora/<usuario>/<tarea>`.
 
 ## Fase 1 — copia de trabajo por tarea y push desde `tm-agent`
 - Al empezar una tarea de un proyecto que es un repositorio git, `tm-agent` crea una **copia aislada** (`git clone --local`, objetos con hardlinks: casi no ocupa)
@@ -59,7 +59,7 @@ Configuración → «Comandos permitidos y prohibidos para todas las IAs».
 **Cómo se activa**
 - Por IA: ficha de la IA → «🛡 Aislamiento» → *Copia de trabajo por tarea* o *Sandbox*. Vale desde la próxima tarea.
 - Para todas las IAs de un agente: variables `TM_SANDBOX=bwrap` o `TM_WORKTREE=1`.
-- Modo servidor: `TM_WORKSPACE=/home/crewhelm` (espacios personales en `homeCrewHelm/<IA>/`, copias en `proyectos/<proyecto>/tareas/<id>`).
+- Modo servidor: `TM_WORKSPACE=/home/crewhelm` (espacios personales en `homeBitacora/<IA>/`, copias en `proyectos/<proyecto>/tareas/<id>`).
   Con `TM_WORKSPACE` la IA usa su propio `HOME`; la primera vez se inicia sesión de su CLI con `TM_IA=<nombre> tm-agent sandbox-shell`.
 - Otras variables: `TM_SANDBOX_NET=open|proxy|none`, `TM_SANDBOX_NET_ALLOW=dominio1,dominio2`, `TM_SANDBOX_RW` y `TM_SANDBOX_RO` (rutas extra, separadas por comas).
 
@@ -78,13 +78,13 @@ Configuración → «Comandos permitidos y prohibidos para todas las IAs».
 - Mac y Windows: sin sandbox (haría falta el driver Docker).
 
 ## Fase 4 — espacios personales para personas (2026-11-06)
-- Con `TM_WORKSPACE`, la terminal web usa `homeCrewHelm/<persona>/` como `HOME`: ahí persisten su `.bashrc`, herdr y lo que guarde. Es solo suyo.
+- Con `TM_WORKSPACE`, la terminal web usa `homeBitacora/<persona>/` como `HOME`: ahí persisten su `.bashrc`, herdr y lo que guarde. Es solo suyo.
 - Owners: shell completa con su espacio como HOME (las herramientas del servicio siguen en el PATH).
 - Miembros: pueden abrir la terminal solo si el agente del proyecto tiene `TM_WORKSPACE`; corre en cápsula `bwrap` (su espacio escribible, el proyecto en solo lectura, sin el home real). Sin `bwrap` no abre.
 - Por SSH directo a la máquina del proyecto siguen entrando solo los owners.
 - Preferencias de terminal (`autoHerdr`) guardadas por cuenta en el servidor (`/api/me/term-prefs`).
 - Admin (owner): selector «👁 Ver espacio de…» en Terminales; abre una cápsula con el espacio de esa persona o IA en **solo lectura** (queda registrado en el log del servidor).
-- Limpieza: el barrido del agente también recorre `homeCrewHelm/*/<proyecto>/<tarea>` (personas y demás IAs), con el mismo aviso a los 23 días y borrado a los 30.
+- Limpieza: el barrido del agente también recorre `homeBitacora/*/<proyecto>/<tarea>` (personas y demás IAs), con el mismo aviso a los 23 días y borrado a los 30.
 - **SSH por persona:** cada persona carga su clave pública en su perfil («🔑 Entrar por SSH», hasta 5). Con `TM_SSH_KEYS=1` (y `TM_WORKSPACE`), `tm-agent` escribe cada minuto un bloque propio en `~/.ssh/authorized_keys` del usuario de servicio. Cada clave lleva `restrict,pty,command="tm-agent ssh-session <persona> <nivel>"`: no abre túneles, agente ni X11, y rechaza comandos sueltos (`ssh host comando`).
   Owner → shell con su espacio como HOME; miembro → cápsula `bwrap` (no ve `~/.ssh`, home real ni a otras personas). El nivel sale del rol en los equipos del agente.
   Conectarse: `ssh <usuario-de-servicio>@<servidor>` con la clave privada correspondiente. Las líneas ajenas de `authorized_keys` no se tocan.

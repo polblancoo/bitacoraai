@@ -1,6 +1,6 @@
 //! Carpeta de red (WebDAV): cada proyecto se puede montar como una unidad en Windows, macOS o Linux
 //! (`/dav/<id del proyecto>/`) y guardar ahí desde cualquier programa (Photoshop, Premiere, Word, DaVinci…).
-//! Muestra `<carpeta del proyecto>/.crewhelm/` con la misma regla de siempre: todos leen, cada persona escribe solo
+//! Muestra `<carpeta del proyecto>/.bitacora/` con la misma regla de siempre: todos leen, cada persona escribe solo
 //! en su carpeta y `_tareas/<n>/final/` es solo lectura. Antes de pisar o borrar un archivo se guarda la versión anterior.
 use crate::{auth, error::Result as ApiResult, flow, limits, routes, taskfiles, AppState};
 use axum::{
@@ -160,7 +160,7 @@ async fn run(st: &AppState, peer: SocketAddr, req: Request<Body>) -> Result<Resp
     }
     let wd: Option<String> = sqlx::query_scalar("SELECT work_dir FROM projects WHERE id = ?").bind(project).fetch_optional(&st.db).await.ok().flatten();
     let wd = wd.filter(|w| !w.trim().is_empty()).and_then(|w| std::fs::canonicalize(w).ok()).ok_or_else(|| plain(StatusCode::NOT_FOUND, "La carpeta del proyecto no está en la máquina del servidor"))?;
-    let root = wd.join(".crewhelm");
+    let root = crate::taskfiles::data_dir(&wd);
     let mine = flow::safe_name(&who.name);
     if role >= Role::Member {
         let _ = std::fs::create_dir_all(root.join(&mine));

@@ -208,7 +208,7 @@ async fn recover(p: &Value, project_dir: &Path) -> Result<Value, String> {
         project_dir.to_path_buf()
     } else {
         let ws = crate::term::workspace().ok_or("Este servidor no usa espacios personales")?;
-        ws.join("homeCrewHelm").join(crate::iso::slug(who)).join(crate::iso::slug(p["project"].as_str().unwrap_or("")))
+        crate::iso::ws_homes(&ws).join(crate::iso::slug(who)).join(crate::iso::slug(p["project"].as_str().unwrap_or("")))
     };
     if !copy.join(".git").exists() {
         return Err("Todavía no tenés una copia de trabajo de este proyecto: abrí su terminal una vez y volvé a probar.".into());
@@ -353,9 +353,9 @@ async fn recover(p: &Value, project_dir: &Path) -> Result<Value, String> {
                 if !is_sha(&sha) {
                     return Err("Esa rama no está en el proyecto".into());
                 }
-                rc.g(&["fetch", "-q", &project_dir.to_string_lossy(), &format!("+{src}:refs/crewhelm/recuperada")]).await.map_err(|e| format!("no pude traerla: {e}"))?;
-                rc.g(&["branch", name, "refs/crewhelm/recuperada"]).await?;
-                let _ = rc.g(&["update-ref", "-d", "refs/crewhelm/recuperada"]).await;
+                rc.g(&["fetch", "-q", &project_dir.to_string_lossy(), &format!("+{src}:refs/bitacora/recuperada")]).await.map_err(|e| format!("no pude traerla: {e}"))?;
+                rc.g(&["branch", name, "refs/bitacora/recuperada"]).await?;
+                let _ = rc.g(&["update-ref", "-d", "refs/bitacora/recuperada"]).await;
             } else {
                 let sha = p["sha"].as_str().unwrap_or("");
                 if !is_sha(sha) || rc.g(&["cat-file", "-e", &format!("{sha}^{{commit}}")]).await.is_err() {
@@ -507,7 +507,7 @@ async fn run_job(p: &Value) -> Result<Value, String> {
     match mode {
         "usage" => {
             // espacio que ocupa cada persona en esta máquina (para el panel del CTO)
-            let Some(root) = crate::term::workspace().map(|w| w.join("homeCrewHelm")) else { return Ok(json!({ "people": [], "limit_mb": 0 })) };
+            let Some(root) = crate::term::workspace().map(|w| crate::iso::ws_homes(&w)) else { return Ok(json!({ "people": [], "limit_mb": 0 })) };
             let mut people = Vec::new();
             if let Ok(rd) = std::fs::read_dir(&root) {
                 for e in rd.flatten().take(60) {

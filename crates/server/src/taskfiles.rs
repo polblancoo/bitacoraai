@@ -1,4 +1,4 @@
-//! Carpeta de cada tarea: `<carpeta del proyecto>/.crewhelm/tareas/<id>/<usuario>/` y `final/`.
+//! Carpeta de cada tarea: `<carpeta del proyecto>/.bitacora/tareas/<id>/<usuario>/` y `final/`.
 //! Al estilo Linux: todos los del equipo leen; cada uno escribe solo en su carpeta; `final/` solo se llena al aprobar.
 use crate::{auth::AuthUser, error::{AppError, Result}, flow, routes, AppState};
 use axum::{
@@ -43,14 +43,25 @@ struct Q {
     ts: String,
 }
 
-/// `<carpeta del proyecto>/.crewhelm` en la máquina del servidor (None si el proyecto no tiene carpeta o no está acá).
+/// Carpeta de datos de BitacoraAI dentro del proyecto (`.bitacora/`). Si existe la de antes (`.bitacora/`) se mueve sola.
+pub fn data_dir(wd: &std::path::Path) -> std::path::PathBuf {
+    let nuevo = wd.join(".bitacora");
+    let viejo = wd.join(".bitacora");
+    if viejo.is_dir() && !nuevo.exists() && std::fs::rename(&viejo, &nuevo).is_ok() {
+        // las copias de trabajo de git recuerdan su ruta: se reparan
+        let _ = std::process::Command::new("git").arg("-C").arg(wd).args(["worktree", "repair"]).output();
+    }
+    nuevo
+}
+
+/// `<carpeta del proyecto>/.bitacora` en la máquina del servidor (None si el proyecto no tiene carpeta o no está acá).
 async fn crew_dir(st: &AppState, task: Id) -> Option<PathBuf> {
     let wd: Option<String> = sqlx::query_scalar("SELECT p.work_dir FROM projects p JOIN tasks t ON t.project_id = p.id WHERE t.id = ?").bind(task).fetch_optional(&st.db).await.ok().flatten();
     let wd = wd.filter(|w| !w.trim().is_empty())?;
-    Some(std::fs::canonicalize(&wd).ok()?.join(".crewhelm"))
+    Some(data_dir(&std::fs::canonicalize(&wd).ok()?))
 }
 
-/// Disposición: `.crewhelm/<usuario>/<tarea>/` (el «home» de cada responsable) y `.crewhelm/_tareas/<tarea>/final/` (la entrega).
+/// Disposición: `.bitacora/<usuario>/<tarea>/` (el «home» de cada responsable) y `.bitacora/_tareas/<tarea>/final/` (la entrega).
 fn user_dir(root: &std::path::Path, user: &str, task: Id) -> PathBuf {
     root.join(flow::safe_name(user)).join(task.to_string())
 }
@@ -283,7 +294,7 @@ async fn publish(State(st): State<AppState>, user: AuthUser, Path(id): Path<Id>)
     let author = if let Some(a) = flow_author { a } else { match t.assignee_id { Some(a) => crate::notify::username_of(&st, a).await, None => crate::notify::username_of(&st, user.id).await } };
     let who = crate::notify::username_of(&st, user.id).await;
     flow::publish_final(&st, team, id, user.id, &author).await;
-    Ok(Json(flow::finish(&st, team, id, user.id, format!("✅ {who} aprobó y publicó el trabajo de {author} en `.crewhelm/_tareas/{id}/final/`.")).await?))
+    Ok(Json(flow::finish(&st, team, id, user.id, format!("✅ {who} aprobó y publicó el trabajo de {author} en `.bitacora/_tareas/{id}/final/`.")).await?))
 }
 
 /// Cuántos archivos entregó la gente en una tarea (carpeta de cada persona + `final`), para mostrarlo junto al pedido de revisión.

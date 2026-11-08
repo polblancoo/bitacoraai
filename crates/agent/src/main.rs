@@ -166,7 +166,7 @@ struct Job {
 }
 
 /// Archivos que una persona adjuntó a la tarea (documentos, fotos, videos): el servidor los guarda en
-/// `<carpeta del proyecto>/.crewhelm/<usuario>/<tarea>/`. Se copian al espacio propio de la tarea (`adjuntos/`)
+/// `<carpeta del proyecto>/.bitacora/<usuario>/<tarea>/`. Se copian al espacio propio de la tarea (`adjuntos/`)
 /// para que la IA los lea aunque trabaje en una copia aislada. Devuelve las rutas copiadas.
 fn gather_attachments(project_dir: &std::path::Path, task: i64, mine: &std::path::Path) -> Vec<std::path::PathBuf> {
     const MAX_FILES: usize = 50;
@@ -181,7 +181,7 @@ fn gather_attachments(project_dir: &std::path::Path, task: i64, mine: &std::path
         }
     }
     let mine_real = std::fs::canonicalize(mine).unwrap_or_else(|_| mine.to_path_buf());
-    let root = project_dir.join(".crewhelm");
+    let root = crate::iso::data_dir(project_dir);
     let Ok(users) = std::fs::read_dir(&root) else { return Vec::new() };
     let (mut copied, mut total) = (Vec::new(), 0u64);
     let mut dirs: Vec<_> = users.flatten().map(|u| u.path()).collect();
@@ -310,8 +310,8 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     // espacio propio de esta tarea para lo intermedio (y final/, que llena el servidor al aprobarse el flujo)
     let mine = iso::mine_path(iso.workspace.as_deref(), &dir, &job.project, &me_name, job.id);
     let _ = std::fs::create_dir_all(&mine);
-    let _ = std::fs::create_dir_all(dir.join(".crewhelm/_tareas").join(job.id.to_string()).join("final"));
-    let _ = std::fs::write(dir.join(".crewhelm/.gitignore"), "*\n");
+    let _ = std::fs::create_dir_all(dir.join(".bitacora/_tareas").join(job.id.to_string()).join("final"));
+    let _ = std::fs::write(dir.join(".bitacora/.gitignore"), "*\n");
     let attachments = gather_attachments(&dir, job.id, &mine);
     if !attachments.is_empty() { api.say(job.id, &format!("📎 Recibí {} archivo(s) adjunto(s); los leo antes de empezar.", attachments.len())).await; }
     let prompt = prompt_for(api, job, &work.dir, &mine, work.branch.as_deref(), &attachments).await;
@@ -354,7 +354,7 @@ async fn run(api: &Api, job: &Job) -> Option<String> {
     };
     let mut cmd = if iso.sandbox {
         let real_home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/root"));
-        let ia_home = iso.workspace.as_ref().map(|w| w.join("homeCrewHelm").join(iso::slug(&me_name)));
+        let ia_home = iso.workspace.as_ref().map(|w| crate::iso::ws_homes(&w).join(iso::slug(&me_name)));
         if let Some(h) = &ia_home {
             let _ = std::fs::create_dir_all(h);
         }
@@ -637,7 +637,7 @@ async fn sandbox_shell(dir: Option<String>) -> Result<()> {
     if !iso::bwrap_ok().await {
         bail!("`bwrap` no está instalado o no funciona en esta máquina");
     }
-    let home = ws.join("homeCrewHelm").join(iso::slug(&name));
+    let home = crate::iso::ws_homes(&ws).join(iso::slug(&name));
     std::fs::create_dir_all(&home)?;
     let work = dir.map(PathBuf::from).unwrap_or_else(|| home.clone());
     let real_home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/root"));
@@ -661,9 +661,9 @@ async fn sweep(api: &Api, me: &str) {
             let (pname, wd) = (p["name"].as_str().unwrap_or(""), iso::expand_home(p["work_dir"].as_str().unwrap_or("")));
             let mut roots = vec![iso::work_path(ws.as_deref(), &wd, pname, 0).parent().map(PathBuf::from).unwrap_or_default(), iso::mine_path(ws.as_deref(), &wd, pname, me, 0).parent().map(PathBuf::from).unwrap_or_default()];
             roots.dedup();
-            // modo servidor: también los espacios de las personas y de las demás IAs (homeCrewHelm/<quien>/<proyecto>/<tarea>)
+            // modo servidor: también los espacios de las personas y de las demás IAs (homeBitacora/<quien>/<proyecto>/<tarea>)
             if let Some(w) = ws.as_deref() {
-                if let Ok(rd) = std::fs::read_dir(w.join("homeCrewHelm")) {
+                if let Ok(rd) = std::fs::read_dir(crate::iso::ws_homes(&w)) {
                     for who in rd.flatten() {
                         let r = who.path().join(iso::slug(pname));
                         if r.is_dir() && !roots.contains(&r) {
@@ -814,7 +814,7 @@ mod tests {
     fn adjuntos_de_la_tarea_se_copian_al_espacio_de_la_ia() {
         let base = std::env::temp_dir().join(format!("tm-adj-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
-        let c = base.join(".crewhelm");
+        let c = base.join(".bitacora");
         std::fs::create_dir_all(c.join("ana/7/sub")).unwrap();
         std::fs::create_dir_all(c.join("ana/8")).unwrap();
         std::fs::create_dir_all(c.join("_tareas/7/final")).unwrap();

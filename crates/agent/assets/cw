@@ -5,7 +5,7 @@ P="${BITACORA_PROJECT:-}"
 WHO="${CW_WHO:-persona}"
 SH="${CW_SHARED:-/proyectos/$P}"
 W="$HOME/$P"
-PED="$HOME/.crewhelm/pedidos"
+PED="$HOME/.bitacora/pedidos"
 
 verde() { printf '\033[32m%s\033[0m\n' "$*"; }
 amar() { printf '\033[33m%s\033[0m\n' "$*"; }

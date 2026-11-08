@@ -392,18 +392,18 @@ fn copy_tree(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<us
     Ok(n)
 }
 
-/// Al terminar el flujo: lo que dejó la última etapa de trabajo en `.crewhelm/<usuario>/<id>/` se copia a `final/`.
+/// Al terminar el flujo: lo que dejó la última etapa de trabajo en `.bitacora/<usuario>/<id>/` se copia a `final/`.
 /// Solo funciona si la carpeta del proyecto está en la máquina del servidor.
 pub(crate) async fn publish_final(st: &AppState, team: Id, task: Id, actor: Id, author: &str) {
     let wd: Option<String> = sqlx::query_scalar("SELECT p.work_dir FROM projects p JOIN tasks t ON t.project_id = p.id WHERE t.id = ?").bind(task).fetch_optional(&st.db).await.ok().flatten();
     let Some(wd) = wd.filter(|w| !w.trim().is_empty()) else { return };
-    let crew = std::path::PathBuf::from(&wd).join(".crewhelm");
+    let crew = crate::taskfiles::data_dir(std::path::Path::new(&wd));
     let from = crew.join(safe_name(author)).join(task.to_string());
     if !from.is_dir() { return; }
     let to = crew.join("_tareas").join(task.to_string()).join("final");
     let r = tokio::task::spawn_blocking(move || copy_tree(&from, &to)).await;
     if let Ok(Ok(n)) = r {
-        if n > 0 { post_comment(st, team, task, actor, format!("📦 Entrega final: {n} archivo(s) de {author} copiados a `.crewhelm/_tareas/{task}/final/`.")).await; }
+        if n > 0 { post_comment(st, team, task, actor, format!("📦 Entrega final: {n} archivo(s) de {author} copiados a `.bitacora/_tareas/{task}/final/`.")).await; }
     }
 }
 
@@ -411,7 +411,7 @@ pub(crate) async fn publish_final(st: &AppState, team: Id, task: Id, actor: Id, 
 async fn publish_group(st: &AppState, team: Id, task: Id, actor: Id) {
     let wd: Option<String> = sqlx::query_scalar("SELECT p.work_dir FROM projects p JOIN tasks t ON t.project_id = p.id WHERE t.id = ?").bind(task).fetch_optional(&st.db).await.ok().flatten();
     let Some(wd) = wd.filter(|w| !w.trim().is_empty()) else { return };
-    let crew = std::path::PathBuf::from(&wd).join(".crewhelm");
+    let crew = crate::taskfiles::data_dir(std::path::Path::new(&wd));
     let rows = sqlx::query("SELECT f.child_id, u.username FROM flow_par f JOIN tasks c ON c.id = f.child_id JOIN users u ON u.id = c.assignee_id WHERE f.task_id = ?").bind(task).fetch_all(&st.db).await.unwrap_or_default();
     let mut total = 0;
     for r in rows {
@@ -421,7 +421,7 @@ async fn publish_group(st: &AppState, team: Id, task: Id, actor: Id) {
         let to = crew.join("_tareas").join(task.to_string()).join("final").join(safe_name(&name));
         if let Ok(Ok(n)) = tokio::task::spawn_blocking(move || copy_tree(&from, &to)).await { total += n; }
     }
-    if total > 0 { post_comment(st, team, task, actor, format!("📦 Entrega final: {total} archivo(s) del grupo copiados a `.crewhelm/_tareas/{task}/final/`.")).await; }
+    if total > 0 { post_comment(st, team, task, actor, format!("📦 Entrega final: {total} archivo(s) del grupo copiados a `.bitacora/_tareas/{task}/final/`.")).await; }
 }
 
 /// Pasa a esperar a una persona (zona «Esperando tu próximo paso») y le avisa a quien creó la tarea.

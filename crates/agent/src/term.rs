@@ -78,7 +78,7 @@ async fn fetch_config(api: &Api) -> Option<Config> {
     Some(Config { terminal: v["terminal"].as_bool()?, people: v["people"].as_bool().unwrap_or(false), ssh: v["ssh"].as_bool().unwrap_or(false) })
 }
 
-/// Raíz de los espacios personales (`homeCrewHelm/<persona>/`): `TM_WORKSPACE` si se fijó; si no, `~/crewhelm` cuando la app permite la terminal a las personas.
+/// Raíz de los espacios personales (`homeBitacora/<persona>/`): `TM_WORKSPACE` si se fijó; si no, `~/bitacora` cuando la app permite la terminal a las personas.
 pub(crate) fn workspace() -> Option<PathBuf> {
     if let Some(w) = std::env::var("TM_WORKSPACE").ok().filter(|w| !w.trim().is_empty()) {
         return Some(crate::iso::expand_home(w.trim()));
@@ -94,7 +94,7 @@ pub(crate) fn workspace() -> Option<PathBuf> {
 
 /// Espacio personal de una persona: su HOME en la terminal (herdr, shell, preferencias e intermedios persisten acá).
 fn personal_home(ws: &Path, who: &str) -> std::io::Result<PathBuf> {
-    let home = ws.join("homeCrewHelm").join(crate::iso::slug(who));
+    let home = crate::iso::ws_homes(&ws).join(crate::iso::slug(who));
     std::fs::create_dir_all(home.join(".config"))?;
     std::fs::create_dir_all(home.join(".cache"))?;
     // configuración por defecto (zsh y bash con colores, eza, fzf, starship…): se actualiza sola mientras la persona no la toque
@@ -116,10 +116,10 @@ fn personal_home(ws: &Path, who: &str) -> std::io::Result<PathBuf> {
     Ok(home)
 }
 
-/// Escribe `content` si el archivo no existe, o si es un archivo de BitacoraAI (primera línea `# crewhelm-default vN`, o el `.bashrc` de la
+/// Escribe `content` si el archivo no existe, o si es un archivo de BitacoraAI (primera línea `# bitacora-default vN` (o `crewhelm-default`, de antes del cambio de nombre), o el `.bashrc` de la
 /// primera versión) de una versión anterior. Si la persona borró esa primera línea, el archivo es suyo y no se toca.
 fn install_rc(path: &Path, content: &str) -> std::io::Result<()> {
-    let version = |t: &str| t.lines().next().and_then(|l| l.strip_prefix("# crewhelm-default v")).and_then(|v| v.trim().parse::<u32>().ok());
+    let version = |t: &str| t.lines().next().and_then(|l| l.strip_prefix("# bitacora-default v").or_else(|| l.strip_prefix("# crewhelm-default v"))).and_then(|v| v.trim().parse::<u32>().ok());
     let new_v = version(content).unwrap_or(1);
     let replace = match std::fs::read_to_string(path) {
         Err(_) => true,
@@ -172,7 +172,7 @@ struct Pedidos {
 
 impl Pedidos {
     async fn watch(self, stop: Arc<AtomicBool>) {
-        let dir = self.home.join(".crewhelm/pedidos");
+        let dir = self.home.join(".bitacora/pedidos");
         let _ = std::fs::create_dir_all(&dir);
         while !stop.load(Ordering::Relaxed) {
             tokio::time::sleep(Duration::from_millis(500)).await;
@@ -193,7 +193,7 @@ impl Pedidos {
     }
 
 
-    /// Deja la rama (ya traída a `refs/crewhelm/…`) como rama normal del repositorio del proyecto. Solo se avanza: si la rama ya existía con otros cambios, se rechaza.
+    /// Deja la rama (ya traída a `refs/bitacora/…`) como rama normal del repositorio del proyecto. Solo se avanza: si la rama ya existía con otros cambios, se rechaza.
     async fn dejar_en_proyecto(&self, rama: &str, reference: &str) -> Result<(), String> {
         let git = |args: Vec<String>| {
             let mut c = tokio::process::Command::new("git");
@@ -240,7 +240,7 @@ impl Pedidos {
             return false;
         }
         say("1/3 Llevando tu trabajo al proyecto…");
-        let reference = format!("refs/crewhelm/{rama}");
+        let reference = format!("refs/bitacora/{rama}");
         let mut f = tokio::process::Command::new("bwrap");
         f.args(["--ro-bind", "/", "/", "--bind"]).arg(&git_dir).arg(&git_dir).args(["--dev", "/dev", "--proc", "/proc", "--unshare-net", "--unshare-pid", "--unshare-ipc", "--die-with-parent", "git", "-C"]);
         f.arg(&self.project_dir)
@@ -356,7 +356,7 @@ async fn session(api: &Arc<Api>, sid: &str, job: &Value) -> anyhow::Result<()> {
     let mut cmd = match (workspace(), who.is_empty()) {
         (Some(root), false) => {
             let home = personal_home(&root, &who)?;
-            let target = view.as_ref().map(|v| root.join("homeCrewHelm").join(crate::iso::slug(v)));
+            let target = view.as_ref().map(|v| crate::iso::ws_homes(&root).join(crate::iso::slug(v)));
             if view.is_some() && !target.as_ref().is_some_and(|t| t.is_dir()) {
                 let _ = ws.send(Message::Binary(b"\r\nEsa persona todavia no tiene espacio personal en este servidor.\r\n".to_vec().into())).await;
                 return Ok(());
@@ -693,7 +693,7 @@ mod tests {
         // sin servidor, el Pull Request no se abre (devuelve false) pero la rama ya tiene que estar subida
         assert!(!p.enviar(&out, "marta/tema", "t", "", None).await);
         assert!(sh(&gh, &["branch", "--list", "marta/tema"]).contains("marta/tema"), "salida: {}", std::fs::read_to_string(&out).unwrap_or_default());
-        assert!(sh(&proj, &["for-each-ref", "refs/crewhelm"]).is_empty());
+        assert!(sh(&proj, &["for-each-ref", "refs/bitacora"]).is_empty());
         // una rama ajena o con trucos no se acepta
         assert!(!p.enviar(&d.join("out2"), "otra/cosa", "t", "", None).await);
         assert!(!p.enviar(&d.join("out3"), "marta/../main", "t", "", None).await);
@@ -721,17 +721,17 @@ mod tests {
         sh(&copy, &["commit", "-q", "-m", "b"]);
         let cfg = crate::Cfg { url: "http://127.0.0.1:1".into(), token: String::new(), cmd: String::new(), poll: 1, timeout: 1, max: 1, fallback_dir: None, once: true };
         let p = Pedidos { api: Arc::new(Api { http: reqwest::Client::new(), cfg }), home: home.clone(), copy: copy.clone(), project_dir: proj.clone(), pid: 1, who: "Marta".into(), prefix: "marta".into() };
-        let fetch = |branch: &str| sh(&proj, &["fetch", "-q", copy.to_str().unwrap(), &format!("+refs/heads/{branch}:refs/crewhelm/{branch}")]);
+        let fetch = |branch: &str| sh(&proj, &["fetch", "-q", copy.to_str().unwrap(), &format!("+refs/heads/{branch}:refs/bitacora/{branch}")]);
         fetch("marta/tema");
-        p.dejar_en_proyecto("marta/tema", "refs/crewhelm/marta/tema").await.unwrap();
+        p.dejar_en_proyecto("marta/tema", "refs/bitacora/marta/tema").await.unwrap();
         assert!(sh(&proj, &["branch", "--list", "marta/tema"]).contains("marta/tema"));
-        assert!(sh(&proj, &["for-each-ref", "refs/crewhelm"]).is_empty());
+        assert!(sh(&proj, &["for-each-ref", "refs/bitacora"]).is_empty());
         // avanzar está bien
         std::fs::write(copy.join("c.txt"), "dos").unwrap();
         sh(&copy, &["add", "."]);
         sh(&copy, &["commit", "-q", "-m", "c"]);
         fetch("marta/tema");
-        p.dejar_en_proyecto("marta/tema", "refs/crewhelm/marta/tema").await.unwrap();
+        p.dejar_en_proyecto("marta/tema", "refs/bitacora/marta/tema").await.unwrap();
         assert_eq!(sh(&proj, &["rev-parse", "marta/tema"]), sh(&copy, &["rev-parse", "HEAD"]));
         // otra historia con el mismo nombre se rechaza
         sh(&copy, &["switch", "-q", "-C", "marta/tema", "main"]);
@@ -739,7 +739,7 @@ mod tests {
         sh(&copy, &["add", "."]);
         sh(&copy, &["commit", "-q", "-m", "x"]);
         fetch("marta/tema");
-        assert!(p.dejar_en_proyecto("marta/tema", "refs/crewhelm/marta/tema").await.is_err());
+        assert!(p.dejar_en_proyecto("marta/tema", "refs/bitacora/marta/tema").await.is_err());
         let _ = std::fs::remove_dir_all(&d);
     }
 

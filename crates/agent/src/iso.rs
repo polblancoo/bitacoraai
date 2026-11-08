@@ -47,6 +47,25 @@ fn paths_env(key: &str) -> Vec<PathBuf> {
     std::env::var(key).unwrap_or_default().split(',').map(str::trim).filter(|s| !s.is_empty()).map(expand_home).collect()
 }
 
+/// Carpeta de datos de BitacoraAI dentro del proyecto (`.bitacora/`). Si existe la de antes (`.crewhelm/`) se mueve sola.
+pub fn data_dir(project_dir: &Path) -> PathBuf {
+    let nuevo = project_dir.join(".bitacora");
+    let viejo = project_dir.join(".crewhelm");
+    if viejo.is_dir() && !nuevo.exists() && std::fs::rename(&viejo, &nuevo).is_ok() {
+        // las copias de trabajo de git recuerdan su ruta: se reparan
+        let _ = std::process::Command::new("git").arg("-C").arg(project_dir).args(["worktree", "repair"]).output();
+    }
+    nuevo
+}
+
+/// Raíz de los espacios personales dentro del espacio de trabajo (`homeBitacora/`; antes `homeCrewHelm/`, que se mueve sola).
+pub fn ws_homes(ws: &Path) -> PathBuf {
+    let nuevo = ws.join("homeBitacora");
+    let viejo = ws.join("homeCrewHelm");
+    if viejo.is_dir() && !nuevo.exists() { let _ = std::fs::rename(&viejo, &nuevo); }
+    nuevo
+}
+
 pub fn expand_home(p: &str) -> PathBuf {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     match (p.strip_prefix("~/").or_else(|| (p == "~").then_some("")), home) {
@@ -138,15 +157,15 @@ pub fn branch_of(task: i64) -> String {
 pub fn work_path(ws: Option<&Path>, project_dir: &Path, project: &str, task: i64) -> PathBuf {
     match ws {
         Some(w) => w.join("proyectos").join(slug(project)).join("tareas").join(task.to_string()),
-        None => project_dir.join(".crewhelm").join("wt").join(format!("tarea-{task}")),
+        None => crate::iso::data_dir(project_dir).join("wt").join(format!("tarea-{task}")),
     }
 }
 
 /// Espacio personal de la IA para lo intermedio de una tarea.
 pub fn mine_path(ws: Option<&Path>, project_dir: &Path, project: &str, ia: &str, task: i64) -> PathBuf {
     match ws {
-        Some(w) => w.join("homeCrewHelm").join(slug(ia)).join(slug(project)).join(task.to_string()),
-        None => project_dir.join(".crewhelm").join(slug(ia)).join(task.to_string()),
+        Some(w) => crate::iso::ws_homes(&w).join(slug(ia)).join(slug(project)).join(task.to_string()),
+        None => crate::iso::data_dir(project_dir).join(slug(ia)).join(task.to_string()),
     }
 }
 
@@ -367,7 +386,7 @@ pub fn bwrap_args(real_home: &Path, p: &Plan) -> Vec<String> {
 }
 
 /// Cápsula para PERSONAS (terminal web y SSH): el home real del servidor no existe ahí adentro, ni siquiera como carpetas vacías.
-/// El espacio personal aparece en `/home/crewhelm`, el proyecto (solo lectura) en `/proyecto`, el espacio ajeno que mira un admin
+/// El espacio personal aparece en `/home/bitacora`, el proyecto (solo lectura) en `/proyecto`, el espacio ajeno que mira un admin
 /// (solo lectura) en `/espacio` y las pocas herramientas permitidas en `/tools`.
 pub struct PersonPlan<'a> {
     pub home: &'a Path,
@@ -382,8 +401,8 @@ pub struct PersonPlan<'a> {
     pub who: &'a str,
 }
 
-pub const PERSON_HOME: &str = "/home/crewhelm";
-pub const PERSON_PATH: &str = "/usr/local/bin:/usr/bin:/bin:/tools:/home/crewhelm/.local/bin";
+pub const PERSON_HOME: &str = "/home/bitacora";
+pub const PERSON_PATH: &str = "/usr/local/bin:/usr/bin:/bin:/tools:/home/bitacora/.local/bin";
 
 pub fn person_args(p: &PersonPlan) -> Vec<String> {
     let s = |x: &Path| x.to_string_lossy().to_string();
@@ -768,6 +787,23 @@ fn chrono_like(s: &str) -> Option<i64> {
 mod tests {
     /// La cápsula de una persona no deja ver nada del home real del servidor (ni los nombres de carpetas).
     #[test]
+    fn la_carpeta_vieja_crewhelm_se_migra_a_bitacora() {
+        let base = std::env::temp_dir().join(format!("tm-mig-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join(".crewhelm/ana/1")).unwrap();
+        std::fs::write(base.join(".crewhelm/ana/1/a.txt"), b"x").unwrap();
+        std::fs::create_dir_all(base.join("homeCrewHelm/ana")).unwrap();
+        let d = data_dir(&base);
+        assert!(d.ends_with(".bitacora") && d.join("ana/1/a.txt").is_file() && !base.join(".crewhelm").exists());
+        assert!(ws_homes(&base).join("ana").is_dir() && !base.join("homeCrewHelm").exists());
+        // si ya existe la nueva, no se toca la vieja
+        std::fs::create_dir_all(base.join(".crewhelm")).unwrap();
+        data_dir(&base);
+        assert!(base.join(".crewhelm").is_dir());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
     fn la_capsula_de_una_persona_no_ve_el_home_real() {
         let ok = std::process::Command::new("bwrap").args(["--ro-bind", "/", "/", "--dev", "/dev", "true"]).status().is_ok_and(|s| s.success());
         if !ok {
@@ -783,7 +819,7 @@ mod tests {
         a.extend(["--".into(), "/bin/bash".into(), "-c".into(), script.into()]);
         let out = std::process::Command::new("bwrap").args(a).env_clear().output().unwrap();
         let t = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
-        assert!(t.starts_with("P=mi-proyecto\ncrewhelm\n--\n/proyectos/mi-proyecto\n--\nhola"), "salida: {t}");
+        assert!(t.starts_with("P=mi-proyecto\nbitacora\n--\n/proyectos/mi-proyecto\n--\nhola"), "salida: {t}");
         assert!(t.contains("escribe") && !t.contains("pablo\n") && !proj.join("x").exists(), "salida: {t}");
         assert!(home.join("mio").exists());
         // con copia de trabajo: la shell arranca en ~/<proyecto> y ahí se puede crear
@@ -792,7 +828,7 @@ mod tests {
         a.extend(["--".into(), "/bin/bash".into(), "-c".into(), "pwd; mkdir nueva && touch nueva/a.txt && echo ok".into()]);
         let out = std::process::Command::new("bwrap").args(a).env_clear().output().unwrap();
         let t = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
-        assert!(t.starts_with("/home/crewhelm/mi-proyecto\nok"), "salida: {t}");
+        assert!(t.starts_with("/home/bitacora/mi-proyecto\nok"), "salida: {t}");
         assert!(home.join("mi-proyecto/nueva/a.txt").exists());
         let _ = std::fs::remove_dir_all(&d);
     }
@@ -897,7 +933,7 @@ mod tests {
     async fn sin_remoto_queda_local_y_sin_repo_no_hay_copia() {
         let proj = repo("proj2");
         let w = prepare(&proj, None, "p", 3, None).await.unwrap();
-        assert!(w.dir.ends_with(".crewhelm/wt/tarea-3"));
+        assert!(w.dir.ends_with(".bitacora/wt/tarea-3"));
         std::fs::write(w.dir.join("x"), "x").unwrap();
         let o = finish(&w, "ia", 3, "t").await.unwrap();
         assert_eq!(o.pushed, Pushed::LocalOnly);

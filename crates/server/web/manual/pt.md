@@ -324,7 +324,7 @@ O botão **💬 Comunicação** abre um painel com duas abas.
 - **Minimizar a chamada:** vira uma barra pequena no canto inferior direito com «▲ Voltar à chamada».
 
 ## 19. Pastas das tarefas
-Cada tarefa tem sua pasta de trabalho no formato `.crewhelm/<usuário>/<tarefa>/`: cada pessoa ou IA guarda ali o seu. O resultado final é publicado em `final/`, compartilhado por toda a tarefa.
+Cada tarefa tem sua pasta de trabalho no formato `.bitacora/<usuário>/<tarefa>/`: cada pessoa ou IA guarda ali o seu. O resultado final é publicado em `final/`, compartilhado por toda a tarefa.
 
 - Na tarefa, o bloco **Pasta** permite ver, baixar e enviar arquivos (até 25 MB; executáveis e scripts são recusados).
 - **Quem cria a tarefa decide a aprovação** e a publicação em `final/`, numa tarefa avulsa ou num fluxo.
@@ -564,7 +564,7 @@ O que for salvo no assistente substitui as variáveis de ambiente (`TM_TELEGRAM_
 *Configurações → Equipe e projeto → Pasta de rede → Como conectar* mostra o endereço do projeto (`/dav/<número>/`) e os passos para montá-la como unidade no **Windows** (Mapear unidade de rede), **macOS** (Ir → Conectar ao Servidor) ou **Linux** (Arquivos → Conectar ao servidor). Você entra com seu usuário e senha do BitacoraAI e salva do Photoshop, Premiere, Word, DaVinci ou o que usar: o arquivo chega à pasta do projeto no servidor, sem passar pelo navegador e sem o limite de 25 MB (até 8 GB por arquivo).
 
 - **Quem escreve onde**: dentro da pasta com seu nome (`<seu usuário>/…`). A equipe toda lê tudo; `_tareas/<n>/final/` é somente leitura. Leitores não escrevem.
-- **Versões**: se você salvar por cima de um arquivo, movê-lo ou apagá-lo, o BitacoraAI guarda antes a versão anterior (as últimas 20 por arquivo, em `.crewhelm/.versions/`).
+- **Versões**: se você salvar por cima de um arquivo, movê-lo ou apagá-lo, o BitacoraAI guarda antes a versão anterior (as últimas 20 por arquivo, em `.bitacora/.versions/`).
 - **Programas executáveis não são enviados** (`.exe`, `.bat`, instaladores, etc.).
 - **O Windows exige HTTPS**: use o «Endereço seguro» e instale o certificado próprio do servidor (link na mesma ajuda); com um certificado real (Let's Encrypt ou o da empresa) não é preciso. O endereço HTTP serve no macOS e Linux numa rede confiável.
 - Cada envio, movimento ou exclusão fica na auditoria (`carpeta_de_red`).

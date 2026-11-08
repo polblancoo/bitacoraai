@@ -324,7 +324,7 @@ El botón **💬 Comunicación** abre un panel con dos solapas.
 - **Minimizar la llamada:** queda una barra chica abajo a la derecha con «▲ Volver a la llamada».
 
 ## 19. Carpetas de las tareas
-Cada tarea tiene su carpeta de trabajo, con la forma `.crewhelm/<usuario>/<tarea>/`: cada persona o IA guarda ahí lo suyo. Lo definitivo se publica en `final/`, compartido por toda la tarea.
+Cada tarea tiene su carpeta de trabajo, con la forma `.bitacora/<usuario>/<tarea>/`: cada persona o IA guarda ahí lo suyo. Lo definitivo se publica en `final/`, compartido por toda la tarea.
 
 - En la tarea, el bloque **Carpeta** permite ver, descargar y subir archivos (hasta 25 MB; se rechazan ejecutables y scripts).
 - **Quien crea la tarea decide la aprobación** y la publicación a `final/`, tanto en una tarea suelta como en un flujo.
@@ -571,7 +571,7 @@ Lo guardado en el asistente reemplaza a las variables de entorno (`TM_TELEGRAM_T
 *Configuración → Equipo y proyecto → Carpeta de red → Cómo conectarla* muestra la dirección del proyecto (`/dav/<número>/`) y los pasos para montarla como una unidad en **Windows** (Conectar a unidad de red), **macOS** (Ir → Conectarse al servidor) o **Linux** (Archivos → Conectar con el servidor). Entrás con tu usuario y contraseña de BitacoraAI y guardás desde Photoshop, Premiere, Word, DaVinci o lo que uses: el archivo llega a la carpeta del proyecto en el servidor, sin pasar por el navegador y sin el tope de 25 MB (hasta 8 GB por archivo).
 
 - **Quién escribe dónde**: dentro de la carpeta con tu nombre (`<tu usuario>/…`). Todo el equipo lee todo; `_tareas/<n>/final/` es solo lectura. Los lectores no escriben.
-- **Versiones**: si guardás encima de un archivo, lo movés o lo borrás, BitacoraAI guarda antes la versión anterior (las últimas 20 por archivo, en `.crewhelm/.versions/`).
+- **Versiones**: si guardás encima de un archivo, lo movés o lo borrás, BitacoraAI guarda antes la versión anterior (las últimas 20 por archivo, en `.bitacora/.versions/`).
 - **No se suben programas ejecutables** (`.exe`, `.bat`, `.msi`, `.ps1`, `.jar`, etc.).
 - **Windows exige HTTPS**: usá la «Dirección segura» e instalá el certificado propio del servidor (enlace en la misma ayuda); con un certificado real (Let's Encrypt o el de tu empresa) no hace falta. La dirección HTTP sirve en macOS y Linux dentro de una red de confianza.
 - Cada subida, movimiento o borrado queda en la auditoría (`carpeta_de_red`).

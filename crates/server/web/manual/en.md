@@ -324,7 +324,7 @@ The **💬 Communication** button opens a panel with two tabs.
 - **Minimizing the call:** it becomes a small bar at the bottom right with «▲ Back to the call».
 
 ## 19. Task folders
-Each task has its own working folder shaped like `.crewhelm/<user>/<task>/`: every person or AI keeps their own work there. Final results are published to `final/`, shared by the whole task.
+Each task has its own working folder shaped like `.bitacora/<user>/<task>/`: every person or AI keeps their own work there. Final results are published to `final/`, shared by the whole task.
 
 - In the task, the **Folder** block lets you view, download and upload files (up to 25 MB; executables and scripts are rejected).
 - **Whoever creates the task decides approval** and publishing to `final/`, for a loose task or a flow.
@@ -564,7 +564,7 @@ What you save in the wizard overrides the environment variables (`TM_TELEGRAM_TO
 *Settings → Team and project → Network folder → How to connect it* shows the project's address (`/dav/<number>/`) and the steps to mount it as a drive on **Windows** (Map network drive), **macOS** (Go → Connect to Server) or **Linux** (Files → Connect to Server). You sign in with your BitacoraAI username and password and save from Photoshop, Premiere, Word, DaVinci or whatever you use: the file lands in the project folder on the server, without going through the browser and without the 25 MB limit (up to 8 GB per file).
 
 - **Who writes where**: inside the folder with your name (`<your user>/…`). The whole team reads everything; `_tareas/<n>/final/` is read-only. Viewers can't write.
-- **Versions**: if you save over a file, move it or delete it, BitacoraAI first keeps the previous version (the last 20 per file, in `.crewhelm/.versions/`).
+- **Versions**: if you save over a file, move it or delete it, BitacoraAI first keeps the previous version (the last 20 per file, in `.bitacora/.versions/`).
 - **Executable programs can't be uploaded** (`.exe`, `.bat`, installers, etc.).
 - **Windows requires HTTPS**: use the «Secure address» and install the server's own certificate (link in the same help); with a real certificate (Let's Encrypt or your company's) it isn't needed. The HTTP address works on macOS and Linux on a trusted network.
 - Every upload, move or delete is logged in the audit (`carpeta_de_red`).

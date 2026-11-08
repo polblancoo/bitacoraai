@@ -1,4 +1,4 @@
-# crewhelm-default v2
+# bitacora-default v2
 # Configuración por defecto de BitacoraAI. Para personalizarla, borrá la primera línea (así BitacoraAI ya no la reemplaza).
 
 export LANG="${LANG:-C.UTF-8}"
