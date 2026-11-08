@@ -553,3 +553,14 @@ What you save in the wizard overrides the environment variables (`TM_TELEGRAM_TO
 **Risk approval** (*Settings → 🤖 AIs → Risk approval*, CTO and admin): instead of building command lists, you choose per type of action whether AIs do it **freely**, need someone to **ask/approve**, or it is **forbidden**. Types: delete (rm, git clean, git reset --hard…), publish (git push, npm/cargo publish, releases, PR merges), deploy (kubectl, terraform, ssh, rsync…), install (npm/pip/cargo install, apt, curl, wget…) and administer the system (sudo, chmod, systemctl…). With *Ask* the AI stops and notifies you; approving with `/permitir <command>` enables only that rule (`rm`, not `rmdir`) for that task, or for that AI if you pick «always». Forbidden always wins. It applies from each AI's next run and every change is logged in the audit (`politica_riesgo`).
 
 **Viewing changes inside the task**: if the task has a Pull Request, its window shows **👁 View changes** with the files and lines the AI changed, without going through 🔀 Integrate. Merging and returning remain project-level.
+
+## 29. Network folder: save from your own programs
+
+*Settings → Team and project → Network folder → How to connect it* shows the project's address (`/dav/<number>/`) and the steps to mount it as a drive on **Windows** (Map network drive), **macOS** (Go → Connect to Server) or **Linux** (Files → Connect to Server). You sign in with your CrewHelm username and password and save from Photoshop, Premiere, Word, DaVinci or whatever you use: the file lands in the project folder on the server, without going through the browser and without the 25 MB limit (up to 8 GB per file).
+
+- **Who writes where**: inside the folder with your name (`<your user>/…`). The whole team reads everything; `_tareas/<n>/final/` is read-only. Viewers can't write.
+- **Versions**: if you save over a file, move it or delete it, CrewHelm first keeps the previous version (the last 20 per file, in `.crewhelm/.versions/`).
+- **Executable programs can't be uploaded** (`.exe`, `.bat`, installers, etc.).
+- **Windows requires HTTPS**: use the «Secure address» and install the server's own certificate (link in the same help); with a real certificate (Let's Encrypt or your company's) it isn't needed. The HTTP address works on macOS and Linux on a trusted network.
+- Every upload, move or delete is logged in the audit (`carpeta_de_red`).
+- It works for projects whose working folder is on the server machine.

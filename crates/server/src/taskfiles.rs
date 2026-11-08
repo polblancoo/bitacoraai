@@ -17,7 +17,7 @@ use tm_core::{Id, Role};
 const FILE_MAX: usize = 25 * 1024 * 1024;
 const ENTRIES_MAX: usize = 500;
 /// Lo que nunca se sube a mano: programas que alguien podría ejecutar después en el servidor.
-const BLOCKED: &[&str] = &["exe", "dll", "bat", "cmd", "msi", "com", "scr", "ps1", "vbs", "jar", "so", "dylib", "apk", "app"];
+pub(crate) const BLOCKED: &[&str] = &["exe", "dll", "bat", "cmd", "msi", "com", "scr", "ps1", "vbs", "jar", "so", "dylib", "apk", "app"];
 
 pub fn router() -> Router<AppState> {
     Router::new()

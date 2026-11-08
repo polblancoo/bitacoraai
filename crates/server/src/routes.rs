@@ -242,7 +242,7 @@ fn throttle(st: &AppState, headers: &HeaderMap, peer: SocketAddr) -> Result<()> 
 /// ¿Es la primera vez? (sin ninguna persona registrada): la web ofrece entonces la guía de inicio.
 async fn setup_state(State(st): State<AppState>) -> Result<Json<serde_json::Value>> {
     let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE is_bot = 0").fetch_one(&st.db).await?;
-    Ok(Json(serde_json::json!({ "first_run": n == 0, "version": env!("CARGO_PKG_VERSION") })))
+    Ok(Json(serde_json::json!({ "first_run": n == 0, "version": env!("CARGO_PKG_VERSION"), "https_port": crate::tls::port() })))
 }
 
 async fn register(

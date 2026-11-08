@@ -108,3 +108,16 @@ pub fn ensure_cert() -> anyhow::Result<(PathBuf, PathBuf)> {
     tracing::info!("certificado HTTPS propio creado para: {}", names.join(", "));
     Ok((cert, key))
 }
+
+/// El certificado propio (público) para instalarlo en los equipos que montan la carpeta de red por HTTPS (Windows lo exige).
+pub fn router() -> axum::Router<crate::AppState> {
+    axum::Router::new().route("/api/tls/cert", axum::routing::get(cert))
+}
+
+async fn cert() -> Response {
+    use axum::response::IntoResponse;
+    match std::fs::read(dir().join("auto-cert.pem")) {
+        Ok(b) => ([(axum::http::header::CONTENT_TYPE, "application/x-x509-ca-cert"), (axum::http::header::CONTENT_DISPOSITION, "attachment; filename=\"crewhelm.crt\"")], b).into_response(),
+        Err(_) => (axum::http::StatusCode::NOT_FOUND, "Este servidor no usa el certificado propio (tiene uno suyo o el HTTPS está apagado)").into_response(),
+    }
+}

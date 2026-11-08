@@ -650,6 +650,36 @@ async function openIntegrar() {
   load();
 }
 
+// Carpeta de red (WebDAV): montar el proyecto como una unidad para guardar desde cualquier programa
+const openDav = guard(async () => {
+  const info = await api("GET", "/api/setup").catch(() => ({}));
+  const close = () => document.getElementById("dav-modal")?.remove();
+  const sel = h("select", {}, S.projects.map((p) => h("option", { value: p.id, selected: S.project?.id === p.id }, p.name)));
+  const out = h("div", {});
+  const copy = (t) => h("button", { class: "ghost", onclick: () => { navigator.clipboard?.writeText(t); toast("Copiado"); } }, "Copiar");
+  const row = (label, url) => h("div", { class: "row" }, h("small", { class: "hint", style: "min-width:120px" }, label), h("code", { style: "word-break:break-all" }, url), copy(url));
+  const draw = () => {
+    const id = sel.value, me = S.user.username, port = info.https_port;
+    const http = `${location.protocol}//${location.hostname}${location.port ? ":" + location.port : ""}/dav/${id}/`;
+    const https = port ? `https://${location.hostname}:${port}/dav/${id}/` : (location.protocol === "https:" ? http : null);
+    out.replaceChildren(
+      h("p", { class: "hint" }, `Usuario: ${me} · Contraseña: la de tu cuenta de CrewHelm. Guardá tu trabajo dentro de la carpeta «${me}»: ahí escribís vos; el resto del equipo lo ve y no lo puede tocar.`),
+      https && row("Dirección segura", https), row("Dirección HTTP", http),
+      h("details", { open: true }, h("summary", {}, "🪟 Windows"),
+        h("ol", {}, h("li", {}, "Explorador de archivos → Este equipo → «Conectar a unidad de red…»."), h("li", {}, "Pegá la dirección segura y marcá «Conectar con otras credenciales»."),
+          h("li", {}, "Si dice que el certificado no es de confianza: ", h("a", { href: S.server + "/api/tls/cert", download: "crewhelm.crt" }, "bajá el certificado"), ", doble clic → Instalar certificado → Equipo local → «Entidades de certificación raíz de confianza»."),
+          h("li", {}, "Con la dirección HTTP Windows no deja entrar salvo que un administrador ponga BasicAuthLevel=2 en HKLM\\SYSTEM\\CurrentControlSet\\Services\\WebClient\\Parameters y reinicie el servicio WebClient."))),
+      h("details", {}, h("summary", {}, "🍎 macOS"), h("ol", {}, h("li", {}, "Finder → Ir → «Conectarse al servidor…» (⌘K)."), h("li", {}, "Pegá la dirección (la HTTP sirve en una red de confianza) y entrá con tu usuario y contraseña."))),
+      h("details", {}, h("summary", {}, "🐧 Linux"), h("ol", {}, h("li", {}, "Archivos → Otras ubicaciones → «Conectar con el servidor»."), h("li", {}, `Escribí dav://${location.hostname}${location.port ? ":" + location.port : ""}/dav/${id}/ (o davs:// para la segura).`))),
+      h("small", { class: "hint" }, "Si guardás encima de un archivo o lo borrás, CrewHelm guarda la versión anterior (las últimas 20). No se suben programas ejecutables."));
+  };
+  sel.onchange = draw; draw();
+  const m = h("div", { class: "overlay", id: "dav-modal", onmousedown: (e) => e.target.id === "dav-modal" && close() },
+    h("div", { class: "modal wide" }, h("h3", {}, "📁 Carpeta de red", h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: close }, "✕")),
+      h("small", { class: "hint" }, "Conectá la carpeta del proyecto como una unidad de tu computadora y guardá desde Photoshop, Premiere, Word, DaVinci o lo que uses: llega sola al equipo."),
+      h("label", {}, "Proyecto", sel), out, h("div", { class: "actions" }, h("button", { class: "ghost", onclick: close }, "Cerrar"))));
+  document.body.append(m);
+});
 // ventana con el asistente de git de un proyecto (al crearlo, o desde el aviso «Sin repositorio»)
 function openGitSetup(p) {
   const close = () => document.getElementById("git-setup")?.remove();
@@ -2742,6 +2772,7 @@ const CFG_HELP = {
   project: ["Proyecto", "Un proyecto agrupa las tareas del equipo (tablero, calendario, Gantt y pizarra). Creá uno con «Nuevo proyecto».", null],
   perfil: ["Perfil de uso", "Prepara la interfaz según para qué usan el equipo: cambia los nombres de las columnas y oculta lo técnico (terminales, carpeta del código) si no hace falta. «Cargar ejemplo» crea un proyecto de muestra con tareas; «Eliminar ejemplo» lo borra entero y deja todo limpio. No toca tus proyectos reales.", null],
   duplicate: ["Usar como plantilla", "Crea un proyecto nuevo copiando las tareas, etiquetas y dependencias del actual, para repetir un proceso sin armarlo de cero.", null],
+  dav: ["Carpeta de red", "Monta la carpeta del proyecto como una unidad de tu computadora (Windows, macOS o Linux) y guardá directo desde Photoshop, Premiere, Word, DaVinci o cualquier programa. Escribís solo en tu carpeta; el equipo ve lo que guardás. Si pisás o borrás un archivo, queda la versión anterior.", null],
   audit: ["Auditoría del equipo", "Descarga el registro completo del equipo en CSV o JSON: quién (persona o IA) hizo qué y cuándo, permisos dados a las IAs, revisiones, cambios de tope, cada ejecución de IA con modelo, tokens y costo, y los movimientos del chat. No se recorta con el tiempo. Podés acotar por fechas. Solo administradores y dueños, y cada descarga queda anotada.", null],
   export: ["Exportar", "Descarga todas las tareas del proyecto en CSV (para planilla) o JSON (para copia de seguridad o scripts).", null],
   integrations: ["Integraciones", "Sumá herramientas externas (por ejemplo una videollamada con Jitsi) como botones en la barra de arriba. Con el asistente queda lista en tres pasos, con salida a internet o con tu propio servidor. Las configura un administrador y las usa todo el equipo.", null],
@@ -3175,6 +3206,7 @@ const openSettings = guard(async () => {
         S.project && can("member") && line(["Usar como plantilla (copia tareas, etiquetas y dependencias)", "duplicate"], h("button", { onclick: go(duplicateProject) }, "Duplicar")),
         S.project && line(["Exportar las tareas", "export"], h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
           h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
+      S.team && sec("Archivos", line(["Carpeta de red: guardá desde tus programas y llega al equipo", "dav"], h("button", { onclick: go(openDav) }, "Cómo conectarla"))),
       S.team && can("admin") && sec("Auditoría", (() => {
         const f = h("input", { type: "date", title: "Desde (vacío = desde el principio)" }), t = h("input", { type: "date", title: "Hasta (vacío = hasta hoy)" });
         const dl = (fmt) => guard(() => saveFile(`/api/teams/${S.team.id}/audit/export?format=${fmt}&from=${f.value}&to=${t.value}`, `auditoria-${S.team.name}.${fmt}`));
@@ -3299,7 +3331,7 @@ const openSettings = guard(async () => {
   const TABS = [
     ["cuenta", "👤 Cuenta", ["user", "inbox", "logout", "logoutAll"]],
     ["conexiones", "🔔 Avisos y conexiones", ["email", "telegram", "digest", "github", "google", "reports"]],
-    ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export", "audit"]],
+    ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export", "dav", "audit"]],
     ["ias", "🤖 IAs", ["agents", "cmds", "risk"]],
     ["integraciones", "🔌 Integraciones", ["integrations"]],
     ["procesos", "🖥 Procesos", ["procesos"]],

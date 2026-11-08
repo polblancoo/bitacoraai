@@ -41,6 +41,7 @@ mod term;
 mod usage;
 mod audit;
 mod risk;
+mod dav;
 mod ws;
 
 use axum::{
@@ -291,7 +292,7 @@ async fn main() -> anyhow::Result<()> {
 
     let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(gh_sync::router()).merge(gitsetup::router())
         .merge(prs::router())
-        .merge(mailcfg::router()).merge(setup::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(audit::router()).merge(risk::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(taskfiles::router()).merge(integrations::router()).merge(chat_tr::router()).merge(sysops::router()).merge(chat::router()).merge(chat_ai::router()).merge(flow::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
+        .merge(mailcfg::router()).merge(setup::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(audit::router()).merge(risk::router()).merge(tls::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(taskfiles::router()).merge(integrations::router()).merge(chat_tr::router()).merge(sysops::router()).merge(chat::router()).merge(chat_ai::router()).merge(flow::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))
@@ -299,6 +300,8 @@ async fn main() -> anyhow::Result<()> {
         .layer(axum::middleware::from_fn_with_state(state.clone(), flood_guard))
         .layer(cors())
         .layer(TraceLayer::new_for_http())
+        // la carpeta de red va aparte: sin tope de cuerpo ni de tiempo (son archivos grandes) y con su propio control de intentos
+        .merge(dav::router())
         .with_state(state);
     match (std::env::var("TM_TLS_CERT"), std::env::var("TM_TLS_KEY")) {
         (Ok(cert), Ok(key)) => {

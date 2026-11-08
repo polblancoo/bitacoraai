@@ -560,3 +560,14 @@ Lo guardado en el asistente reemplaza a las variables de entorno (`TM_TELEGRAM_T
 **Aprobación por riesgo** (*Configuración → 🤖 IAs → Aprobación por riesgo*, CTO y administrador): en vez de armar listas de comandos, elegís por tipo de acción si las IAs la hacen **libre**, necesitan que alguien la **pida/apruebe**, o está **prohibida**. Tipos: borrar (rm, git clean, git reset --hard…), publicar (git push, npm/cargo publish, releases, merge de PRs), desplegar (kubectl, terraform, ssh, rsync…), instalar (npm/pip/cargo install, apt, curl, wget…) y administrar el sistema (sudo, chmod, systemctl…). En *Pedir* la IA se detiene y te avisa; al aprobar con `/permitir <comando>` se habilita solo esa regla (`rm`, no `rmdir`) para esa tarea, o para esa IA si elegís «siempre». Lo prohibido siempre gana. Rige desde la próxima ejecución de cada IA y cada cambio queda en la auditoría (`politica_riesgo`).
 
 **Ver cambios dentro de la tarea**: si la tarea tiene un Pull Request, en su ventana aparece **👁 Ver cambios** con los archivos y líneas que cambió la IA, sin pasar por 🔀 Integrar. Integrar y devolver siguen siendo del proyecto.
+
+## 29. Carpeta de red: guardar desde tus programas
+
+*Configuración → Equipo y proyecto → Carpeta de red → Cómo conectarla* muestra la dirección del proyecto (`/dav/<número>/`) y los pasos para montarla como una unidad en **Windows** (Conectar a unidad de red), **macOS** (Ir → Conectarse al servidor) o **Linux** (Archivos → Conectar con el servidor). Entrás con tu usuario y contraseña de CrewHelm y guardás desde Photoshop, Premiere, Word, DaVinci o lo que uses: el archivo llega a la carpeta del proyecto en el servidor, sin pasar por el navegador y sin el tope de 25 MB (hasta 8 GB por archivo).
+
+- **Quién escribe dónde**: dentro de la carpeta con tu nombre (`<tu usuario>/…`). Todo el equipo lee todo; `_tareas/<n>/final/` es solo lectura. Los lectores no escriben.
+- **Versiones**: si guardás encima de un archivo, lo movés o lo borrás, CrewHelm guarda antes la versión anterior (las últimas 20 por archivo, en `.crewhelm/.versions/`).
+- **No se suben programas ejecutables** (`.exe`, `.bat`, `.sh`-tipo instaladores, etc.).
+- **Windows exige HTTPS**: usá la «Dirección segura» e instalá el certificado propio del servidor (enlace en la misma ayuda); con un certificado real (Let's Encrypt o el de tu empresa) no hace falta. La dirección HTTP sirve en macOS y Linux dentro de una red de confianza.
+- Cada subida, movimiento o borrado queda en la auditoría (`carpeta_de_red`).
+- Funciona con proyectos cuya carpeta de trabajo está en la máquina del servidor.

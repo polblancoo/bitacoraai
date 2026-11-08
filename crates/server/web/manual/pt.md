@@ -553,3 +553,14 @@ O que for salvo no assistente substitui as variáveis de ambiente (`TM_TELEGRAM_
 **Aprovação por risco** (*Configurações → 🤖 IAs → Aprovação por risco*, CTO e administrador): em vez de montar listas de comandos, você escolhe por tipo de ação se as IAs fazem **livremente**, precisam que alguém **peça/aprove**, ou é **proibida**. Tipos: apagar (rm, git clean, git reset --hard…), publicar (git push, npm/cargo publish, releases, merge de PRs), implantar (kubectl, terraform, ssh, rsync…), instalar (npm/pip/cargo install, apt, curl, wget…) e administrar o sistema (sudo, chmod, systemctl…). Em *Pedir* a IA para e avisa você; ao aprovar com `/permitir <comando>` só essa regra é habilitada (`rm`, não `rmdir`) para essa tarefa, ou para essa IA se escolher «sempre». O proibido sempre vence. Vale a partir da próxima execução de cada IA e cada mudança fica na auditoria (`politica_riesgo`).
 
 **Ver mudanças dentro da tarefa**: se a tarefa tem um Pull Request, sua janela mostra **👁 Ver mudanças** com os arquivos e linhas que a IA alterou, sem passar por 🔀 Integrar. Integrar e devolver continuam sendo do projeto.
+
+## 29. Pasta de rede: salvar dos seus próprios programas
+
+*Configurações → Equipe e projeto → Pasta de rede → Como conectar* mostra o endereço do projeto (`/dav/<número>/`) e os passos para montá-la como unidade no **Windows** (Mapear unidade de rede), **macOS** (Ir → Conectar ao Servidor) ou **Linux** (Arquivos → Conectar ao servidor). Você entra com seu usuário e senha do CrewHelm e salva do Photoshop, Premiere, Word, DaVinci ou o que usar: o arquivo chega à pasta do projeto no servidor, sem passar pelo navegador e sem o limite de 25 MB (até 8 GB por arquivo).
+
+- **Quem escreve onde**: dentro da pasta com seu nome (`<seu usuário>/…`). A equipe toda lê tudo; `_tareas/<n>/final/` é somente leitura. Leitores não escrevem.
+- **Versões**: se você salvar por cima de um arquivo, movê-lo ou apagá-lo, o CrewHelm guarda antes a versão anterior (as últimas 20 por arquivo, em `.crewhelm/.versions/`).
+- **Programas executáveis não são enviados** (`.exe`, `.bat`, instaladores, etc.).
+- **O Windows exige HTTPS**: use o «Endereço seguro» e instale o certificado próprio do servidor (link na mesma ajuda); com um certificado real (Let's Encrypt ou o da empresa) não é preciso. O endereço HTTP serve no macOS e Linux numa rede confiável.
+- Cada envio, movimento ou exclusão fica na auditoria (`carpeta_de_red`).
+- Funciona para projetos cuja pasta de trabalho está na máquina do servidor.
