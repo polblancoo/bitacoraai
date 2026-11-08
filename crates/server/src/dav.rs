@@ -100,7 +100,12 @@ async fn authenticate(st: &AppState, peer: SocketAddr, h: &axum::http::HeaderMap
     let ip = limits::client_ip(h, peer, st.trust_proxy);
     let row = sqlx::query("SELECT id, username, password_hash, is_bot FROM users WHERE username = ?").bind(user.trim()).fetch_optional(&st.db).await.ok().flatten();
     let ok = match &row {
-        Some(r) => auth::verify_password(&pass, &r.get::<String, _>("password_hash")),
+        Some(r) => {
+            let uid: Id = r.get("id");
+            let by_app = crate::twofa::dav_token_ok(st, uid, &pass).await;
+            // con verificación en dos pasos la contraseña sola no entra: hace falta la «contraseña de aplicación»
+            by_app || (!crate::twofa::enabled(st, uid).await && auth::verify_password(&pass, &r.get::<String, _>("password_hash")))
+        }
         None => { auth::dummy_verify(&pass); false }
     };
     let Some(r) = row.filter(|_| ok) else {

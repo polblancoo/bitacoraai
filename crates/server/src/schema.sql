@@ -479,3 +479,12 @@ CREATE TABLE IF NOT EXISTS audit_log (
     text TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_log_team ON audit_log(team_id, at);
+
+-- Códigos de recuperación del 2FA (solo se guarda su hash; cada uno se usa una vez)
+CREATE TABLE IF NOT EXISTS recovery_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    hash TEXT NOT NULL,
+    used_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_recovery_user ON recovery_codes(user_id);

@@ -42,6 +42,7 @@ mod usage;
 mod audit;
 mod risk;
 mod dav;
+mod twofa;
 mod ws;
 
 use axum::{
@@ -141,6 +142,10 @@ async fn migrate(db: &SqlitePool) -> anyhow::Result<()> {
         "ALTER TABLE teams ADD COLUMN description TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE tasks ADD COLUMN created_by INTEGER",
         "ALTER TABLE users ADD COLUMN full_access INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN totp_secret TEXT",
+        "ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN totp_last INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN dav_token_hash TEXT",
         "ALTER TABLE users ADD COLUMN base_allow TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE users ADD COLUMN base_deny TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE users ADD COLUMN lists_from_app INTEGER NOT NULL DEFAULT 0",
@@ -292,7 +297,7 @@ async fn main() -> anyhow::Result<()> {
 
     let api = hardening(routes::router().merge(profile::router()).merge(canvas::router()).merge(extras::router()).merge(google::router()).merge(github::router()).merge(gh_sync::router()).merge(gitsetup::router())
         .merge(prs::router())
-        .merge(mailcfg::router()).merge(setup::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(audit::router()).merge(risk::router()).merge(tls::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(taskfiles::router()).merge(integrations::router()).merge(chat_tr::router()).merge(sysops::router()).merge(chat::router()).merge(chat_ai::router()).merge(flow::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
+        .merge(mailcfg::router()).merge(setup::router()).merge(teampanel::router()).merge(bots::router()).merge(term::router()).merge(usage::router()).merge(audit::router()).merge(risk::router()).merge(tls::router()).merge(twofa::router()).merge(license::router()).merge(pro::router()).merge(profile_pack::router()).merge(digest::router()).merge(review::router()).merge(files::router()).merge(taskfiles::router()).merge(integrations::router()).merge(chat_tr::router()).merge(sysops::router()).merge(chat::router()).merge(chat_ai::router()).merge(flow::router()).merge(schedule::router()).merge(runner::router()).merge(report::router()).merge(ws::router()));
     let api = if web::enabled() { api.merge(web::router()) } else { api };
     let app: Router = api
         .layer(DefaultBodyLimit::max(limits::MAX_BODY_BYTES))

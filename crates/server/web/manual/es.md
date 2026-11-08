@@ -582,3 +582,15 @@ En la ventana de una tarea, *📂 Carpeta de la tarea* (abierta de entrada en lo
 - **🔗 Agregar enlace**: un enlace a Drive, Figma, Dropbox o un video en la nube como entregable, sin subir nada. Se abre con un clic.
 
 **Perfil 🎨 Diseño y audiovisual** (*Configuración → Equipo y proyecto → Perfil de uso*): columnas *Brief / En producción / Entregado*, sin partes técnicas, con un ejemplo de campaña. **Para quien programa**: trabajá con tu editor sobre un clon local y enviá con `git`/`cw enviar` (sección 21); la carpeta de red (sección 29) también sirve para abrir el proyecto desde el editor.
+
+## 31. Verificación en dos pasos (2FA)
+
+*Mi perfil → 🔐 Verificación en dos pasos → Activar*: escaneás un código QR con una app de autenticación (Google Authenticator, Authy, 1Password, Aegis…), escribís el código de 6 dígitos que muestra y listo. Desde ese momento, al entrar se pide el código después de la contraseña. Aunque alguien robe la contraseña, no puede entrar.
+
+- **Códigos de recuperación**: al activar se muestran 8, una sola vez. Cada uno sirve una vez en lugar del código de la app. Guardalos aparte (gestor de contraseñas, papel).
+- **Un código no se usa dos veces** y se acepta el de la ventana actual y el anterior/siguiente (por si el reloj del teléfono está algo corrido). Tras 5 intentos fallidos la cuenta se bloquea 15 minutos.
+- **Desactivar** pide la contraseña y un código vigente (la sesión abierta sola no alcanza).
+- **Carpeta de red (sección 29)**: no puede pedir códigos, así que con 2FA activo no acepta tu contraseña normal. Generá una **contraseña de aplicación** en *Mi perfil → 🔑 Contraseña para la carpeta de red* y usala al conectar (se muestra una vez; generar otra anula la anterior).
+- **Las IAs** entran con su token, no con contraseña: el 2FA no las afecta.
+- **Si alguien pierde el teléfono y los códigos**: el administrador del servidor entra a *Configuración → 🛡 Roles y límites* y toca *🔓 Quitar 2FA* en su fila; eso también cierra sus sesiones. Queda anotado en el registro del servidor y en la auditoría de sus equipos.
+- La terminal de texto (`tm`) todavía no pide el código: con 2FA activo, usá la web o la app de escritorio.

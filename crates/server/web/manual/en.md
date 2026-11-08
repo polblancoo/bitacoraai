@@ -575,3 +575,15 @@ In a task's window, *📂 Task folder* (open by default in profiles without tech
 - **🔗 Add link**: a link to Drive, Figma, Dropbox or a cloud video as a deliverable, without uploading anything. It opens with one click.
 
 **🎨 Design and audiovisual profile** (*Settings → Team and project → Usage profile*): columns *Brief / In production / Delivered*, no technical parts, with a sample campaign. **For programmers**: work in your editor on a local clone and send with `git`/`cw enviar` (section 21); the network folder (section 29) also lets you open the project from your editor.
+
+## 31. Two-step verification (2FA)
+
+*My profile → 🔐 Two-step verification → Enable*: you scan a QR code with an authenticator app (Google Authenticator, Authy, 1Password, Aegis…), type the 6-digit code it shows, and that's it. From then on, signing in asks for the code after the password. Even if someone steals the password, they can't get in.
+
+- **Recovery codes**: 8 are shown once when you enable it. Each works once in place of the app's code. Keep them apart (password manager, paper).
+- **A code can't be used twice**, and the current window plus the previous/next are accepted (in case the phone's clock is a bit off). After 5 failed attempts the account is locked for 15 minutes.
+- **Disabling** asks for the password and a valid code (an open session alone isn't enough).
+- **Network folder (section 29)**: it can't ask for codes, so with 2FA on it doesn't accept your normal password. Generate an **app password** in *My profile → 🔑 Password for the network folder* and use it when connecting (shown once; generating another cancels the previous one).
+- **AIs** sign in with their token, not a password: 2FA doesn't affect them.
+- **If someone loses their phone and codes**: the server administrator goes to *Settings → 🛡 Roles and limits* and taps *🔓 Remove 2FA* on their row; that also closes their sessions. It is logged on the server and in the audit of their teams.
+- The text terminal (`tm`) doesn't ask for the code yet: with 2FA on, use the web or the desktop app.

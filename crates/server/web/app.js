@@ -285,7 +285,15 @@ function logout() {
 }
 
 async function authenticate(user, pass) {
-  const r = await api("POST", S.register ? "/api/register" : "/api/login", { username: user, password: pass });
+  let r;
+  try { r = await api("POST", S.register ? "/api/register" : "/api/login", { username: user, password: pass }); }
+  catch (e) {
+    // la cuenta tiene verificación en dos pasos: se pide el código (o uno de recuperación) y se reintenta
+    if (S.register || !/dos pasos/.test(e.message)) throw e;
+    const f = await form("Verificación en dos pasos", [{ name: "code", label: "Código de 6 dígitos de tu app de autenticación (o un código de recuperación)", max: 20 }], "Entrar");
+    if (!f) return;
+    r = await api("POST", "/api/login", { username: user, password: pass, code: f.code });
+  }
   S.token = r.token; S.user = r.user;
   store.set("token", r.token); store.set("user", JSON.stringify(r.user)); store.set("server", S.server);
   await boot(true);
@@ -390,9 +398,52 @@ const openProfile = guard(async () => {
       me.email && !me.email_verified && h("div", { class: "row" }, code, h("button", { class: "primary", onclick: guard(async () => {
         await api("POST", "/api/me/email/verify", { code: code.value }); toast("Email verificado"); close(); openProfile();
       }) }, "Verificar")),
+      twofaBox(),
       sshKeysBox(),
       h("div", { class: "row" }, h("button", { onclick: close }, "Cerrar")))));
 });
+
+// verificación en dos pasos (TOTP): activar con un QR, códigos de recuperación y contraseña de aplicación para la carpeta de red
+function twofaBox() {
+  const box = h("div", { class: "sshkeys" });
+  const load = async () => {
+    const st = await api("GET", "/api/me/2fa").catch(() => null); if (!st) return;
+    const showCodes = (codes) => { const m = h("div", { class: "overlay", id: "rec-modal" }, h("div", { class: "modal" }, h("h3", {}, "🔐 Códigos de recuperación"),
+      h("p", { class: "warn" }, "Guardalos ahora en un lugar seguro: no se vuelven a mostrar. Cada uno sirve una sola vez si perdés el teléfono."),
+      h("pre", { class: "preview-text" }, codes.join("\n")),
+      h("div", { class: "row" }, h("button", { onclick: () => { navigator.clipboard?.writeText(codes.join("\n")); toast("Copiados"); } }, "Copiar"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: () => m.remove() }, "Ya los guardé")))); document.body.append(m); };
+    const activate = guard(async () => {
+      const r = await api("POST", "/api/me/2fa/setup");
+      const code = h("input", { placeholder: "Código de 6 dígitos", maxLength: 8, inputmode: "numeric", autocomplete: "one-time-code" });
+      const m = h("div", { class: "overlay", id: "tfa-modal" }, h("div", { class: "modal" }, h("h3", {}, "🔐 Activar la verificación en dos pasos"),
+        h("ol", {}, h("li", {}, "Instalá una app de autenticación (Google Authenticator, Authy, 1Password, Aegis…)."), h("li", {}, "Escaneá este código QR (o escribí la clave a mano)."), h("li", {}, "Escribí abajo el código de 6 dígitos que muestra la app.")),
+        r.qr_svg && h("img", { alt: "QR", src: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(r.qr_svg), style: "background:#fff;padding:8px;border-radius:8px;width:200px;height:200px;display:block;margin:6px auto" }),
+        h("div", { class: "row" }, h("small", { class: "hint" }, "Clave: "), h("code", { style: "word-break:break-all" }, r.secret.match(/.{1,4}/g).join(" "))),
+        h("div", { class: "row" }, code, h("span", { class: "spacer" }), h("button", { onclick: () => m.remove() }, "Cancelar"), h("button", { class: "primary", onclick: guard(async () => {
+          const a = await api("POST", "/api/me/2fa/enable", { code: code.value }); m.remove(); showCodes(a.recovery); load();
+        }) }, "Activar"))));
+      document.body.append(m); code.focus();
+    });
+    const off = guard(async () => {
+      const f = await form("Desactivar la verificación en dos pasos", [{ name: "password", label: "Tu contraseña", type: "password", max: 128 }, { name: "code", label: "Código de tu app (o de recuperación)", max: 20 }], "Desactivar"); if (!f) return;
+      await api("POST", "/api/me/2fa/disable", f); toast("Verificación en dos pasos desactivada"); load();
+    });
+    const davPw = guard(async () => {
+      if (!(await ask("Se genera una contraseña nueva y la anterior deja de servir. Se muestra una sola vez.", "Generar"))) return;
+      const r = await api("POST", "/api/me/dav-password");
+      document.body.append(h("div", { class: "overlay", id: "dav-pw" }, h("div", { class: "modal" }, h("h3", {}, "🔑 Contraseña de aplicación"),
+        h("p", { class: "hint" }, "Usala como contraseña al conectar la carpeta de red (tu usuario es el de siempre). Guardala: no se vuelve a mostrar."),
+        h("pre", { class: "preview-text" }, r.password), h("div", { class: "row" }, h("button", { onclick: () => { navigator.clipboard?.writeText(r.password); toast("Copiada"); } }, "Copiar"), h("span", { class: "spacer" }), h("button", { class: "primary", onclick: () => document.getElementById("dav-pw")?.remove() }, "Listo")))));
+      load();
+    });
+    box.replaceChildren(h("h4", {}, "🔐 Verificación en dos pasos"),
+      h("small", {}, st.enabled ? `Activada: al entrar te pedimos el código de tu app. Te quedan ${st.recovery_left} códigos de recuperación.` : "Suma un código de tu teléfono a la contraseña: aunque alguien la robe, no puede entrar."),
+      h("div", { class: "row" }, st.enabled ? h("button", { class: "danger", onclick: off }, "Desactivar") : h("button", { class: "primary", onclick: activate }, "Activar"), h("span", { class: "spacer" }),
+        h("button", { class: "ghost", title: st.enabled ? "Con 2FA, la carpeta de red no acepta tu contraseña: usa esta" : "Opcional: una contraseña propia para la carpeta de red", onclick: davPw }, "🔑 Contraseña para la carpeta de red")));
+  };
+  load();
+  return box;
+}
 
 // claves SSH de la persona: con ellas entra por ssh al servidor, cada una a su espacio personal (los miembros dentro de un sandbox)
 function sshKeysBox() {
@@ -1366,7 +1417,11 @@ function rolesPanel() {
     box.replaceChildren(h("p", { class: "hint" }, "Usuario: usa la app. CTO: además ve «Procesos», fija los límites de las terminales y ve el uso por persona. Administrador: todo, incluido cambiar estos roles. No cambia los roles dentro de cada equipo."),
       ...us.map((u) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, u.username),
         h("select", { onchange: async (e) => { try { await api("PUT", `/api/admin/users/${u.id}/role`, { role: e.target.value }); toast("Rol actualizado"); } catch (x) { toast(x.message, true); } load(); } },
-          Object.entries(ROLE_LBL).map(([k, v]) => h("option", { value: k, selected: u.role === k }, v))))));
+          Object.entries(ROLE_LBL).map(([k, v]) => h("option", { value: k, selected: u.role === k }, v)))
+        , u.totp && h("button", { class: "ghost", title: "Si perdió el teléfono y los códigos de recuperación: le quita la verificación en dos pasos y cierra sus sesiones", onclick: guard(async () => {
+          if (!(await ask(`¿Quitarle la verificación en dos pasos a ${u.username}? Tendrá que volver a activarla.`, "Quitar"))) return;
+          await api("POST", `/api/admin/users/${u.id}/2fa/reset`); toast("Verificación en dos pasos quitada"); load();
+        }) }, "🔓 Quitar 2FA"))));
   };
   load().catch((e) => box.replaceChildren(h("p", { class: "warn" }, e.message)));
   return box;

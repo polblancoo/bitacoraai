@@ -575,3 +575,15 @@ Na janela de uma tarefa, *📂 Pasta da tarefa* (aberta por padrão nos perfis s
 - **🔗 Adicionar link**: um link para Drive, Figma, Dropbox ou um vídeo na nuvem como entregável, sem enviar nada. Abre com um clique.
 
 **Perfil 🎨 Design e audiovisual** (*Configurações → Equipe e projeto → Perfil de uso*): colunas *Brief / Em produção / Entregue*, sem partes técnicas, com uma campanha de exemplo. **Para quem programa**: trabalhe no seu editor num clone local e envie com `git`/`cw enviar` (seção 21); a pasta de rede (seção 29) também serve para abrir o projeto no editor.
+
+## 31. Verificação em duas etapas (2FA)
+
+*Meu perfil → 🔐 Verificação em duas etapas → Ativar*: você escaneia um QR code com um app autenticador (Google Authenticator, Authy, 1Password, Aegis…), digita o código de 6 dígitos que ele mostra e pronto. A partir daí, ao entrar é pedido o código depois da senha. Mesmo que alguém roube a senha, não consegue entrar.
+
+- **Códigos de recuperação**: ao ativar são mostrados 8, uma só vez. Cada um serve uma vez no lugar do código do app. Guarde-os à parte (gerenciador de senhas, papel).
+- **Um código não é usado duas vezes**, e são aceitos o da janela atual e o anterior/seguinte (caso o relógio do celular esteja um pouco errado). Após 5 tentativas falhas a conta fica bloqueada por 15 minutos.
+- **Desativar** pede a senha e um código válido (a sessão aberta sozinha não basta).
+- **Pasta de rede (seção 29)**: não pode pedir códigos, então com 2FA ativo não aceita sua senha normal. Gere uma **senha de aplicativo** em *Meu perfil → 🔑 Senha para a pasta de rede* e use-a ao conectar (mostrada uma vez; gerar outra anula a anterior).
+- **As IAs** entram com seu token, não com senha: o 2FA não as afeta.
+- **Se alguém perder o celular e os códigos**: o administrador do servidor vai em *Configurações → 🛡 Papéis e limites* e toca em *🔓 Remover 2FA* na linha da pessoa; isso também encerra as sessões. Fica registrado no servidor e na auditoria das equipes dela.
+- O terminal de texto (`tm`) ainda não pede o código: com 2FA ativo, use a web ou o app de desktop.

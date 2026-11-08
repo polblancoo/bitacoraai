@@ -279,11 +279,20 @@ async fn register(
     }))
 }
 
+#[derive(serde::Deserialize)]
+struct LoginIn {
+    username: String,
+    password: String,
+    /// código de la app de verificación en dos pasos o de recuperación (solo si la cuenta lo tiene activo)
+    #[serde(default)]
+    code: Option<String>,
+}
+
 async fn login(
     State(st): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    Json(c): Json<Credentials>,
+    Json(c): Json<LoginIn>,
 ) -> Result<Json<AuthResponse>> {
     throttle(&st, &headers, addr)?;
     max_len("usuario", &c.username, USERNAME_MAX)?;
@@ -306,8 +315,19 @@ async fn login(
         let _ = st.user_limiter.hit(&key, 5, window);
         return Err(AppError::unauthorized("credenciales inválidas"));
     };
-    st.user_limiter.reset(&key);
     let (id, username, ver): (Id, String, i64) = (row.get("id"), row.get("username"), row.get("token_version"));
+    // segundo paso (si la persona lo activó): sin código no se entra; un código malo cuenta como intento fallido
+    if crate::twofa::enabled(&st, id).await {
+        let code = c.code.as_deref().unwrap_or("").trim();
+        if code.is_empty() {
+            return Err(AppError::unauthorized(crate::twofa::NEEDS_CODE));
+        }
+        if !crate::twofa::verify_second(&st, id, code).await {
+            let _ = st.user_limiter.hit(&key, 5, window);
+            return Err(AppError::unauthorized("código incorrecto"));
+        }
+    }
+    st.user_limiter.reset(&key);
     Ok(Json(AuthResponse { token: make_token(&st.secret, id, &username, ver), user: User { id, username } }))
 }
 

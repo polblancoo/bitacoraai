@@ -33,8 +33,8 @@ pub(crate) async fn need(st: &AppState, user: &AuthUser, admin_only: bool) -> Re
 
 async fn users(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>> {
     need(&st, &user, true).await?;
-    let rows = sqlx::query("SELECT id, username, server_role FROM users WHERE is_bot = 0 AND id NOT IN (SELECT user_id FROM api_tokens) ORDER BY username").fetch_all(&st.db).await?;
-    Ok(Json(json!(rows.iter().map(|r| json!({ "id": r.get::<i64, _>(0), "username": r.get::<String, _>(1), "role": r.get::<String, _>(2) })).collect::<Vec<_>>())))
+    let rows = sqlx::query("SELECT id, username, server_role, totp_enabled FROM users WHERE is_bot = 0 AND id NOT IN (SELECT user_id FROM api_tokens) ORDER BY username").fetch_all(&st.db).await?;
+    Ok(Json(json!(rows.iter().map(|r| json!({ "id": r.get::<i64, _>(0), "username": r.get::<String, _>(1), "role": r.get::<String, _>(2), "totp": r.get::<i64, _>(3) != 0 })).collect::<Vec<_>>())))
 }
 
 #[derive(Deserialize)]
