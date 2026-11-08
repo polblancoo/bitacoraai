@@ -153,6 +153,223 @@ async fn retry<T, F: std::future::Future<Output = Result<T, String>>>(mut f: imp
     Err(last)
 }
 
+// ---------------------------------------------------------------- recuperar archivos y ramas desde la web (sin escribir comandos)
+
+/// git dentro de una cápsula sin red: la copia de la persona la maneja ella, así que su configuración (filtros, hooks) no corre con permisos del servicio.
+async fn sgit(copy: &Path, sandbox: bool, args: &[&str]) -> Result<String, String> {
+    let mut c;
+    if sandbox {
+        c = Command::new("bwrap");
+        c.args(["--ro-bind", "/", "/", "--bind"]).arg(copy).arg(copy).args(["--dev", "/dev", "--proc", "/proc", "--unshare-net", "--unshare-pid", "--unshare-ipc", "--die-with-parent", "git"]);
+    } else {
+        c = Command::new("git");
+    }
+    c.arg("-C").arg(copy).args(["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "-c", "protocol.file.allow=always"]).args(args);
+    c.env_clear().env("PATH", std::env::var("PATH").unwrap_or_default()).env("GIT_CONFIG_GLOBAL", "/dev/null").env("GIT_CONFIG_NOSYSTEM", "1");
+    run(&mut c, 60).await
+}
+
+fn safe_rel(p: &str) -> bool {
+    !p.is_empty() && p.len() < 400 && !p.contains('\0') && !p.starts_with('/') && p.split('/').all(|s| !s.is_empty() && s != ".." && s != "." && s != ".git")
+}
+
+fn safe_branch(b: &str) -> bool {
+    !b.is_empty() && b.len() <= 100 && !b.contains("..") && !b.starts_with(['/', '-']) && !b.ends_with(['/', '.']) && !b.ends_with(".lock") && b.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '/' | '.'))
+}
+
+fn is_sha(s: &str) -> bool {
+    (4..=40).contains(&s.len()) && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+struct Rc {
+    copy: PathBuf,
+    sandbox: bool,
+}
+
+impl Rc {
+    async fn g(&self, a: &[&str]) -> Result<String, String> {
+        sgit(&self.copy, self.sandbox, a).await
+    }
+    async fn base_of(&self, f: &str) -> Option<String> {
+        for b in ["main", "master"] {
+            let r = format!("refs/remotes/base/{b}");
+            if self.g(&["cat-file", "-e", &format!("{r}:{f}")]).await.is_ok() {
+                return Some(r);
+            }
+        }
+        None
+    }
+}
+
+async fn recover(p: &Value, project_dir: &Path) -> Result<Value, String> {
+    let owner = p["owner"].as_bool() == Some(true);
+    let who = p["who"].as_str().unwrap_or("");
+    let copy = if owner {
+        project_dir.to_path_buf()
+    } else {
+        let ws = crate::term::workspace().ok_or("Este servidor no usa espacios personales")?;
+        ws.join("homeCrewHelm").join(crate::iso::slug(who)).join(crate::iso::slug(p["project"].as_str().unwrap_or("")))
+    };
+    if !copy.join(".git").exists() {
+        return Err("Todavía no tenés una copia de trabajo de este proyecto: abrí su terminal una vez y volvé a probar.".into());
+    }
+    let sandbox = !owner;
+    if sandbox && !crate::iso::bwrap_ok().await {
+        return Err("Falta bwrap en el servidor: no se puede mirar la copia de trabajo de forma segura.".into());
+    }
+    let prefix = if owner { String::new() } else { format!("{}/", crate::iso::ascii_slug(who)) };
+    let path = p["path"].as_str().unwrap_or("").trim_start_matches("./").to_string();
+    let rc = Rc { copy: copy.clone(), sandbox };
+    match p["action"].as_str().unwrap_or("") {
+        "list" => {
+            // `diff --name-status -z` (no `status`): `run` recorta los espacios del principio y rompería la primera línea
+            let st = rc.g(&["diff", "--name-status", "-z", "HEAD"]).await?;
+            let mut changed = Vec::new();
+            let mut parts = st.split('\0');
+            while let Some(code) = parts.next() {
+                let Some(f) = parts.next() else { break };
+                if code.starts_with('R') || code.starts_with('C') {
+                    parts.next();
+                }
+                if !safe_rel(f) {
+                    continue;
+                }
+                if code.starts_with('D') {
+                    changed.push(json!({ "path": f, "state": "borrado" }));
+                } else if code.starts_with('M') || code.starts_with('T') {
+                    changed.push(json!({ "path": f, "state": "cambiado" }));
+                }
+            }
+            let log = rc.g(&["log", "--diff-filter=D", "--name-only", "--format=", "-n", "60"]).await.unwrap_or_default();
+            let mut seen = std::collections::HashSet::new();
+            let deleted: Vec<String> = log.lines().filter(|l| !l.is_empty() && safe_rel(l) && !copy.join(l).exists() && seen.insert(l.to_string())).take(40).map(String::from).collect();
+            Ok(json!({ "changed": changed, "deleted": deleted }))
+        }
+        "versions" => {
+            if !safe_rel(&path) {
+                return Err("Ruta no válida".into());
+            }
+            let log = rc.g(&["log", "-n", "25", "--format=%h%x09%at%x09%an%x09%s", "--", &path]).await.unwrap_or_default();
+            let mut versions = Vec::new();
+            for l in log.lines() {
+                let f: Vec<&str> = l.splitn(4, '\t').collect();
+                if f.len() == 4 && rc.g(&["cat-file", "-e", &format!("{}:{path}", f[0])]).await.is_ok() {
+                    versions.push(json!({ "rev": f[0], "at": f[1].parse::<i64>().unwrap_or(0), "who": f[2], "msg": f[3] }));
+                    if versions.len() >= 12 {
+                        break;
+                    }
+                }
+            }
+            Ok(json!({ "versions": versions, "base": rc.base_of(&path).await.is_some(), "exists_now": copy.join(&path).exists() }))
+        }
+        "restore" => {
+            if !safe_rel(&path) {
+                return Err("Ruta no válida".into());
+            }
+            let rev = p["rev"].as_str().unwrap_or("");
+            let rev = if rev == "base" { rc.base_of(&path).await.ok_or("El proyecto no tiene ese archivo")? } else if is_sha(rev) { rev.to_string() } else { return Err("Versión no válida".into()) };
+            rc.g(&["cat-file", "-e", &format!("{rev}:{path}")]).await.map_err(|_| "Esa versión no tiene el archivo".to_string())?;
+            let target = copy.join(&path);
+            let mut backup = None;
+            if target.is_file() {
+                let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) % 86400;
+                let b = format!("{path}.antes-de-recuperar-{:02}{:02}{:02}", secs / 3600, secs / 60 % 60, secs % 60);
+                std::fs::copy(&target, copy.join(&b)).map_err(|e| format!("no pude respaldar lo que había: {e}"))?;
+                backup = Some(b);
+            }
+            if let Some(d) = target.parent() {
+                std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
+            }
+            rc.g(&["restore", "--source", &rev, "--worktree", "--", &path]).await?;
+            Ok(json!({ "restored": path, "backup": backup }))
+        }
+        "branches" => {
+            let cur = rc.g(&["branch", "--show-current"]).await.unwrap_or_default();
+            let fmt = "--format=%(refname:short)%09%(committerdate:unix)%09%(subject)";
+            let pat = if prefix.is_empty() { "refs/heads/".to_string() } else { format!("refs/heads/{prefix}") };
+            let local_txt = rc.g(&["for-each-ref", "--sort=-committerdate", fmt, &pat]).await?;
+            let mut local = Vec::new();
+            let mut names = std::collections::HashSet::new();
+            for l in local_txt.lines() {
+                let f: Vec<&str> = l.splitn(3, '\t').collect();
+                if f.len() == 3 {
+                    names.insert(f[0].to_string());
+                    local.push(json!({ "name": f[0], "at": f[1].parse::<i64>().unwrap_or(0), "msg": f[2], "current": f[0] == cur.trim() }));
+                }
+            }
+            // ramas que se borraron: salen del historial de movimientos de la copia
+            let rl = rc.g(&["reflog", "--format=%H%x09%gs", "-n", "400"]).await.unwrap_or_default();
+            let rows: Vec<(&str, &str)> = rl.lines().filter_map(|l| l.split_once('\t')).collect();
+            let mut deleted = Vec::new();
+            let mut dseen = std::collections::HashSet::new();
+            for (i, (_, gs)) in rows.iter().enumerate() {
+                let Some(rest) = gs.strip_prefix("checkout: moving from ") else { continue };
+                let Some((from, _)) = rest.split_once(" to ") else { continue };
+                if !from.starts_with(&prefix) || !safe_branch(from) || names.contains(from) || !dseen.insert(from.to_string()) {
+                    continue;
+                }
+                if let Some((sha, _)) = rows.get(i + 1) {
+                    let at = rc.g(&["log", "-1", "--format=%at%x09%s", sha]).await.unwrap_or_default();
+                    let (t, m) = at.split_once('\t').unwrap_or(("0", ""));
+                    deleted.push(json!({ "name": from, "sha": &sha[..12.min(sha.len())], "at": t.parse::<i64>().unwrap_or(0), "msg": m }));
+                }
+                if deleted.len() >= 15 {
+                    break;
+                }
+            }
+            // ramas que ya se enviaron a revisión (están en el proyecto) y no están en la copia
+            let spat = if prefix.is_empty() { "refs/remotes/origin/".to_string() } else { format!("refs/remotes/origin/{prefix}") };
+            let sent_txt = run(Command::new("git").arg("-C").arg(project_dir).args(["for-each-ref", "--sort=-committerdate", "--format=%(refname:lstrip=3)%09%(committerdate:unix)%09%(subject)", &spat]), 20).await.unwrap_or_default();
+            let sent: Vec<Value> = sent_txt.lines().filter_map(|l| {
+                let f: Vec<&str> = l.splitn(3, '\t').collect();
+                (f.len() == 3 && safe_branch(f[0]) && !names.contains(f[0])).then(|| json!({ "name": f[0], "at": f[1].parse::<i64>().unwrap_or(0), "msg": f[2] }))
+            }).take(15).collect();
+            Ok(json!({ "local": local, "deleted": deleted, "sent": sent, "dirty": !rc.g(&["status", "--porcelain"]).await.unwrap_or_default().is_empty() }))
+        }
+        "branch_restore" => {
+            let name = p["name"].as_str().unwrap_or("");
+            if !safe_branch(name) || !name.starts_with(&prefix) {
+                return Err("Solo podés recuperar ramas tuyas".into());
+            }
+            if rc.g(&["rev-parse", "-q", "--verify", &format!("refs/heads/{name}")]).await.is_ok() {
+                return Err("Esa rama ya existe en tu copia".into());
+            }
+            if p["from"].as_str() == Some("sent") {
+                let src = format!("refs/remotes/origin/{name}");
+                let sha = run(Command::new("git").arg("-C").arg(project_dir).args(["rev-parse", "-q", "--verify", &src]), 20).await.map_err(|_| "Esa rama no está en el proyecto".to_string())?;
+                let sha = sha.trim().to_string();
+                if !is_sha(&sha) {
+                    return Err("Esa rama no está en el proyecto".into());
+                }
+                rc.g(&["fetch", "-q", &project_dir.to_string_lossy(), &format!("+{src}:refs/crewhelm/recuperada")]).await.map_err(|e| format!("no pude traerla: {e}"))?;
+                rc.g(&["branch", name, "refs/crewhelm/recuperada"]).await?;
+                let _ = rc.g(&["update-ref", "-d", "refs/crewhelm/recuperada"]).await;
+            } else {
+                let sha = p["sha"].as_str().unwrap_or("");
+                if !is_sha(sha) || rc.g(&["cat-file", "-e", &format!("{sha}^{{commit}}")]).await.is_err() {
+                    return Err("No encontré esa versión de la rama".into());
+                }
+                rc.g(&["branch", name, sha]).await?;
+            }
+            let dirty = !rc.g(&["status", "--porcelain"]).await.unwrap_or_default().is_empty();
+            let switched = p["switch"].as_bool() == Some(true) && !dirty && rc.g(&["switch", "-q", name]).await.is_ok();
+            Ok(json!({ "branch": name, "switched": switched, "dirty": dirty }))
+        }
+        "branch_switch" => {
+            let name = p["name"].as_str().unwrap_or("");
+            if !safe_branch(name) || !name.starts_with(&prefix) {
+                return Err("Solo podés pasar a ramas tuyas".into());
+            }
+            if !rc.g(&["status", "--porcelain"]).await.unwrap_or_default().is_empty() {
+                return Err("Tenés cambios sin guardar: guardalos primero (botón «💾 Guardar»)".into());
+            }
+            rc.g(&["switch", "-q", name]).await?;
+            Ok(json!({ "branch": name }))
+        }
+        _ => Err("Acción no válida".into()),
+    }
+}
+
 async fn run_job(p: &Value) -> Result<Value, String> {
     let dir = crate::iso::expand_home(p["dir"].as_str().unwrap_or(""));
     if !dir.is_absolute() {
@@ -178,6 +395,7 @@ async fn run_job(p: &Value) -> Result<Value, String> {
             return Ok(json!({ "people": people, "limit_mb": crate::iso::quota_mb() }));
         }
         "status" => return Ok(status(&dir).await),
+        "recover" => return recover(p, &dir).await,
         "sync" => {
             // después de integrar un Pull Request: la carpeta del proyecto se pone al día con GitHub (solo si se puede sin pisar nada)
             if !dir.join(".git").exists() {
@@ -296,6 +514,89 @@ mod tests {
         assert_eq!(git(&dir, &["rev-list", "--count", "HEAD"]).await.unwrap(), "1");
         // traer un repositorio sobre una carpeta que ya es repositorio se rechaza
         assert!(run_job(&json!({ "mode": "clone", "dir": dir, "repo": "a/b" })).await.is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[tokio::test]
+    async fn recuperar_archivos_y_ramas() {
+        let d = std::env::temp_dir().join(format!("cw-rec-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("sub")).unwrap();
+        let sh = |args: &[&str]| {
+            let o = std::process::Command::new("git").arg("-C").arg(&d).args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(args).output().unwrap();
+            assert!(o.status.success(), "{args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        };
+        sh(&["init", "-q", "-b", "main"]);
+        std::fs::write(d.join("a.txt"), "v1").unwrap();
+        std::fs::write(d.join("sub/b.txt"), "bb").unwrap();
+        sh(&["add", "-A"]);
+        sh(&["commit", "-q", "-m", "uno"]);
+        std::fs::write(d.join("a.txt"), "v2").unwrap();
+        sh(&["commit", "-qam", "dos"]);
+        sh(&["rm", "-q", "sub/b.txt"]);
+        sh(&["commit", "-qm", "borro b"]);
+        let q = |extra: Value| {
+            let mut v = json!({ "mode": "recover", "dir": d.to_string_lossy(), "owner": true, "who": "t", "project": "p" });
+            for (k, x) in extra.as_object().unwrap() { v[k] = x.clone(); }
+            v
+        };
+        // archivo borrado en un guardado anterior
+        let l = run_job(&q(json!({ "action": "list" }))).await.unwrap();
+        assert_eq!(l["deleted"][0], "sub/b.txt");
+        let v = run_job(&q(json!({ "action": "versions", "path": "sub/b.txt" }))).await.unwrap();
+        let rev = v["versions"][0]["rev"].as_str().unwrap().to_string();
+        run_job(&q(json!({ "action": "restore", "path": "sub/b.txt", "rev": rev }))).await.unwrap();
+        assert_eq!(std::fs::read_to_string(d.join("sub/b.txt")).unwrap(), "bb");
+        // archivo cambiado: se pisa con la versión vieja y lo de hoy queda al lado
+        std::fs::write(d.join("a.txt"), "roto").unwrap();
+        let v = run_job(&q(json!({ "action": "versions", "path": "a.txt" }))).await.unwrap();
+        let old = v["versions"].as_array().unwrap().last().unwrap()["rev"].as_str().unwrap().to_string();
+        let r = run_job(&q(json!({ "action": "restore", "path": "a.txt", "rev": old }))).await.unwrap();
+        assert_eq!(std::fs::read_to_string(d.join("a.txt")).unwrap(), "v1");
+        let b = r["backup"].as_str().unwrap();
+        assert_eq!(std::fs::read_to_string(d.join(b)).unwrap(), "roto");
+        // rutas peligrosas
+        for bad in ["../x", "/etc/passwd", ".git/config", "a/../../x"] {
+            assert!(run_job(&q(json!({ "action": "restore", "path": bad, "rev": "base" }))).await.is_err(), "{bad}");
+        }
+        // rama borrada: se vuelve a crear desde el historial
+        sh(&["switch", "-q", "-c", "t/trabajo"]);
+        std::fs::write(d.join("n.txt"), "n").unwrap();
+        sh(&["add", "-A"]);
+        sh(&["commit", "-qm", "nuevo"]);
+        sh(&["switch", "-q", "main"]);
+        sh(&["branch", "-D", "t/trabajo"]);
+        let br = run_job(&q(json!({ "action": "branches" }))).await.unwrap();
+        let del = br["deleted"].as_array().unwrap();
+        assert_eq!(del[0]["name"], "t/trabajo");
+        let sha = del[0]["sha"].as_str().unwrap().to_string();
+        let x = run_job(&q(json!({ "action": "branch_restore", "name": "t/trabajo", "sha": sha, "from": "reflog", "switch": true }))).await.unwrap();
+        assert_eq!(x["switched"], true);
+        assert!(d.join("n.txt").exists());
+        assert!(run_job(&q(json!({ "action": "branch_restore", "name": "../x", "sha": "abcd1234" }))).await.is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[tokio::test]
+    async fn git_en_capsula() {
+        if !crate::iso::bwrap_ok().await {
+            return;
+        }
+        let d = std::env::temp_dir().join(format!("cw-caps-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        git(&d, &["init", "-q", "-b", "main"]).await.unwrap();
+        std::fs::write(d.join("a"), "1").unwrap();
+        git(&d, &["add", "-A"]).await.unwrap();
+        git(&d, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"]).await.unwrap();
+        std::fs::write(d.join("a"), "2").unwrap();
+        // restaurar dentro de la cápsula escribe en la copia y funciona sin red
+        sgit(&d, true, &["restore", "--source", "HEAD", "--worktree", "--", "a"]).await.unwrap();
+        assert_eq!(std::fs::read_to_string(d.join("a")).unwrap(), "1");
+        // un hook malicioso de la copia no se ejecuta
+        std::fs::write(d.join(".git/hooks/post-checkout"), "#!/bin/sh\ntouch /tmp/cw-hook-pwned\n").unwrap();
+        let _ = sgit(&d, true, &["switch", "-q", "-c", "otra"]).await;
+        assert!(!std::path::Path::new("/tmp/cw-hook-pwned").exists());
         let _ = std::fs::remove_dir_all(&d);
     }
 }

@@ -32,6 +32,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/projects/{id}/git/setup", post(setup))
         .route("/api/projects/{id}/git/state", get(state))
         .route("/api/projects/{id}/git/request", post(request_repo))
+        .route("/api/projects/{id}/git/recover", post(recover))
         .route("/api/agent/git/pending", get(agent_pending))
         .route("/api/agent/git/{id}/result", post(agent_result))
 }
@@ -94,6 +95,45 @@ async fn setup(State(st): State<AppState>, user: AuthUser, Path(project): Path<I
     }
     STATE_CACHE.lock().unwrap().remove(&project);
     tracing::info!("git: usuario {} ejecutó «{}» en el proyecto {project}", user.id, b.mode);
+    Ok(Json(data))
+}
+
+#[derive(Deserialize)]
+struct RecoverBody {
+    action: String,
+    #[serde(default)]
+    path: String,
+    #[serde(default)]
+    rev: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    sha: String,
+    #[serde(default)]
+    from: String,
+    #[serde(default)]
+    switch: bool,
+}
+
+/// Recuperar un archivo o una rama desde la web, sin escribir comandos: se mira la copia de trabajo de quien lo pide (nunca la de otra persona).
+async fn recover(State(st): State<AppState>, user: AuthUser, Path(project): Path<Id>, Json(b): Json<RecoverBody>) -> Result<Json<Value>> {
+    user.human_only()?;
+    if !["list", "versions", "restore", "branches", "branch_restore", "branch_switch"].contains(&b.action.as_str()) {
+        return Err(AppError::bad("Opción no válida"));
+    }
+    let (team, name): (Id, String) = sqlx::query_as("SELECT team_id, name FROM projects WHERE id = ?").bind(project).fetch_optional(&st.db).await?.ok_or_else(AppError::forbidden)?;
+    routes::require(&st, team, user.id, Role::Member).await?;
+    st.user_limiter.hit(&format!("gitrecover:{}", user.id), 40, Duration::from_secs(60)).map_err(|_| AppError::bad("demasiados intentos: esperá un minuto"))?;
+    let owner = routes::require(&st, team, user.id, Role::Owner).await.is_ok();
+    let who: String = sqlx::query_scalar("SELECT username FROM users WHERE id = ?").bind(user.id).fetch_one(&st.db).await.unwrap_or_default();
+    let (agent, dir) = target(&st, project, team).await?;
+    let payload = json!({ "mode": "recover", "dir": dir, "who": who, "project": name, "owner": owner, "action": b.action, "path": b.path, "rev": b.rev, "name": b.name, "sha": b.sha, "from": b.from, "switch": b.switch });
+    let data = dispatch(agent, payload, 60).await?;
+    match b.action.as_str() {
+        "restore" => crate::audit::record(&st, team, Some(project), None, user.id, "archivo_recuperado", &format!("{} ({})", b.path, b.rev)).await,
+        "branch_restore" => crate::audit::record(&st, team, Some(project), None, user.id, "rama_recuperada", &b.name).await,
+        _ => {}
+    }
     Ok(Json(data))
 }
 

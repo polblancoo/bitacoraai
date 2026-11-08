@@ -3348,6 +3348,7 @@ const openSettings = guard(async () => {
           h("button", { onclick: go(createProject) }, "Nuevo proyecto"),
           S.project && can("admin") && h("button", { onclick: go(editProject), title: "Nombre, carpeta de trabajo y repositorio" }, "⚙ Datos del proyecto"),
           S.project && can("member") && h("button", { onclick: go(githubProject), title: "Traer los issues abiertos del repositorio como tareas" }, "🐙 Traer issues")),
+        S.project && can("member") && line(["Recuperar un archivo o una rama (borrados o cambiados)", "recover"], h("button", { onclick: go(() => openRecover(S.project.id)) }, "♻ Recuperar")),
         S.project && can("member") && line(["Usar como plantilla (copia tareas, etiquetas y dependencias)", "duplicate"], h("button", { onclick: go(duplicateProject) }, "Duplicar")),
         S.project && line(["Exportar las tareas", "export"], h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=csv`, `${S.project.name}.csv`)) }, "CSV"),
           h("button", { onclick: guard(() => saveFile(`/api/projects/${S.project.id}/export?format=json`, `${S.project.name}.json`)) }, "JSON"))),
@@ -3478,7 +3479,7 @@ const openSettings = guard(async () => {
   const TABS = [
     ["cuenta", "👤 Cuenta", ["user", "inbox", "logout", "logoutAll"]],
     ["conexiones", "🔔 Avisos y conexiones", ["email", "telegram", "digest", "github", "google", "reports"]],
-    ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "duplicate", "export", "dav", "audit"]],
+    ["equipo", "👥 Equipo y proyecto", ["role", "message", "members", "join", "newTeam", "perfil", "project", "recover", "duplicate", "export", "dav", "audit"]],
     ["ias", "🤖 IAs", ["agents", "cmds"]],
     ["integraciones", "🔌 Integraciones", ["integrations"]],
     ["srvstart", "🖥 Servidor (paso a paso)", ["srvstart", "srvwiz", "srvroles", "srvrisk", "srvcmds", "srvlimits", "procesos", "license"]],
@@ -4077,10 +4078,71 @@ function termsView() {
         return sel;
       })(),
         h("button", { title: "Conexión: cómo llega la terminal a la máquina del proyecto (agente o SSH) y si las personas del equipo pueden usarla", onclick: guard(() => openTerminal({ id: null, project_id: S.tvProject })) }, "⚙ Conexión"),
+        h("button", { title: "Trae de vuelta un archivo o una rama (borrados o cambiados), con botones", onclick: () => S.tvProject && openRecover(S.tvProject) }, "♻ Recuperar"),
         can("owner") && h("button", { title: "Repositorio git del proyecto: traer uno de GitHub, crear uno nuevo o dejarlo solo local", onclick: () => { const p = S.projects.find((x) => x.id === S.tvProject); if (p) openGitSetup(p); } }, "🐙 Repositorio")),
       h("small", { class: "hint" }, "Hasta 8 a la vez. Lo que hagas queda anotado en .tm/ de la carpeta del proyecto para que la IA retome.")),
     h("div", { class: "tv-body" }, store.get("tvSide") !== "0" && tvSide,
       h("div", { class: "tv-grid" + (PANES.length === 1 ? " one" : ""), style: `--cols:${c}` }, PANES.length ? PANES.map((p) => p.el) : h("div", { class: "empty" }, "Tocá «+ Terminal» o elegí una IA de la izquierda."))));
+}
+// ♻ Recuperar un archivo o una rama de tu copia de trabajo, con botones (sin escribir comandos)
+function openRecover(pid) {
+  const close = () => document.getElementById("recover-modal")?.remove();
+  const body = h("div", {});
+  const call = (b) => api("POST", `/api/projects/${pid}/git/recover`, b);
+  const when = (t) => (t ? new Date(t * 1000).toLocaleString() : "");
+  const fail = (e) => body.replaceChildren(h("p", { class: "err" }, "⚠ " + (e.message || e)), h("button", { class: "ghost", onclick: home }, "↻ Volver"));
+  const versions = async (path) => {
+    body.replaceChildren(h("p", { class: "hint" }, "⏳ Buscando versiones de «" + path + "»…"));
+    try {
+      const r = await call({ action: "versions", path });
+      const go = (rev) => async () => {
+        try {
+          const x = await call({ action: "restore", path, rev });
+          toast("Recuperado: " + x.restored + (x.backup ? " · lo que había quedó como " + x.backup : ""));
+          home();
+        } catch (e) { toast(e.message, true); }
+      };
+      const rows = r.versions.map((v) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, h("b", {}, when(v.at)), " · ", v.who, h("br", {}), h("small", { class: "hint" }, v.msg)), h("button", { onclick: go(v.rev), title: "Pone el archivo como estaba en ese momento. Lo que hay ahora se guarda al lado con otro nombre." }, "↩ Traer esta")));
+      if (r.base) rows.push(h("div", { class: "cfg-line" }, h("span", { class: "grow" }, h("b", {}, "La versión actual del proyecto"), h("br", {}), h("small", { class: "hint" }, "Lo que tiene el equipo ahora")), h("button", { onclick: go("base") }, "↩ Traer esta")));
+      body.replaceChildren(h("button", { class: "ghost", onclick: home }, "← Volver"), h("h4", {}, "📄 " + path),
+        r.exists_now ? h("small", { class: "hint" }, "El archivo existe hoy. Si traés una versión, lo de hoy queda guardado al lado (…antes-de-recuperar).") : h("small", { class: "hint" }, "El archivo no está hoy en tu carpeta."),
+        ...(rows.length ? rows : [h("p", { class: "hint" }, "No encontré versiones guardadas de este archivo. Solo se pueden recuperar cosas que alguna vez se guardaron (botón «💾 Guardar»).")]));
+    } catch (e) { fail(e); }
+  };
+  const fileRow = (path, tag) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, path, " ", h("small", { class: "hint" }, tag)), h("button", { onclick: () => versions(path) }, "♻ Recuperar"));
+  const branchAct = (label, tip, b, ok) => h("button", { title: tip, onclick: async () => {
+    try { const x = await call(b); toast(ok(x)); home(); } catch (e) { toast(e.message, true); }
+  } }, label);
+  const home = async () => {
+    body.replaceChildren(h("p", { class: "hint" }, "⏳ Mirando tu copia de trabajo…"));
+    try {
+      const [fl, br] = await Promise.all([call({ action: "list" }), call({ action: "branches" })]);
+      const other = h("input", { placeholder: "carpeta/archivo.docx", style: "flex:1" });
+      const files = [...fl.changed.map((f) => fileRow(f.path, f.state === "borrado" ? "· lo borraste y todavía no lo guardaste" : "· lo cambiaste y todavía no lo guardaste")), ...fl.deleted.map((f) => fileRow(f, "· se borró en un guardado anterior"))];
+      const cur = br.local.find((b) => b.current);
+      body.replaceChildren(...[
+        h("h4", {}, "📄 Archivos"),
+        ...(files.length ? files : [h("p", { class: "hint" }, "No hay archivos borrados ni cambiados sin guardar. Si buscás otro, escribí su ruta:")]),
+        h("div", { class: "row" }, other, h("button", { class: "ghost", onclick: () => other.value.trim() ? versions(other.value.trim()) : toast("Escribí la ruta del archivo", true) }, "Buscar versiones")),
+        h("h4", {}, "🌿 Mis ramas"),
+        br.dirty ? h("small", { class: "hint" }, "Tenés cambios sin guardar: para pasar de rama guardalos primero (💾 Guardar).") : null,
+        ...br.local.map((b) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, b.current ? "● " : "", h("b", {}, b.name), h("br", {}), h("small", { class: "hint" }, when(b.at) + " · " + b.msg)),
+          b.current ? h("small", { class: "hint" }, "estás acá") : branchAct("➡ Pasar a esta", "Cambia tu copia a esta rama (hay que tener todo guardado)", { action: "branch_switch", name: b.name }, () => "Ahora estás en «" + b.name + "»"))),
+        ...(br.local.length ? [] : [h("p", { class: "hint" }, "No tenés ramas propias en esta copia.")]),
+        br.deleted.length ? h("h5", {}, "🗑 Ramas que borraste") : null,
+        ...br.deleted.map((b) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, h("b", {}, b.name), h("br", {}), h("small", { class: "hint" }, "último guardado: " + when(b.at) + " · " + b.msg)),
+          branchAct("♻ Recuperar", "Vuelve a crear la rama tal como estaba cuando la dejaste", { action: "branch_restore", name: b.name, sha: b.sha, from: "reflog", switch: true }, (x) => "Rama recuperada: " + x.branch + (x.switched ? " (ya estás en ella)" : "")))),
+        br.sent.length ? h("h5", {}, "🚀 Ramas que ya enviaste a revisión (no están en tu copia)") : null,
+        ...br.sent.map((b) => h("div", { class: "cfg-line" }, h("span", { class: "grow" }, h("b", {}, b.name), h("br", {}), h("small", { class: "hint" }, when(b.at) + " · " + b.msg)),
+          branchAct("⬇ Traer de nuevo", "Trae a tu copia la rama que enviaste, tal como quedó en el proyecto", { action: "branch_restore", name: b.name, from: "sent", switch: true }, (x) => "Rama traída: " + x.branch + (x.switched ? " (ya estás en ella)" : "")))),
+        cur ? null : h("small", { class: "hint" }, "No estás en una rama tuya ahora mismo.")].filter(Boolean));
+    } catch (e) { fail(e); }
+  };
+  document.body.append(h("div", { class: "overlay", id: "recover-modal", onmousedown: (e) => e.target.id === "recover-modal" && close() },
+    h("div", { class: "modal wide" }, h("h3", {}, "♻ Recuperar un archivo o una rama", h("span", { class: "spacer" }), h("button", { class: "ghost", onclick: close, title: "Cerrar" }, "✕")),
+      h("small", { class: "hint" }, "Se mira solo tu copia de trabajo. Nada se borra: lo que haya ahora queda guardado al lado antes de traer la versión vieja."), body,
+      h("div", { class: "actions" }, h("button", { class: "ghost", onclick: close }, "Cerrar")))));
+  home();
 }
 // barra de acciones de git bajo la terminal de una persona (no owner): escribe en la terminal el comando `cw …`, así se ve qué se hizo y se aprende
 function gitBar(pane) {
@@ -4093,6 +4155,7 @@ function gitBar(pane) {
     b("🌿 Empezar trabajo", "Crea tu propia rama para un trabajo nuevo: te pregunta cómo se llama.\nEn git: git switch -c nombre-de-la-rama", "cw rama"),
     b("📋 Qué cambié", "Muestra en qué rama estás y qué archivos tocaste.\nEn git: git status", "cw estado"),
     b("💾 Guardar", "Guarda tus cambios con un mensaje corto (te lo pregunta).\nEn git: git add -A + git commit -m \"mensaje\"", "cw guardar"),
+    h("button", { class: "ghost", title: "Trae de vuelta un archivo borrado o cambiado, o una rama tuya (también las que borraste o ya enviaste). Con botones, sin comandos.", onclick: () => openRecover(pane.pid) }, "♻ Recuperar"),
     b("🚀 Enviar a revisión", "Sube tu trabajo y abre el Pull Request para que otra persona lo revise.\nEn git: git push origin tu-rama (y el Pull Request se abre en GitHub)", "cw enviar"),
     b("❓ Ayuda", "Lista de comandos y el orden normal: empezar → editar → guardar → enviar", "cw ayuda"));
   // si el proyecto todavía no tiene repositorio, los botones no sirven: se ofrece pedirlo
