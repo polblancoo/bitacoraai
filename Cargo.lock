@@ -366,7 +366,7 @@ checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
 
 [[package]]
 name = "bitacora"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "anyhow",
  "bitacora-core",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "bitacora-agent"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "bitacora-core"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "chrono",
  "serde",
@@ -406,7 +406,7 @@ dependencies = [
 
 [[package]]
 name = "bitacora-server"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "aes-gcm 0.10.3",
  "anyhow",
@@ -6392,7 +6392,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tm-desktop"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "tauri",
  "tauri-build",
